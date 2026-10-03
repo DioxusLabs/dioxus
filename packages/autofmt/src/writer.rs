@@ -34,6 +34,18 @@ impl From<&Brace> for BodyDelimiters {
     }
 }
 
+/// Where the attributes and spreads of an element or component have comments
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AttrComments {
+    None,
+
+    /// Only after the last attribute, on the same line
+    AfterLast,
+
+    /// Above an attribute, or after one that isn't the last
+    Any,
+}
+
 #[derive(Debug)]
 pub struct Writer<'a> {
     pub raw_src: &'a str,
@@ -63,7 +75,7 @@ impl<'a> Writer<'a> {
 
     pub fn write_rsx_call(&mut self, body: &CallBody) -> Result {
         if body.body().roots.is_empty() {
-            return Ok(());
+            return self.write_trailing_body_comments(body);
         }
 
         if Self::is_short_rsx_call(&body.body().roots) {
@@ -80,13 +92,14 @@ impl<'a> Writer<'a> {
     }
 
     fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
-        if let Some(span) = body.span() {
+        // The comments are on the lines above the closing delimiter of the macro. If anything else
+        // is on its line then the lines above it are not part of the body.
+        if let Some(span) = body.span()
+            && self.leading_row_is_empty(span.end())
+        {
             self.out.indent_level += 1;
-            let comments = self.accumulate_full_line_comments(span.span().end());
-            let has_real_comment = comments
-                .iter()
-                .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
-            if has_real_comment {
+            let comments = self.accumulate_full_line_comments(span.end());
+            if self.has_real_comment(&comments) {
                 self.out.new_line()?;
                 self.apply_line_comments(comments)?;
                 self.out.buf.pop(); // remove the trailing newline, forcing us to end at the end of the comment
@@ -199,16 +212,7 @@ impl<'a> Writer<'a> {
         write!(self.out, "for {} in ", self.unparse_pat(&forloop.pat),)?;
 
         self.write_inline_expr(&forloop.expr)?;
-
-        if forloop.body.is_empty() {
-            write!(self.out, "}}")?;
-            return Ok(());
-        }
-
-        self.out.new_line()?;
-        self.write_body_indented(&forloop.body.roots)?;
-
-        self.out.tabbed_line()?;
+        self.write_block_body(&forloop.body.roots, (&forloop.brace).into())?;
         write!(self.out, "}}")?;
 
         Ok(())
@@ -222,8 +226,10 @@ impl<'a> Writer<'a> {
             let IfChain {
                 if_token,
                 cond,
+                then_brace,
                 then_branch,
                 else_if_branch,
+                else_brace,
                 else_branch,
                 ..
             } = chain;
@@ -231,32 +237,37 @@ impl<'a> Writer<'a> {
             write!(self.out, "{} ", if_token.to_token_stream(),)?;
 
             self.write_inline_expr(cond)?;
-
-            self.out.new_line()?;
-            self.write_body_indented(&then_branch.roots)?;
+            self.write_block_body(&then_branch.roots, then_brace.into())?;
 
             if let Some(else_if_branch) = else_if_branch {
-                // write the closing bracket and else
-                self.out.tabbed_line()?;
                 write!(self.out, "}} else ")?;
-
                 branch = Some(else_if_branch);
             } else if let Some(else_branch) = else_branch {
-                self.out.tabbed_line()?;
                 write!(self.out, "}} else {{")?;
-
-                self.out.new_line()?;
-                self.write_body_indented(&else_branch.roots)?;
+                let else_brace = else_brace.unwrap_or_default();
+                self.write_block_body(&else_branch.roots, (&else_brace).into())?;
                 branch = None;
             } else {
                 branch = None;
             }
         }
 
-        self.out.tabbed_line()?;
         write!(self.out, "}}")?;
 
         Ok(())
+    }
+
+    /// Writes the body of a `for` or `if` block, from after its opening brace up to its closing
+    /// brace
+    fn write_block_body(&mut self, children: &[BodyNode], delimiters: BodyDelimiters) -> Result {
+        if children.is_empty() {
+            return self.write_comment_only_body(delimiters);
+        }
+
+        self.write_inline_comments(delimiters.open, 1)?;
+        self.out.new_line()?;
+        self.write_body_indented(children)?;
+        self.write_closing_line(delimiters)
     }
 
     /// An expression within a for or if block that might need to be spread out across several lines
@@ -367,8 +378,22 @@ impl<'a> Writer<'a> {
         let children_len = self
             .is_short_children(children)
             .map_err(|_| std::fmt::Error)?;
+        let has_attributes = !attributes.is_empty() || !spreads.is_empty();
+        let attr_comments = self.attr_comments(attributes, spreads);
         let has_trailing_comments = self.has_trailing_comments(children, delimiters);
-        let is_small_children = children_len.is_some() && !has_trailing_comments;
+        // A comment after the last attribute ends its line, so the children can't follow on it
+        let is_small_children = children_len.is_some()
+            && !has_trailing_comments
+            && attr_comments != AttrComments::AfterLast;
+        // Attributes with comments each need their own line. A comment after the last one is the
+        // exception, as only the children come after it.
+        let split_commented_attrs = match attr_comments {
+            AttrComments::None => {
+                has_attributes && children.is_empty() && self.has_closing_comments(delimiters)
+            }
+            AttrComments::AfterLast => children.is_empty(),
+            AttrComments::Any => true,
+        };
 
         // if we have one long attribute and a lot of children, place the attrs on top
         if is_short_attr_list && !is_small_children {
@@ -408,13 +433,12 @@ impl<'a> Writer<'a> {
             opt_level = ShortOptimization::Empty;
 
             // Write comments if they exist
-            self.write_inline_comments(delimiters.open, 1)?;
-            self.write_todo_body(delimiters)?;
+            self.write_comment_only_body(delimiters)?;
         }
 
         // multiline handlers bump everything down, but not empty blocks
         if !matches!(opt_level, ShortOptimization::Empty)
-            && (attr_len > 1000 || self.out.indent.split_line_attributes())
+            && (attr_len > 1000 || split_commented_attrs || self.out.indent.split_line_attributes())
         {
             opt_level = ShortOptimization::NoOpt;
         }
@@ -428,7 +452,7 @@ impl<'a> Writer<'a> {
 
                 self.write_attributes(attributes, spreads, true, delimiters, has_children)?;
 
-                if !children.is_empty() && !attributes.is_empty() {
+                if !children.is_empty() && has_attributes {
                     write!(self.out, " ")?;
                 }
 
@@ -444,7 +468,7 @@ impl<'a> Writer<'a> {
             }
 
             ShortOptimization::PropsOnTop => {
-                if !attributes.is_empty() {
+                if has_attributes {
                     write!(self.out, " ")?;
                 }
 
@@ -455,7 +479,7 @@ impl<'a> Writer<'a> {
                     self.write_body_indented(children)?;
                 }
 
-                self.out.tabbed_line()?;
+                self.write_closing_line(delimiters)?;
             }
 
             ShortOptimization::NoOpt => {
@@ -470,29 +494,7 @@ impl<'a> Writer<'a> {
                     self.write_body_indented(children)?;
                 }
 
-                self.out.tabbed_line()?;
-            }
-        }
-
-        // Write trailing comments
-        if matches!(
-            opt_level,
-            ShortOptimization::NoOpt | ShortOptimization::PropsOnTop
-        ) && self.leading_row_is_empty(delimiters.close)
-        {
-            let comments = self.accumulate_full_line_comments(delimiters.close);
-            let has_real_comment = comments
-                .iter()
-                .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
-            if has_real_comment {
-                // Undo the tab from tabbed_line(). It positioned for the closing
-                // brace, but trailing comments need child-level indentation
-                let tab_width = self.out.indent.indent_str().len() * self.out.indent_level;
-                self.out.buf.truncate(self.out.buf.len() - tab_width);
-                self.out.indent_level += 1;
-                self.apply_line_comments(comments)?;
-                self.out.indent_level -= 1;
-                self.out.tab()?;
+                self.write_closing_line(delimiters)?;
             }
         }
 
@@ -530,7 +532,7 @@ impl<'a> Writer<'a> {
                     delimiters,
                     match attr {
                         AttrType::Attr(attr) => attr.span(),
-                        AttrType::Spread(attr) => attr.expr.span(),
+                        AttrType::Spread(attr) => attr.span(),
                     },
                 )?;
             }
@@ -546,15 +548,10 @@ impl<'a> Writer<'a> {
                 AttrType::Spread(attr) => self.write_spread_attribute(&attr.expr)?,
             }
 
-            let span = match attr {
-                AttrType::Attr(attr) => attr
-                    .comma
-                    .as_ref()
-                    .map(|c| c.span())
-                    .unwrap_or_else(|| self.total_span_of_attr(attr)),
-                AttrType::Spread(attr) => attr.span(),
+            let attr_end = match attr {
+                AttrType::Attr(attr) => self.end_of_attr(attr),
+                AttrType::Spread(attr) => self.end_of_spread(attr),
             };
-            let attr_end = span.end();
 
             let has_more = attr_iter.peek().is_some();
             let should_finish_comma = has_attributes && has_children || !props_same_line;
@@ -716,11 +713,8 @@ impl<'a> Writer<'a> {
         let attr_line = attr_span.start().line;
 
         if brace_line != attr_line {
-            // Get the raw line of the attribute
-            let line = self.src.get(attr_line - 1).unwrap_or(&"");
-
             // Only write comments if the line is empty before the attribute start
-            let row_start = line.get(..attr_span.start().column - 1).unwrap_or("");
+            let row_start = self.text_before(attr_span.start()).unwrap_or("");
             if !row_start.trim().is_empty() {
                 return Ok(());
             }
@@ -732,33 +726,24 @@ impl<'a> Writer<'a> {
     }
 
     fn write_inline_comments(&mut self, final_span: LineColumn, offset: usize) -> Result {
-        let line = final_span.line;
-        let column = final_span.column;
-        let Some(src_line) = self.src.get(line - 1) else {
-            return Ok(());
-        };
-
-        // the line might contain emoji or other unicode characters - this will cause issues
-        let Some(mut whitespace) = src_line.get(column..).map(|s| s.trim()) else {
-            return Ok(());
-        };
-
-        if whitespace.is_empty() {
-            return Ok(());
-        }
-
-        whitespace = whitespace[offset..].trim();
-
-        // don't emit whitespace if the span is messed up for some reason
-        if final_span.line == 1 && final_span.column == 0 {
-            return Ok(());
-        };
-
-        if whitespace.starts_with("//") {
-            write!(self.out, " {whitespace}")?;
+        if let Some(comment) = self.inline_comment(final_span, offset) {
+            write!(self.out, " {comment}")?;
         }
 
         Ok(())
+    }
+
+    /// The comment that follows a location on the same line, skipping `offset` bytes first
+    pub(crate) fn inline_comment(&self, location: LineColumn, offset: usize) -> Option<&'a str> {
+        // don't emit whitespace if the span is messed up for some reason
+        if location.line == 1 && location.column == 0 {
+            return None;
+        };
+
+        let rest = self.text_after(location)?.trim();
+        let rest = rest.get(offset..)?.trim();
+
+        rest.starts_with("//").then_some(rest)
     }
 
     fn accumulate_full_line_comments(&mut self, loc: LineColumn) -> VecDeque<usize> {
@@ -940,39 +925,144 @@ impl<'a> Writer<'a> {
         total
     }
 
-    fn write_todo_body(&mut self, delimiters: BodyDelimiters) -> std::fmt::Result {
-        let start = delimiters.open;
-        let end = delimiters.close;
+    /// Writes a body that has nothing in it but comments, leaving the closing delimiter to the
+    /// caller. A body without comments is left empty so that it closes on the same line.
+    fn write_comment_only_body(&mut self, delimiters: BodyDelimiters) -> Result {
+        let BodyDelimiters { open, close } = delimiters;
 
-        if start.line == end.line {
-            return Ok(());
-        }
+        let has_inline_comment = self.brace_has_trailing_comments(delimiters);
+        self.write_inline_comments(open, 1)?;
 
-        let comments: Vec<&str> = (start.line..end.line)
-            .filter_map(|idx| {
-                let line = self.src.get(idx)?;
-                line.trim().starts_with("//").then_some(line.trim())
-            })
-            .collect();
-
-        if comments.is_empty() {
-            return Ok(());
-        }
-
-        writeln!(self.out)?;
-
-        for comment in &comments {
-            for _ in 0..self.out.indent_level + 1 {
-                write!(self.out, "    ")?
+        // Keep the comments, and one of the blank lines between each of them
+        let mut lines: Vec<&str> = Vec::new();
+        for idx in open.line..close.line.saturating_sub(1) {
+            let line = self.src.get(idx).map_or("", |line| line.trim());
+            let follows_comment = lines.last().is_some_and(|last| !last.is_empty());
+            if line.starts_with("//") || (line.is_empty() && follows_comment) {
+                lines.push(line);
             }
-            writeln!(self.out, "{comment}")?;
+        }
+        while lines.last().is_some_and(|line| line.is_empty()) {
+            lines.pop();
         }
 
-        for _ in 0..self.out.indent_level {
-            write!(self.out, "    ")?
+        if lines.is_empty() && !has_inline_comment {
+            return Ok(());
         }
 
-        Ok(())
+        self.out.new_line()?;
+        for line in lines {
+            if !line.is_empty() {
+                self.out.indented_tab()?;
+                write!(self.out, "{line}")?;
+            }
+            self.out.new_line()?;
+        }
+        self.out.tab()
+    }
+
+    /// Starts the line of a closing delimiter, first writing the comments on the lines above it
+    fn write_closing_line(&mut self, delimiters: BodyDelimiters) -> Result {
+        self.out.new_line()?;
+
+        if self.leading_row_is_empty(delimiters.close) {
+            let comments = self.accumulate_full_line_comments(delimiters.close);
+            if self.has_real_comment(&comments) {
+                self.out.indent_level += 1;
+                self.apply_line_comments(comments)?;
+                self.out.indent_level -= 1;
+            }
+        }
+
+        self.out.tab()
+    }
+
+    /// Whether there are comments on the lines above a closing delimiter
+    fn has_closing_comments(&mut self, delimiters: BodyDelimiters) -> bool {
+        self.leading_row_is_empty(delimiters.close) && {
+            let comments = self.accumulate_full_line_comments(delimiters.close);
+            self.has_real_comment(&comments)
+        }
+    }
+
+    /// Whether any of the collected lines is a comment rather than a blank line
+    fn has_real_comment(&self, lines: &VecDeque<usize>) -> bool {
+        lines
+            .iter()
+            .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")))
+    }
+
+    /// Where the attributes and spreads have comments: on the lines above them, or after them on
+    /// the same line
+    fn attr_comments(&self, attributes: &[Attribute], spreads: &[Spread]) -> AttrComments {
+        let attributes = attributes
+            .iter()
+            .map(|attr| (attr.span().start(), self.end_of_attr(attr)));
+        let spreads = spreads
+            .iter()
+            .map(|spread| (spread.span().start(), self.end_of_spread(spread)));
+
+        let mut comments = AttrComments::None;
+        let mut iter = attributes.chain(spreads).peekable();
+        while let Some((start, end)) = iter.next() {
+            let is_last = iter.peek().is_none();
+            if self.has_leading_comments(start) {
+                return AttrComments::Any;
+            }
+            if self.inline_comment(end, 0).is_some() {
+                if !is_last {
+                    return AttrComments::Any;
+                }
+                comments = AttrComments::AfterLast;
+            }
+        }
+
+        comments
+    }
+
+    /// Whether the lines directly above a location are comments. Only true if nothing else comes
+    /// before the location on its own line, as the comments would then belong to that instead.
+    fn has_leading_comments(&self, location: LineColumn) -> bool {
+        if !self.current_span_is_primary(location) {
+            return false;
+        }
+
+        let Some(lines) = self.src.get(..location.line - 1) else {
+            return false;
+        };
+
+        for line in lines.iter().rev() {
+            match (line.trim().starts_with("//"), line.is_empty()) {
+                (true, _) => return true,
+                (_, true) => continue,
+                _ => break,
+            }
+        }
+
+        false
+    }
+
+    /// The end of an attribute, including its trailing comma
+    fn end_of_attr(&self, attr: &Attribute) -> LineColumn {
+        match &attr.comma {
+            Some(comma) => comma.span().end(),
+            None => self.total_span_of_attr(attr).end(),
+        }
+    }
+
+    /// The end of a spread, including its trailing comma
+    fn end_of_spread(&self, spread: &Spread) -> LineColumn {
+        let mut end = spread.expr.span().end();
+
+        // The comma of a spread isn't exposed, so look for it in the source
+        if let Some(rest) = self.text_after(end)
+            && let Some((whitespace, _)) = rest.split_once(',')
+            && whitespace.trim().is_empty()
+        {
+            end.column += whitespace.chars().count() + 1;
+        }
+
+        end
     }
 
     fn write_partial_expr(&mut self, expr: syn::Result<Expr>, src_span: Span) -> Result {
@@ -1320,15 +1410,32 @@ impl<'a> Writer<'a> {
     }
 
     fn leading_row_is_empty(&self, location: LineColumn) -> bool {
-        let Some(line) = self.src.get(location.line - 1) else {
+        let Some(column) = location.column.checked_sub(1) else {
             return false;
         };
 
-        let Some(sub) = line.get(..location.column - 1) else {
-            return false;
-        };
+        self.text_before(LineColumn { column, ..location })
+            .is_some_and(|before| before.trim().is_empty())
+    }
 
-        sub.trim().is_empty()
+    /// The text of a line that comes before a location on it
+    fn text_before(&self, location: LineColumn) -> Option<&'a str> {
+        let line = self.src.get(location.line.checked_sub(1)?)?;
+        line.get(..Self::byte_offset(line, location.column)?)
+    }
+
+    /// The text of a line that comes after a location on it
+    fn text_after(&self, location: LineColumn) -> Option<&'a str> {
+        let line = self.src.get(location.line.checked_sub(1)?)?;
+        line.get(Self::byte_offset(line, location.column)?..)
+    }
+
+    /// Columns count characters, which are not all one byte long
+    fn byte_offset(line: &str, column: usize) -> Option<usize> {
+        line.char_indices()
+            .map(|(idx, _)| idx)
+            .chain([line.len()])
+            .nth(column)
     }
 
     #[allow(clippy::map_entry)]
@@ -1368,10 +1475,17 @@ impl<'a> Writer<'a> {
             BodyNode::Text(txt) => txt.input.span(),
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(f) => f.brace.span.span(),
-            BodyNode::IfChain(i) => match i.else_brace {
-                Some(b) => b.span.span(),
-                None => i.then_brace.span.span(),
-            },
+            BodyNode::IfChain(chain) => {
+                // The closing brace is that of the last branch
+                let mut last = chain;
+                while let Some(next) = &last.else_if_branch {
+                    last = next;
+                }
+                match last.else_brace {
+                    Some(b) => b.span.span(),
+                    None => last.then_brace.span.span(),
+                }
+            }
             BodyNode::SyntheticBoundary(_) => node.span(),
         }
     }
@@ -1387,10 +1501,7 @@ impl<'a> Writer<'a> {
     }
 
     fn brace_has_trailing_comments(&self, delimiters: BodyDelimiters) -> bool {
-        let open = delimiters.open;
-        let line = self.src.get(open.line - 1).unwrap_or(&"");
-        let after_brace = line.get(open.column + 1..).unwrap_or("").trim();
-        after_brace.starts_with("//")
+        self.inline_comment(delimiters.open, 1).is_some()
     }
 
     fn has_trailing_comments(&self, children: &[BodyNode], delimiters: BodyDelimiters) -> bool {
@@ -1399,34 +1510,23 @@ impl<'a> Writer<'a> {
         };
 
         // Check for any comments after the last node between the last brace
-        let final_span = Self::final_span_of_node(last_node);
-        let final_span = final_span.end();
-        let mut line = final_span.line;
-        let mut column = final_span.column;
+        let mut location = Self::final_span_of_node(last_node).end();
         loop {
-            let Some(src_line) = self.src.get(line - 1) else {
-                return false;
-            };
-
-            // the line might contain emoji or other unicode characters - this will cause issues
-            let Some(mut whitespace) = src_line.get(column..).map(|s| s.trim()) else {
-                return false;
-            };
-
-            let offset = 0;
-            whitespace = whitespace[offset..].trim();
-
-            if whitespace.starts_with("//") {
-                return true;
+            match self.text_after(location) {
+                Some(rest) if rest.trim().starts_with("//") => return true,
+                Some(_) => {}
+                None => return false,
             }
 
-            if line == delimiters.close.line {
-                // If we reached the end of the brace span, stop
+            // If we reached the end of the brace span, stop
+            if location.line == delimiters.close.line {
                 break;
             }
 
-            line += 1;
-            column = 0; // reset column to the start of the next line
+            location = LineColumn {
+                line: location.line + 1,
+                column: 0,
+            };
         }
 
         false
