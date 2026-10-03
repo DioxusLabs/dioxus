@@ -26,14 +26,20 @@
 //! - Spread attributes use `{..props}`
 //!
 //! The parsed result is the same [`Element`]/[`Component`] AST as the regular syntax, so
-//! templates, hot-reloading, and diagnostics work identically.
+//! templates, hot-reloading, and diagnostics work identically. The tokens of the tags are kept
+//! in the node's [`NodeDelimiter`].
+//!
+//! Like the regular syntax, tags that are still being typed (`<div cl`, `<div>` without a
+//! closing tag) are parsed as far as possible and reported with a diagnostic instead of failing
+//! the whole macro, so that completions keep working.
 
 use crate::innerlude::*;
-use proc_macro2::{Delimiter, Group, TokenStream as TokenStream2};
+use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::{
     Expr, Ident, LitBool, LitFloat, LitInt, LitStr, Token, braced,
     ext::IdentExt,
-    parse::{Parse, ParseBuffer, ParseStream},
+    parse::{ParseBuffer, ParseStream, discouraged::Speculative},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Brace,
@@ -41,6 +47,15 @@ use syn::{
 
 /// Parse a JSX/XML-like tag into a [`BodyNode`]. Expects the stream to be pointing at a `<` token.
 pub(crate) fn parse_jsx_node(stream: ParseStream) -> syn::Result<BodyNode> {
+    parse_tag(stream, &mut Vec::new())
+}
+
+/// Parse a tag
+///
+/// `open_tags` are the names of the tags that this tag is directly nested in. A closing tag that
+/// matches one of them means that this tag is missing its own closing tag, as opposed to its
+/// closing tag being misspelled.
+fn parse_tag(stream: ParseStream, open_tags: &mut Vec<String>) -> syn::Result<BodyNode> {
     let lt = stream.parse::<Token![<]>()?;
 
     if stream.peek(Token![/]) {
@@ -55,6 +70,10 @@ pub(crate) fn parse_jsx_node(stream: ParseStream) -> syn::Result<BodyNode> {
             lt.span,
             "fragments (`<>`) are not supported - list the children directly instead",
         ));
+    }
+
+    if !stream.peek(Ident::peek_any) && !stream.peek(Token![::]) {
+        return Err(syn::Error::new(lt.span, "expected a tag name after `<`"));
     }
 
     // Decide between an element and a component using the same rules as the regular syntax:
@@ -72,59 +91,62 @@ pub(crate) fn parse_jsx_node(stream: ParseStream) -> syn::Result<BodyNode> {
     };
 
     if is_element {
-        parse_element(stream)
+        parse_element(stream, lt, open_tags)
     } else {
-        parse_component(stream)
+        parse_component(stream, lt, open_tags)
     }
 }
 
-fn parse_element(stream: ParseStream) -> syn::Result<BodyNode> {
+fn parse_element(
+    stream: ParseStream,
+    lt: Token![<],
+    open_tags: &mut Vec<String>,
+) -> syn::Result<BodyNode> {
     let name = stream.parse::<ElementName>()?;
-    let (attributes, spreads) = parse_attributes(stream)?;
+    let tag = TagName {
+        name: name.to_string(),
+        span: name.span(),
+        parse: |stream| {
+            let name = stream.parse::<ElementName>()?;
+            Ok((name.to_string(), name.span()))
+        },
+    };
 
-    let (brace, children) = parse_tag_end_and_children(stream, &name.to_string(), |close| {
-        let close_name = close.parse::<ElementName>()?;
-        if close_name != name {
-            return Err(syn::Error::new(
-                close_name.span(),
-                format!("closing tag `</{close_name}>` does not match opening tag `<{name}>`"),
-            ));
-        }
-        Ok(())
-    })?;
+    let mut diagnostics = Diagnostics::new();
+    let (attributes, spreads, end) = parse_open_tag(stream, &tag, &mut diagnostics)?;
+    let (delimiter, children) = parse_tag_body(stream, lt, end, &tag, open_tags, &mut diagnostics)?;
 
     Ok(BodyNode::Element(Element::from_parts(
         name,
         attributes,
         spreads,
         children,
-        Some(brace),
-        Diagnostics::new(),
+        NodeDelimiter::Tag(delimiter),
+        diagnostics,
     )))
 }
 
-fn parse_component(stream: ParseStream) -> syn::Result<BodyNode> {
+fn parse_component(
+    stream: ParseStream,
+    lt: Token![<],
+    open_tags: &mut Vec<String>,
+) -> syn::Result<BodyNode> {
     let mut name = stream.parse::<syn::Path>()?;
     let generics = normalize_path(&mut name);
+    let tag = TagName {
+        name: path_to_string(&name),
+        span: name.span(),
+        // The generics of a component don't need to be repeated in its closing tag
+        parse: |stream| {
+            let mut name = stream.parse::<syn::Path>()?;
+            normalize_path(&mut name);
+            Ok((path_to_string(&name), name.span()))
+        },
+    };
 
-    let (fields, spreads) = parse_attributes(stream)?;
-
-    let name_string = path_to_string(&name);
-    let (brace, children) = parse_tag_end_and_children(stream, &name_string, |close| {
-        let mut close_name = close.parse::<syn::Path>()?;
-        normalize_path(&mut close_name);
-        if path_to_string(&close_name) != name_string {
-            return Err(syn::Error::new(
-                close_name.span(),
-                format!(
-                    "closing tag `</{}>` does not match opening tag `<{}>`",
-                    path_to_string(&close_name),
-                    name_string
-                ),
-            ));
-        }
-        Ok(())
-    })?;
+    let mut diagnostics = Diagnostics::new();
+    let (fields, spreads, end) = parse_open_tag(stream, &tag, &mut diagnostics)?;
+    let (delimiter, children) = parse_tag_body(stream, lt, end, &tag, open_tags, &mut diagnostics)?;
 
     Ok(BodyNode::Component(Component::from_parts(
         name,
@@ -132,23 +154,57 @@ fn parse_component(stream: ParseStream) -> syn::Result<BodyNode> {
         fields,
         spreads,
         children,
-        Some(brace),
-        Diagnostics::new(),
+        NodeDelimiter::Tag(delimiter),
+        diagnostics,
     )))
 }
 
-/// Parse the attributes of an open tag, stopping at `/>` or `>`
-fn parse_attributes(stream: ParseStream) -> syn::Result<(Vec<Attribute>, Vec<Spread>)> {
+/// The name of the tag that is being parsed
+struct TagName {
+    name: String,
+    span: Span,
+    /// Parse the name of a closing tag of the same kind (element or component)
+    parse: fn(ParseStream) -> syn::Result<(String, Span)>,
+}
+
+/// How an open tag ended
+enum OpenTagEnd {
+    /// `<div />`
+    SelfClosing(Token![/], Token![>]),
+    /// `<div>`
+    Open(Token![>]),
+    /// The tag is incomplete: `<div class="a"`. A diagnostic has been emitted.
+    Unterminated,
+}
+
+/// Parse the attributes of an open tag, up to and including its `/>` or `>`
+///
+/// Open tags that are still being typed (`<div cl`) are parsed as far as possible and reported
+/// with a diagnostic rather than an error so that completions keep working.
+fn parse_open_tag(
+    stream: ParseStream,
+    tag: &TagName,
+    diagnostics: &mut Diagnostics,
+) -> syn::Result<(Vec<Attribute>, Vec<Spread>, OpenTagEnd)> {
     let mut attributes = Vec::new();
     let mut spreads = Vec::new();
 
-    loop {
-        if stream.peek(Token![/]) || stream.peek(Token![>]) {
-            break;
+    let end = loop {
+        if stream.peek(Token![>]) {
+            break OpenTagEnd::Open(stream.parse()?);
         }
 
-        if stream.is_empty() {
-            return Err(stream.error("expected `>` or `/>` to close the tag"));
+        if stream.peek(Token![/]) && stream.peek2(Token![>]) {
+            break OpenTagEnd::SelfClosing(stream.parse()?, stream.parse()?);
+        }
+
+        // The start of another tag or the end of the input means this tag was never closed
+        if stream.is_empty() || stream.peek(Token![<]) {
+            diagnostics.push(tag.span.error(format!(
+                "expected `>` or `/>` to close the `<{}` tag",
+                tag.name
+            )));
+            break OpenTagEnd::Unterminated;
         }
 
         // Spread attributes: `{..expr}`
@@ -173,7 +229,7 @@ fn parse_attributes(stream: ParseStream) -> syn::Result<(Vec<Attribute>, Vec<Spr
         // Attribute names are either string literals (custom attributes) or (dash-separated) idents
         let name = if stream.peek(LitStr) {
             AttributeName::Custom(stream.parse::<LitStr>()?)
-        } else {
+        } else if stream.peek(Ident::peek_any) {
             let raw = Punctuated::<Ident, Token![-]>::parse_separated_nonempty_with(
                 stream,
                 parse_raw_ident,
@@ -189,20 +245,16 @@ fn parse_attributes(stream: ParseStream) -> syn::Result<(Vec<Attribute>, Vec<Spr
                     .join("-");
                 AttributeName::Custom(LitStr::new(&name, span))
             }
+        } else {
+            return Err(stream.error("expected an attribute name, `>` or `/>`"));
         };
 
         let value = if stream.peek(Token![=]) {
-            stream.parse::<Token![=]>()?;
+            let eq = stream.parse::<Token![=]>()?;
 
             if stream.peek(Brace) {
                 // Braced expression values: `onclick={move |_| ...}`, `class={some_expr}`
-                let content: ParseBuffer;
-                braced!(content in stream);
-                let value = AttributeValue::parse(&content)?;
-                if !content.is_empty() {
-                    return Err(content.error("unexpected tokens after attribute value"));
-                }
-                value
+                parse_braced_value(stream)?
             } else if stream.peek(LitStr)
                 || stream.peek(LitBool)
                 || stream.peek(LitFloat)
@@ -210,6 +262,13 @@ fn parse_attributes(stream: ParseStream) -> syn::Result<(Vec<Attribute>, Vec<Spr
             {
                 // Literal values: `class="abc {def}"`, `width=100`
                 AttributeValue::AttrLiteral(stream.parse::<HotLiteral>()?)
+            } else if stream.is_empty() || stream.peek(Token![<]) {
+                // The value hasn't been typed yet
+                diagnostics.push(
+                    eq.span
+                        .error(format!("expected a value for the `{name}` attribute")),
+                );
+                break OpenTagEnd::Unterminated;
             } else {
                 return Err(stream.error(
                     "attribute values must be literals or expressions wrapped in braces (`attr={expr}`)",
@@ -235,60 +294,190 @@ fn parse_attributes(stream: ParseStream) -> syn::Result<(Vec<Attribute>, Vec<Spr
         attribute.comma = stream.parse::<Token![,]>().ok();
 
         attributes.push(attribute);
-    }
+    };
 
-    Ok((attributes, spreads))
+    Ok((attributes, spreads, end))
 }
 
-/// Parse the end of an open tag (`>` or `/>`), children, and the closing tag if there is one
+/// Parse a braced attribute value: `{expr}`
 ///
-/// A brace token is synthesized from the span of the open tag's `>` so that consumers that expect
-/// a braced body (completion hints, autofmt, ...) treat the tag as a complete node.
-fn parse_tag_end_and_children(
-    stream: ParseStream,
-    name: &str,
-    parse_close_name: impl FnOnce(ParseStream) -> syn::Result<()>,
-) -> syn::Result<(Brace, Vec<BodyNode>)> {
-    // Self-closing tag: `<div />`
-    if stream.peek(Token![/]) {
-        stream.parse::<Token![/]>()?;
-        let gt = stream.parse::<Token![>]>()?;
-        return Ok((synthetic_brace(gt), Vec::new()));
+/// Expressions that don't parse (yet) are kept as raw tokens, like braced expressions in the
+/// regular syntax, so that the macro still expands and completions work inside of them.
+fn parse_braced_value(stream: ParseStream) -> syn::Result<AttributeValue> {
+    let content: ParseBuffer;
+    let brace = braced!(content in stream);
+
+    let fork = content.fork();
+    if let Ok(value) = fork.parse::<AttributeValue>()
+        && fork.is_empty()
+    {
+        content.advance_to(&fork);
+        return Ok(value);
     }
 
-    let gt = stream.parse::<Token![>]>()?;
+    let tokens = content.parse::<TokenStream2>()?;
+    Ok(AttributeValue::AttrExpr(PartialExpr::from_braced(
+        brace, tokens,
+    )))
+}
+
+/// Parse the children and closing tag that follow an open tag
+///
+/// A missing closing tag is reported with a diagnostic rather than an error so that completions
+/// keep working while the tag's children are being typed.
+fn parse_tag_body(
+    stream: ParseStream,
+    lt: Token![<],
+    end: OpenTagEnd,
+    tag: &TagName,
+    open_tags: &mut Vec<String>,
+    diagnostics: &mut Diagnostics,
+) -> syn::Result<(TagDelimiter, Vec<BodyNode>)> {
+    let mut delimiter = TagDelimiter {
+        lt,
+        slash: None,
+        gt: None,
+        close: None,
+    };
+
+    match end {
+        OpenTagEnd::Unterminated => return Ok((delimiter, Vec::new())),
+        OpenTagEnd::SelfClosing(slash, gt) => {
+            delimiter.slash = Some(slash);
+            delimiter.gt = Some(gt);
+            return Ok((delimiter, Vec::new()));
+        }
+        OpenTagEnd::Open(gt) => delimiter.gt = Some(gt),
+    }
+
+    let missing_closing_tag = || {
+        tag.span
+            .error(format!("missing closing tag `</{}>`", tag.name))
+    };
 
     let mut children = Vec::new();
     loop {
-        if stream.peek(Token![<]) && stream.peek2(Token![/]) {
+        if stream.is_empty() {
+            diagnostics.push(missing_closing_tag());
             break;
         }
 
-        if stream.is_empty() {
+        if stream.peek(Token![<]) && stream.peek2(Token![/]) {
+            let fork = stream.fork();
+            let close_lt = fork.parse::<Token![<]>()?;
+            let close_slash = fork.parse::<Token![/]>()?;
+            let (close_name, close_span) = (tag.parse)(&fork)?;
+
+            if close_name == tag.name {
+                stream.advance_to(&fork);
+                delimiter.close = Some(ClosingTag {
+                    lt: close_lt,
+                    slash: close_slash,
+                    gt: stream.parse()?,
+                });
+                break;
+            }
+
+            // The closing tag of a parent: this tag is the one that is missing its closing tag
+            if open_tags.contains(&close_name) {
+                diagnostics.push(missing_closing_tag());
+                break;
+            }
+
             return Err(syn::Error::new(
-                gt.span(),
-                format!("missing closing tag `</{name}>`"),
+                close_span,
+                format!(
+                    "closing tag `</{close_name}>` does not match opening tag `<{}>`",
+                    tag.name
+                ),
             ));
         }
 
-        // Children of JSX tags are regular body nodes, so both syntaxes can be mixed freely
-        children.push(stream.parse::<BodyNode>()?);
+        // Children of tags are regular body nodes, so both syntaxes can be mixed freely
+        if stream.peek(Token![<]) {
+            open_tags.push(tag.name.clone());
+            let child = parse_tag(stream, open_tags);
+            open_tags.pop();
+            children.push(child?);
+        } else if let Some(child) = parse_unbraced_name(stream)? {
+            children.push(child);
+        } else {
+            children.push(stream.parse::<BodyNode>()?);
+        }
     }
 
-    stream.parse::<Token![<]>()?;
-    stream.parse::<Token![/]>()?;
-    parse_close_name(stream)?;
-    stream.parse::<Token![>]>()?;
-
-    Ok((synthetic_brace(gt), children))
+    Ok((delimiter, children))
 }
 
-fn synthetic_brace(gt: Token![>]) -> Brace {
-    let mut group = Group::new(Delimiter::Brace, TokenStream2::new());
-    group.set_span(gt.span());
-    Brace {
-        span: group.delim_span(),
+const UNQUOTED_TEXT: &str = "text in a tag must be a quoted string literal: `<h1>\"Hello\"</h1>`";
+
+/// Catch text that was written without quotes, which would otherwise be parsed as the (invalid)
+/// start of an element or component in the regular syntax and reported with a confusing error.
+///
+/// A single word directly followed by a tag (`<h1>Hello</h1>`) could also be an element or
+/// component whose body hasn't been typed yet. It is parsed as that node, with a diagnostic, so
+/// that completions keep working. Anything else that can't start a node is rejected.
+fn parse_unbraced_name(stream: ParseStream) -> syn::Result<Option<BodyNode>> {
+    // Text, expressions, control flow, and paths (`::Component {}`) are parsed as regular nodes
+    if stream.peek(LitStr)
+        || stream.peek(Brace)
+        || stream.peek(Token![for])
+        || stream.peek(Token![if])
+        || stream.peek(Token![match])
+        || stream.peek(Token![::])
+    {
+        return Ok(None);
     }
+
+    if !stream.peek(Ident::peek_any) {
+        return Err(stream.error(UNQUOTED_TEXT));
+    }
+
+    // Elements and components in the regular syntax: `div {}`, `my-element {}`, `module::Comp {}`
+    if stream.peek2(Brace) || stream.peek2(Token![::]) || stream.peek2(Token![-]) {
+        return Ok(None);
+    }
+
+    let fork = stream.fork();
+    let ident = parse_raw_ident(&fork)?;
+    if !fork.is_empty() && !fork.peek(Token![<]) {
+        return Err(syn::Error::new(ident.span(), UNQUOTED_TEXT));
+    }
+    stream.advance_to(&fork);
+
+    let name = ident.to_string();
+    let is_element = name.chars().next().unwrap().is_ascii_lowercase() && !name.contains('_');
+
+    let mut diagnostics = Diagnostics::new();
+    diagnostics.push(
+        ident
+            .span()
+            .error(format!("expected `{{` after `{name}`"))
+            .help(format!(
+                "elements and components must be followed by braces. If this is meant to be text, wrap it in quotes: `\"{name}\"`"
+            )),
+    );
+
+    Ok(Some(if is_element {
+        BodyNode::Element(Element::from_parts(
+            ElementName::Ident(ident),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            NodeDelimiter::Missing,
+            diagnostics,
+        ))
+    } else {
+        BodyNode::Component(Component::from_parts(
+            ident.into(),
+            None,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            NodeDelimiter::Missing,
+            diagnostics,
+        ))
+    }))
 }
 
 fn path_to_string(path: &syn::Path) -> String {
@@ -486,9 +675,6 @@ mod tests {
         assert!(syn::parse2::<BodyNode>(quote! { <div>"hi"</span> }).is_err());
         assert!(syn::parse2::<BodyNode>(quote! { <MyComponent>"hi"</Other> }).is_err());
 
-        // Missing closing tag
-        assert!(syn::parse2::<BodyNode>(quote! { <div>"hi" }).is_err());
-
         // Stray closing tag
         assert!(syn::parse2::<BodyNode>(quote! { </div> }).is_err());
 
@@ -497,6 +683,135 @@ mod tests {
 
         // Unbraced expression values
         assert!(syn::parse2::<BodyNode>(quote! { <div class=some_expr /> }).is_err());
+    }
+
+    fn diagnostics(node: &BodyNode) -> &Diagnostics {
+        match node {
+            BodyNode::Element(el) => &el.diagnostics,
+            BodyNode::Component(comp) => &comp.diagnostics,
+            _ => panic!("expected an element or component"),
+        }
+    }
+
+    #[test]
+    fn keeps_tag_tokens() {
+        let BodyNode::Element(el) = parse(quote! { <div>"hi"</div> }) else {
+            panic!("expected element")
+        };
+        let tag = el.delimiter.tag().unwrap();
+        assert!(tag.is_complete() && !tag.is_self_closing());
+
+        let BodyNode::Component(comp) = parse(quote! { <MyComponent /> }) else {
+            panic!("expected component")
+        };
+        let tag = comp.delimiter.tag().unwrap();
+        assert!(tag.is_complete() && tag.is_self_closing());
+
+        let BodyNode::Element(el) = parse(quote! { div { <span /> } }) else {
+            panic!("expected element")
+        };
+        assert!(el.delimiter.brace().is_some());
+    }
+
+    #[test]
+    fn closing_tags_dont_need_generics() {
+        let node = parse(quote! { <Outlet<R>>"child"</Outlet> });
+        assert!(diagnostics(&node).is_empty());
+    }
+
+    #[test]
+    fn parses_expressions_before_tags() {
+        // Braced expressions and `match` nodes end at a following tag
+        let node = parse(quote! {
+            <ul>
+                {first}
+                <li>"item"</li>
+                match x { _ => rsx! {} }
+                <li>"item"</li>
+                match x { _ => rsx! {} }
+            </ul>
+        });
+        let BodyNode::Element(el) = node else {
+            panic!("expected element")
+        };
+        assert_eq!(el.children.len(), 5);
+
+        // But braced attribute values in the regular syntax are still full expressions
+        let node = parse(quote! { div { hidden: {a} < b } });
+        let BodyNode::Element(el) = node else {
+            panic!("expected element")
+        };
+        assert_eq!(el.raw_attributes.len(), 1);
+        assert!(el.children.is_empty());
+    }
+
+    #[test]
+    fn rejects_unquoted_text() {
+        for input in [
+            quote! { <h1>Hello world</h1> },
+            quote! { <h1>Hello, world</h1> },
+            quote! { <h1>42</h1> },
+            quote! { <h1>"Hello" world!</h1> },
+        ] {
+            let err = syn::parse2::<BodyNode>(input).unwrap_err();
+            assert!(err.to_string().contains("quoted string literal"), "{err}");
+        }
+
+        // A single word might also be an element or component that is still being typed
+        for input in [quote! { <h1>Hello</h1> }, quote! { <h1>hello</h1> }] {
+            let BodyNode::Element(el) = parse(input) else {
+                panic!("expected element")
+            };
+            assert!(el.diagnostics.is_empty());
+            assert_eq!(el.children.len(), 1);
+            assert!(!diagnostics(&el.children[0]).is_empty());
+        }
+    }
+
+    #[test]
+    fn partially_expands_incomplete_tags() {
+        // Unterminated open tags
+        for input in [
+            quote! { <di },
+            quote! { <div cl },
+            quote! { <div class="a" },
+            quote! { <div class= },
+            quote! { <MyComponent prop },
+        ] {
+            let node = parse(input);
+            assert!(!diagnostics(&node).is_empty());
+        }
+
+        // Incomplete expressions in attribute values are kept as raw tokens
+        let node = parse(quote! { <div class={foo.} /> });
+        assert!(diagnostics(&node).is_empty());
+
+        // Missing closing tags
+        let node = parse(quote! { <div>"hi" });
+        assert!(!diagnostics(&node).is_empty());
+
+        // An unterminated tag doesn't swallow its siblings or the closing tag of its parent
+        let BodyNode::Element(el) = parse(quote! { <div> <sp <b>"bold"</b> </div> }) else {
+            panic!("expected element")
+        };
+        assert!(el.diagnostics.is_empty());
+        assert_eq!(el.children.len(), 2);
+        assert!(!diagnostics(&el.children[0]).is_empty());
+        assert!(diagnostics(&el.children[1]).is_empty());
+
+        // A tag that is missing its closing tag doesn't swallow the closing tag of its parent
+        let BodyNode::Element(el) = parse(quote! { <div><span>"x"</div> }) else {
+            panic!("expected element")
+        };
+        assert!(el.diagnostics.is_empty());
+        assert!(el.delimiter.tag().unwrap().is_complete());
+        assert!(!diagnostics(&el.children[0]).is_empty());
+
+        // Incomplete tags inside of the regular syntax
+        let BodyNode::Element(el) = parse(quote! { div { <sp } }) else {
+            panic!("expected element")
+        };
+        assert!(!diagnostics(&el.children[0]).is_empty());
     }
 
     #[test]

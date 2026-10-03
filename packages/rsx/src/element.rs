@@ -34,8 +34,8 @@ pub struct Element {
     /// The children of the element
     pub children: Vec<BodyNode>,
 
-    /// the brace of the `div { }`
-    pub brace: Option<Brace>,
+    /// The tokens around the body: the brace of `div { }` or the tags of `<div></div>`
+    pub delimiter: NodeDelimiter,
 
     /// A list of diagnostics that were generated during parsing. This element might be a valid rsx_block
     /// but not technically a valid element - these diagnostics tell us what's wrong and then are used
@@ -49,14 +49,14 @@ impl Parse for Element {
 
         // We very liberally parse elements - they might not even have a brace!
         // This is designed such that we can emit a diagnostic instead of failing to parse.
-        let mut brace = None;
+        let mut delimiter = NodeDelimiter::Missing;
         let mut block = RsxBlock::default();
 
         match stream.peek(Brace) {
             // If the element is followed by a brace, it is complete. Parse the body
             true => {
                 block = stream.parse::<RsxBlock>()?;
-                brace = Some(block.brace);
+                delimiter = NodeDelimiter::Brace(block.brace);
             }
 
             // Otherwise, it is incomplete. Add a diagnostic
@@ -72,7 +72,7 @@ impl Parse for Element {
             block.attributes,
             block.spreads,
             block.children,
-            brace,
+            delimiter,
             block.diagnostics,
         ))
     }
@@ -102,7 +102,7 @@ impl Element {
         mut attributes: Vec<Attribute>,
         spreads: Vec<Spread>,
         children: Vec<BodyNode>,
-        brace: Option<Brace>,
+        delimiter: NodeDelimiter,
         diagnostics: Diagnostics,
     ) -> Self {
         // Make sure these attributes have element context for name and namespace resolution.
@@ -112,7 +112,7 @@ impl Element {
 
         // Assemble the new element from the contents of the block
         let mut element = Element {
-            brace,
+            delimiter,
             name: name.clone(),
             raw_attributes: attributes,
             children,
