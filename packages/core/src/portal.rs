@@ -214,6 +214,11 @@ pub fn Portal(_: PortalProps) -> Element {
 /// target instead of mounting at the scope's slot.
 struct PortalDriver;
 
+/// Whether `driver` renders a [`Portal`] scope.
+pub(crate) fn is_portal_driver(driver: &dyn RenderDriver) -> bool {
+    driver.as_any().is::<PortalDriver>()
+}
+
 fn portal_props(dom: &VirtualDom, scope_id: ScopeId) -> (RenderTargetId, LastRenderedNode) {
     let props = dom.scopes[scope_id.index()]
         .props
@@ -230,13 +235,13 @@ fn portal_props(dom: &VirtualDom, scope_id: ScopeId) -> (RenderTargetId, LastRen
 /// when it should only allocate a fresh root mount.
 fn place_children(
     scope_id: ScopeId,
-    target_id: RenderTargetId,
     children: LastRenderedNode,
     old_root_mount: Option<MountId>,
     parent: Option<MountId>,
     dom: &mut VirtualDom,
     render_to: Option<&mut (dyn WriteMutations + '_)>,
 ) -> MountId {
+    let target_id = dom.runtime.get_state(scope_id).target_id();
     debug_assert_eq!(
         dom.runtime.current_render_target_id(),
         target_id,
@@ -292,20 +297,11 @@ impl RenderDriver for PortalDriver {
         if let Some(old_output) = dom.scopes[scope_id.index()].last_rendered_node.clone() {
             // The props' children handle is not mount-accurate after first create
             // (mounts land on the rendered clone), so re-place from mounted output.
-            let target_id = dom.runtime.get_state(scope_id).target_id();
             let root_mount = old_output.root_mount();
             let children = old_output.node().clone();
 
             return dom.runtime.clone().with_scope_on_stack(scope_id, || {
-                place_children(
-                    scope_id,
-                    target_id,
-                    children,
-                    Some(root_mount),
-                    parent,
-                    dom,
-                    to,
-                );
+                place_children(scope_id, children, Some(root_mount), parent, dom, to);
                 0
             });
         }
@@ -318,7 +314,7 @@ impl RenderDriver for PortalDriver {
         dom.runtime.set_scope_target_id(scope_id, target_id);
 
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            place_children(scope_id, target_id, children, None, parent, dom, to);
+            place_children(scope_id, children, None, parent, dom, to);
             0
         })
     }
@@ -358,7 +354,6 @@ impl RenderDriver for PortalDriver {
 
                 let root_mount = place_children(
                     scope_id,
-                    target_id,
                     new_children,
                     None,
                     logical_parent,
