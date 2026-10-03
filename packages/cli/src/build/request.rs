@@ -1824,10 +1824,7 @@ impl BuildRequest {
         // these args, they will be captured and re-ran for the fast compiles in the future, so whatever
         // we set here will be set for all future hot patches too.
         if matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
-            let is_wasm = matches!(
-                self.triple.architecture,
-                target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
-            ) || self.triple.operating_system == OperatingSystem::Wasi;
+            let is_wasm = self.is_wasm_or_wasi();
 
             // rustc gives us some portable flags required:
             // - save-temps=true: keeps the incremental object files around, which we need for manually linking.
