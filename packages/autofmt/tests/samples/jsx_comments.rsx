@@ -56,4 +56,32 @@ rsx! {
         // Before the only attribute
         src="a" // After the only attribute
     />
+
+    // Comments in the middle of an open tag
+    <div // after the name
+        class="a"
+    >
+        "child"
+    </div>
+    <img // after the name of a self-closing tag
+    />
+    <div
+        class= // after the equals sign
+            "a"
+        id=
+            // above the value
+            {id}
+        width={if a {
+            // inside an if value
+            "1"
+        } else {
+            "2" // after the value of a branch
+        }}
+    >
+        for item in items
+            // inside the header of a for loop
+            .iter() {
+            <span>"{item}"</span>
+        }
+    </div>
 }
