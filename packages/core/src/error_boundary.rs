@@ -225,6 +225,7 @@ impl PartialEq for ErrorBoundaryProps {
 /// Error boundaries handle errors within a specific part of your application. They are similar to `try/catch` in JavaScript, but they only catch errors in the tree below them.
 /// Any errors passed up from a child will be caught by the nearest error boundary. Error boundaries are quick to implement, but it can be useful to individually handle errors
 /// in your components to provide a better user experience when you know that an error is likely to occur.
+/// Errors returned by `handle_error` propagate to the nearest ancestor error boundary.
 ///
 /// ## Example
 ///
