@@ -241,6 +241,7 @@ use tokio::{io::AsyncBufReadExt, process::Command};
 /// All updates from the build will be sent on a global "BuildProgress" channel.
 #[derive(Clone)]
 pub(crate) struct BuildRequest {
+    pub(crate) kind: BuildKind,
     pub(crate) workspace: Arc<Workspace>,
     pub(crate) config: DioxusConfig,
     pub(crate) crate_package: NodeId,
@@ -272,6 +273,17 @@ pub(crate) struct BuildRequest {
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
+}
+
+/// What the build is producing. `Check` and `Test` builds go through the same `cargo` pipeline
+/// as `Build` (sharing dep artifacts) but stop at the cargo stage - no bundling or exe staging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
+pub(crate) enum BuildKind {
+    #[default]
+    Build,
+    Check,
+    #[allow(dead_code)]
+    Test,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -890,6 +902,7 @@ impl BuildRequest {
         );
 
         Ok(Self {
+            kind: BuildKind::Build,
             features,
             bundle,
             all_features,
@@ -936,11 +949,11 @@ impl BuildRequest {
         _ = std::fs::File::create(self.link_args_file());
         _ = std::fs::File::create(self.windows_command_file());
 
-        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
+        if self.kind == BuildKind::Build && !matches!(ctx.mode, BuildMode::Thin { .. }) {
             self.prepare_build_dir(ctx)?;
         }
 
-        if !ctx.is_primary_build() {
+        if self.kind != BuildKind::Build || !ctx.is_primary_build() {
             return Ok(());
         }
 
@@ -970,6 +983,12 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build(&self, ctx: BuildContext) -> Result<BuildArtifacts> {
+        // Check and test builds end at the cargo stage - there's no executable to post-process,
+        // bundle, or extract assets from.
+        if self.kind != BuildKind::Build {
+            return self.cargo_build(&ctx).await;
+        }
+
         match &ctx.mode {
             // In hotpatch mode, we use the dedicated hotpatch flow
             BuildMode::Thin { .. } => self.compile_workspace_hotpatch(&ctx).await,
@@ -1141,7 +1160,32 @@ impl BuildRequest {
                         target_name,
                         artifact.fresh,
                     );
-                    output_location = artifact.executable.map(Into::into);
+                    // Only record the artifact for the tip target - other units must not
+                    // overwrite it.
+                    let tip_kind = match self.executable_type() {
+                        TargetKind::Bin => Some(cargo_metadata::TargetKind::Bin),
+                        TargetKind::Lib => Some(cargo_metadata::TargetKind::Lib),
+                        TargetKind::Example => Some(cargo_metadata::TargetKind::Example),
+                        _ => None,
+                    };
+                    if artifact.target.name == self.executable_name()
+                        && tip_kind.is_some_and(|kind| artifact.target.kind.contains(&kind))
+                    {
+                        match artifact.executable {
+                            Some(exe) => output_location = Some(exe.into()),
+                            None => {
+                                if let Some(rmeta) = artifact.filenames.first() {
+                                    // `cargo check` emits no executable - the primary output is
+                                    // `deps/libX-<hash>.rmeta` (even for bins). The dep-info
+                                    // lives at the sibling `deps/X-<hash>.d`, so record the
+                                    // stripped path and let `with_extension("d")` find it.
+                                    if self.kind == BuildKind::Check {
+                                        output_location = Some(deps_sibling_exe_from_rmeta(rmeta));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
@@ -1157,8 +1201,12 @@ impl BuildRequest {
             }
         }
 
+        let building = self.kind == BuildKind::Build;
+
         // If there's any warnings from the linker, we should print them out
-        self.print_linker_warnings(&output_location);
+        if building {
+            self.print_linker_warnings(&output_location);
+        }
 
         // Load the captured rustc args from the rustc_workspace_wrapper
         let workspace_rustc_args = self.load_rustc_argset()?;
@@ -1167,15 +1215,19 @@ impl BuildRequest {
         let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
-        if matches!(ctx.mode, BuildMode::Fat) {
+        if building && matches!(ctx.mode, BuildMode::Fat) {
             self.run_fat_link(ctx, &exe, &workspace_rustc_args).await?;
         }
 
-        // Asset extraction is starts bundle
-        ctx.status_start_bundle();
-
         // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
-        let assets = self.collect_assets_and_metadata(&exe, ctx).await?;
+        // Check/test builds never produce an exe carrying these symbols, so skip the pass entirely.
+        let assets = match building {
+            true => {
+                ctx.status_start_bundle();
+                self.collect_assets_and_metadata(&exe, ctx).await?
+            }
+            false => AppManifest::new(),
+        };
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
@@ -1579,6 +1631,15 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// The cargo subcommand driving this build - `cargo check` for check builds (no codegen or
+    /// link step, just rmeta), `cargo rustc` otherwise so we can pass extra `--` rustc args.
+    fn cargo_subcommand(&self) -> &'static str {
+        match self.kind {
+            BuildKind::Check => "check",
+            _ => "rustc",
+        }
+    }
+
     /// Assemble the `cargo rustc` / `rustc` command
     ///
     /// When building fat/base binaries, we use `cargo rustc`.
@@ -1655,7 +1716,7 @@ impl BuildRequest {
                     tracing::trace!(": {}", a);
                 }
 
-                cmd.arg("rustc")
+                cmd.arg(self.cargo_subcommand())
                     .current_dir(self.crate_dir())
                     .arg("--message-format")
                     .arg("json-diagnostic-rendered-ansi")
@@ -1719,14 +1780,19 @@ impl BuildRequest {
         cargo_args.push(String::from("-p"));
         cargo_args.push(self.package.clone());
 
-        // Set the executable
+        // Set the executable. `--lib` selects the package's library and takes no name.
         match self.executable_type() {
-            TargetKind::Bin => cargo_args.push("--bin".to_string()),
             TargetKind::Lib => cargo_args.push("--lib".to_string()),
-            TargetKind::Example => cargo_args.push("--example".to_string()),
+            TargetKind::Bin => {
+                cargo_args.push("--bin".to_string());
+                cargo_args.push(self.executable_name().to_string());
+            }
+            TargetKind::Example => {
+                cargo_args.push("--example".to_string());
+                cargo_args.push(self.executable_name().to_string());
+            }
             _ => {}
-        };
-        cargo_args.push(self.executable_name().to_string());
+        }
 
         // Set offline/locked/frozen
         let lock_opts = crate::verbosity_or_default();
@@ -1742,11 +1808,19 @@ impl BuildRequest {
 
         // Merge in extra args. Order shouldn't really matter.
         cargo_args.extend(self.extra_cargo_args.clone());
+
+        // `cargo check` rejects trailing rustc args after `--`; those are folded into RUSTFLAGS
+        // instead (see cargo_build_env_vars).
+        if self.kind == BuildKind::Check {
+            return cargo_args;
+        }
+
         cargo_args.push("--".to_string());
         cargo_args.extend(self.extra_rustc_args.clone());
 
         // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
-        if matches!(self.bundle, BundleFormat::Windows)
+        if self.kind == BuildKind::Build
+            && matches!(self.bundle, BundleFormat::Windows)
             && !self
                 .rustflags
                 .flags
@@ -1773,8 +1847,9 @@ impl BuildRequest {
         // dx links android, thin builds, and fat builds with a custom linker.
         // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
         // frameworks that load at runtime, not linked statically into the binary.
-        let use_dx_linker = self.custom_linker.is_some()
-            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat);
+        let use_dx_linker = self.kind != BuildKind::Check
+            && (self.custom_linker.is_some()
+                || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat));
 
         if use_dx_linker {
             cargo_args.push(format!(
@@ -1928,7 +2003,14 @@ impl BuildRequest {
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
-        let rust_flags = self.rustflags.clone();
+        let mut rust_flags = self.rustflags.clone();
+
+        // `cargo check` can't take rustc args after `--`, so fold them into RUSTFLAGS instead.
+        if self.kind == BuildKind::Check {
+            rust_flags
+                .flags
+                .extend(self.extra_rustc_args.iter().cloned());
+        }
 
         // Set the rust flags for the build if they're not empty.
         if !rust_flags.flags.is_empty() {
@@ -1944,8 +2026,9 @@ impl BuildRequest {
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
         // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
         // frameworks that load at runtime, not linked statically into the binary.
-        let use_dx_linker = self.custom_linker.is_some()
-            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat);
+        let use_dx_linker = self.kind != BuildKind::Check
+            && (self.custom_linker.is_some()
+                || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat));
 
         if use_dx_linker {
             // For Android, we pass the actual linker so cargo can still link normally.
@@ -2392,7 +2475,7 @@ impl BuildRequest {
 
         let output = tokio::process::Command::new("cargo")
             .arg("+nightly")
-            .arg("rustc")
+            .arg(self.cargo_subcommand())
             .arg("--unit-graph")
             .arg("-Z")
             .arg("unstable-options")
@@ -3202,4 +3285,17 @@ impl BuildRequest {
 
         deps
     }
+}
+
+/// Derive the sibling path cargo/rustc actually writes next to a `deps/libX-<hash>.rmeta`
+/// primary output: `deps/X-<hash>` (`.exe` on Windows). For `cargo check` that's the stem
+/// the `.d` dep-info is written under.
+fn deps_sibling_exe_from_rmeta(rmeta: &cargo_metadata::camino::Utf8Path) -> PathBuf {
+    let stem = rmeta.file_stem().unwrap_or_default();
+    let stem = stem.strip_prefix("lib").unwrap_or(stem);
+    let mut exe = rmeta.with_file_name(stem);
+    if cfg!(windows) {
+        exe.set_extension("exe");
+    }
+    exe.into()
 }
