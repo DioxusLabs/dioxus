@@ -103,6 +103,11 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 #[cfg(all(feature = "devtools", debug_assertions))]
                 UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
 
+                #[cfg(any(target_os = "macos", target_os = "ios"))]
+                UserWindowEvent::WebContentProcessTerminated(id) => {
+                    app.handle_web_content_process_terminated(id)
+                }
+
                 // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
                 UserWindowEvent::WindowsDragDrop(id) => {
                     if let Some(app_webview) = app.webviews.get(&id) {

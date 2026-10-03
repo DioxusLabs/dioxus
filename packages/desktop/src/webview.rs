@@ -5,7 +5,7 @@ use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
     DesktopContext, DesktopService, WindowConfig, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, page_gate::PageLoadGate, protocol,
 };
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
@@ -15,7 +15,7 @@ use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedF
 use std::rc::Rc;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU32, Ordering},
+    atomic::{AtomicU32, Ordering},
 };
 use std::{cell::OnceCell, time::Duration};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -248,6 +248,7 @@ pub(crate) struct WebviewInstance {
     pub desktop_context: DesktopContext,
     /// The page that last reported `initialize`, so a later page is a reload.
     pub(crate) initialized_page: Option<u32>,
+    pub(crate) page_gate: Arc<PageLoadGate>,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -416,7 +417,7 @@ impl WebviewInstance {
         };
 
         let navigation_handler = cfg.navigation_handler.take();
-        let page_loaded = AtomicBool::new(false);
+        let page_gate = Arc::new(PageLoadGate::default());
 
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
@@ -429,31 +430,30 @@ impl WebviewInstance {
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
-            .with_navigation_handler(move |var| {
-                // Serve the index and assets.
-                if var.starts_with("dioxus://")
-                    || var.starts_with("http://dioxus.")
-                    || var.starts_with("https://dioxus.")
-                {
-                    // Android loads the index again into the webview of a recreated activity, which is
-                    // redrawn on `initialize`. Other navigations, such as a form submission, would replace the app.
-                    let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
-                    return (cfg!(target_os = "android") && var == crate::protocol::BASE_URI)
-                        || !page_loaded;
-                }
+            .with_navigation_handler({
+                let page_gate = page_gate.clone();
+                move |var| {
+                    // Serve the index and assets.
+                    if var.starts_with("dioxus://")
+                        || var.starts_with("http://dioxus.")
+                        || var.starts_with("https://dioxus.")
+                    {
+                        return page_gate.allow_app_page(&var);
+                    }
 
-                // External links always open somewhere else. Prevents the webview from navigating
-                if var.starts_with("http://")
-                    || var.starts_with("https://")
-                    || var.starts_with("mailto:")
-                {
-                    _ = webbrowser::open(&var);
-                    return false;
-                }
+                    // External links always open somewhere else. Prevents the webview from navigating
+                    if var.starts_with("http://")
+                        || var.starts_with("https://")
+                        || var.starts_with("mailto:")
+                    {
+                        _ = webbrowser::open(&var);
+                        return false;
+                    }
 
-                // By default, external links are allowed. This keeps things like iframes working.
-                // However, users can customize this to allow/disallow domains/routes/patterns.
-                navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+                    // By default, external links are allowed. This keeps things like iframes working.
+                    // However, users can customize this to allow/disallow domains/routes/patterns.
+                    navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+                }
             })
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
 
@@ -470,6 +470,16 @@ impl WebviewInstance {
         {
             use wry::WebViewBuilderExtWindows;
             webview = webview.with_browser_accelerator_keys(false);
+        }
+
+        // wry implements the termination delegate method, so WebKit no longer reloads the page itself.
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            use wry::WebViewBuilderExtDarwin as _;
+            let (proxy, window_id) = (app_context.proxy.to_owned(), window.id());
+            webview = webview.with_on_web_content_process_terminate_handler(move || {
+                _ = proxy.send_event(UserWindowEvent::WebContentProcessTerminated(window_id));
+            });
         }
 
         if !cfg.disable_file_drop_handler {
@@ -586,6 +596,7 @@ impl WebviewInstance {
             edits,
             desktop_context,
             initialized_page: None,
+            page_gate,
             _menu: menu,
             _web_context: web_context,
         }

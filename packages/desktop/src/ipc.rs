@@ -35,6 +35,10 @@ pub enum UserWindowEvent {
     WindowsDragOver(WindowId, i32, i32),
     WindowsDragLeave(WindowId),
 
+    /// The web content process of a window's webview terminated.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    WebContentProcessTerminated(WindowId),
+
     /// Create a new window
     NewWindow,
 

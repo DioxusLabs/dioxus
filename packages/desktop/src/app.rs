@@ -296,6 +296,9 @@ impl App {
         if app_webview.edits.is_replaced(page) || app_webview.initialized_page == Some(page) {
             return;
         }
+        app_webview
+            .page_gate
+            .page_initialized(std::time::Instant::now());
 
         if app_webview.initialized_page.replace(page).is_some() {
             self.redraw_reloaded_page(id);
@@ -316,8 +319,9 @@ impl App {
         self.schedule_poll();
     }
 
-    /// Give a reloaded page, such as the one Android loads into a recreated activity, the
-    /// webview's head elements and whole tree again. Component state is kept.
+    /// Give a reloaded page, such as the one Android loads into a recreated activity or the one
+    /// loaded after a web content process terminated, the webview's head elements and whole tree
+    /// again. Component state is kept.
     fn redraw_reloaded_page(&mut self, id: WindowId) {
         let app_webview = &self.webviews[&id];
         app_webview.edits.wry_queue.start_new_page();
@@ -329,6 +333,33 @@ impl App {
         let mut writer = self.dom_writer();
         self.dom.remount_render_target(target_id, &mut writer);
         self.send_touched_edits();
+    }
+
+    /// Load the index again into a webview whose web content process terminated, unless WebKit's
+    /// crash-loop policy refuses. The new page is redrawn on `initialize`.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    pub fn handle_web_content_process_terminated(&mut self, id: WindowId) {
+        let Some(app_webview) = self.webviews.get(&id) else {
+            return;
+        };
+        if !app_webview
+            .page_gate
+            .web_content_terminated(std::time::Instant::now())
+        {
+            tracing::error!(
+                "The web content process terminated again right after a reload, not reloading"
+            );
+            return;
+        }
+        if let Err(err) = app_webview
+            .desktop_context
+            .webview
+            .load_url(crate::protocol::BASE_URI)
+        {
+            tracing::error!(
+                "Failed to reload the page after its web content process terminated: {err}"
+            );
+        }
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
