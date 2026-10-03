@@ -1,0 +1,20 @@
+[package]
+name = "harness-web-tests"
+version = "0.0.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["web"] }
+
+[features]
+
+[dev-dependencies]
+dioxus-test-harness = { workspace = true }
+dioxus-core = { workspace = true }
+dioxus-signals = { workspace = true }
+
+[[test]]
+name = "web"
+harness = false
