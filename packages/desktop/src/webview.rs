@@ -13,7 +13,10 @@ use dioxus_core::{RenderTargetId, Runtime, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
 use std::rc::Rc;
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicU32, Ordering},
+};
 use std::{cell::OnceCell, time::Duration};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 
@@ -59,6 +62,8 @@ pub(crate) struct WebviewEdits {
     target_id: RenderTargetId,
     pub wry_queue: WryQueue,
     desktop_context: Rc<OnceCell<WeakDesktopContext>>,
+    /// How many index documents this webview has been served, which numbers its pages.
+    served_pages: Arc<AtomicU32>,
 }
 
 impl WebviewEdits {
@@ -68,7 +73,18 @@ impl WebviewEdits {
             target_id,
             wry_queue,
             desktop_context: Default::default(),
+            served_pages: Default::default(),
         }
+    }
+
+    /// Number a newly served index document.
+    pub(crate) fn serve_page(&self) -> u32 {
+        self.served_pages.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Whether a newer page than `page` has been served, so `page` is being replaced.
+    pub(crate) fn is_replaced(&self, page: u32) -> bool {
+        page < self.served_pages.load(Ordering::Relaxed)
     }
 
     pub fn handle_event(
@@ -230,6 +246,8 @@ impl WebviewEdits {
 pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
+    /// The page that last reported `initialize`, so a later page is a reload.
+    pub(crate) initialized_page: Option<u32>,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -248,6 +266,14 @@ impl WebviewInstance {
     /// this exposes it as the webview's identity to the app layer.
     pub(crate) fn target_id(&self) -> RenderTargetId {
         self.desktop_context.target_id
+    }
+
+    /// Make the page that reported `initialize` open the edits connection at its current location.
+    pub(crate) fn connect_initialized_page(&self) {
+        if let Some(page) = self.initialized_page {
+            let connect = self.edits.wry_queue.connect_script(page);
+            _ = self.desktop_context.webview.evaluate_script(&connect);
+        }
     }
 
     pub(crate) fn new(
@@ -409,9 +435,11 @@ impl WebviewInstance {
                     || var.starts_with("http://dioxus.")
                     || var.starts_with("https://dioxus.")
                 {
-                    // After the page has loaded once, don't allow any more navigation
+                    // Android loads the index again into the webview of a recreated activity, which is
+                    // redrawn on `initialize`. Other navigations, such as a form submission, would replace the app.
                     let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
-                    return !page_loaded;
+                    return (cfg!(target_os = "android") && var == crate::protocol::BASE_URI)
+                        || !page_loaded;
                 }
 
                 // External links always open somewhere else. Prevents the webview from navigating
@@ -557,6 +585,7 @@ impl WebviewInstance {
         WebviewInstance {
             edits,
             desktop_context,
+            initialized_page: None,
             _menu: menu,
             _web_context: web_context,
         }

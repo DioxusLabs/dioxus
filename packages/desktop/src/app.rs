@@ -279,14 +279,27 @@ impl App {
         }
     }
 
-    /// The webview is finally loaded. Rebuild once, then start polling the
-    /// shared VDOM.
-    pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        if !self.webviews.contains_key(&id) {
+    /// A page finished loading in a webview. The first page of the app triggers the initial
+    /// rebuild and a page that replaced an earlier one is redrawn from the live VirtualDom, then
+    /// the page is told where to read its edits. A page being replaced, or already initialized, is ignored.
+    pub fn handle_initialize_msg(&mut self, msg: IpcMessage, id: WindowId) {
+        #[derive(serde::Deserialize)]
+        struct Params {
+            page: u32,
+        }
+        let Ok(Params { page }) = serde_json::from_value(msg.params()) else {
+            return;
+        };
+        let Some(app_webview) = self.webviews.get_mut(&id) else {
+            return;
+        };
+        if app_webview.edits.is_replaced(page) || app_webview.initialized_page == Some(page) {
             return;
         }
 
-        if !self.initial_dom_rebuild_done {
+        if app_webview.initialized_page.replace(page).is_some() {
+            self.redraw_reloaded_page(id);
+        } else if !self.initial_dom_rebuild_done {
             self.rebuild_dom();
             self.send_touched_edits();
 
@@ -298,7 +311,24 @@ impl App {
             }
         }
 
+        self.webviews[&id].connect_initialized_page();
+
         self.schedule_poll();
+    }
+
+    /// Give a reloaded page, such as the one Android loads into a recreated activity, the
+    /// webview's head elements and whole tree again. Component state is kept.
+    fn redraw_reloaded_page(&mut self, id: WindowId) {
+        let app_webview = &self.webviews[&id];
+        app_webview.edits.wry_queue.start_new_page();
+        app_webview.desktop_context.replay_head_elements();
+        let target_id = app_webview.target_id();
+
+        #[cfg(target_os = "android")]
+        let _lock = crate::android_sync_lock::android_runtime_lock();
+        let mut writer = self.dom_writer();
+        self.dom.remount_render_target(target_id, &mut writer);
+        self.send_touched_edits();
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
@@ -515,14 +545,7 @@ impl App {
                 .poll_new_edits_location(cx)
                 .is_ready()
             {
-                _ = app_webview
-                    .desktop_context
-                    .webview
-                    .evaluate_script(&format!(
-                        "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
-                        edits_path = app_webview.edits.wry_queue.edits_path(),
-                        expected_key = app_webview.edits.wry_queue.required_server_key()
-                    ));
+                app_webview.connect_initialized_page();
             }
 
             if app_webview
