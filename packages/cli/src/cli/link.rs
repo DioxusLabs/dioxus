@@ -1,7 +1,12 @@
 use crate::Result;
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, ffi::OsString, path::PathBuf, process::ExitCode};
+use std::{
+    borrow::Cow,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 use target_lexicon::Triple;
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
@@ -33,6 +38,7 @@ pub struct LinkAction {
     pub triple: Triple,
     pub link_args_file: PathBuf,
     pub link_err_file: PathBuf,
+    pub link_env_file: PathBuf,
 }
 
 /// The linker flavor to use. This influences the argument style that gets passed to the linker.
@@ -52,6 +58,7 @@ impl LinkAction {
     const DX_LINK_ARG: &str = "DX_LINK";
     const DX_ARGS_FILE: &str = "DX_LINK_ARGS_FILE";
     const DX_ERR_FILE: &str = "DX_LINK_ERR_FILE";
+    const DX_ENV_FILE: &str = "DX_LINK_ENV_FILE";
     const DX_LINK_TRIPLE: &str = "DX_LINK_TRIPLE";
     const DX_LINK_CUSTOM_LINKER: &str = "DX_LINK_CUSTOM_LINKER";
 
@@ -72,6 +79,9 @@ impl LinkAction {
                 .into(),
             link_err_file: std::env::var(Self::DX_ERR_FILE)
                 .expect("Linker error file not set")
+                .into(),
+            link_env_file: std::env::var(Self::DX_ENV_FILE)
+                .expect("Linker env file not set")
                 .into(),
             triple: std::env::var(Self::DX_LINK_TRIPLE)
                 .expect("Linker triple not set")
@@ -94,6 +104,10 @@ impl LinkAction {
         env_vars.push((
             Self::DX_ERR_FILE.into(),
             dunce::canonicalize(&self.link_err_file)?.into_os_string(),
+        ));
+        env_vars.push((
+            Self::DX_ENV_FILE.into(),
+            dunce::canonicalize(&self.link_env_file)?.into_os_string(),
         ));
         env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string().into()));
         if let Some(linker) = &self.linker {
@@ -143,6 +157,12 @@ impl LinkAction {
         // Write the linker args to a file for the main process to read
         // todo: we might need to encode these as escaped shell words in case newlines are passed
         std::fs::write(&self.link_args_file, args.join("\n"))?;
+
+        // Also write the env rustc gave us. rustc only hands some vars to its linker child, not to
+        // the rustc process the wrapper captured: `LIB`/`INCLUDE`/`PATH` from MSVC tool discovery
+        // on windows, the sysroot tool dirs on `PATH`, `LC_ALL`/`VSLANG`. Without `LIB` the fat/thin
+        // link replay can't resolve `kernel32.lib` and friends outside of a VS developer prompt.
+        write_link_envs(&self.link_env_file, std::env::vars())?;
 
         // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
         // any post-processing steps that rustc does.
@@ -239,6 +259,27 @@ impl LinkAction {
         }
 
         Ok(())
+    }
+}
+
+/// Persist the env of a linker invocation so the driving `dx` process can replay the link with it.
+pub(crate) fn write_link_envs(
+    path: &Path,
+    envs: impl IntoIterator<Item = (String, String)>,
+) -> Result<()> {
+    let envs: Vec<(String, String)> = envs.into_iter().collect();
+    std::fs::write(path, serde_json::to_string(&envs)?)?;
+    Ok(())
+}
+
+/// Read back the env written by [`write_link_envs`]. An empty or missing file means the link step
+/// never ran through our interception, so there is nothing to replay with.
+pub(crate) fn read_link_envs(path: &Path) -> Vec<(String, String)> {
+    match std::fs::read_to_string(path) {
+        Ok(contents) if !contents.trim().is_empty() => {
+            serde_json::from_str(&contents).unwrap_or_default()
+        }
+        _ => vec![],
     }
 }
 
