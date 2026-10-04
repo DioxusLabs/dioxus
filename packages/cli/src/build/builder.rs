@@ -375,6 +375,15 @@ impl AppBuilder {
             return;
         };
 
+        let tip_crate_name = self.build.tip_package_name();
+        let captured = &artifacts.workspace_rustc.rustc_args;
+
+        let is_in_target = |name: &str| {
+            name == tip_crate_name
+                || captured.contains_key(&format!("{name}.lib"))
+                || captured.contains_key(&format!("{name}.bin"))
+        };
+
         // On web, our patches are fully relocatable, so we don't need to worry about ASLR, but
         // for all other platforms, we need to use the ASLR reference to know where to insert the patch.
         let aslr_reference = match self.aslr_reference {
@@ -410,6 +419,7 @@ impl AppBuilder {
         // for the BFS, so they stay in sync automatically.
         // Track the tip by *package* name — that's the identity used by the file→crate
         // mapping and the workspace dependents graph (the bin target name can differ).
+        // now it filters crates that are not in the target (e.g. dev-dependencies)
         let tip_crate_name = self.build.tip_package_name();
         self.modified_crates.insert(tip_crate_name.clone());
 
@@ -420,6 +430,11 @@ impl AppBuilder {
             if !visited.insert(c.clone()) {
                 continue;
             }
+
+            if !is_in_target(&c) {
+                continue;
+            }
+
             self.modified_crates.insert(c.clone());
             for dep in self.build.workspace_dependents_of(&c) {
                 if dep != tip_crate_name && !visited.contains(&dep) {
