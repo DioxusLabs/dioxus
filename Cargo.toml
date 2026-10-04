@@ -51,6 +51,8 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/component-manifest",
+    "packages/test-harness",
+    "packages/test-harness-macro",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -168,6 +170,10 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "=0.8.0-alpha.1" 
 # cli
 dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "=0.8.0-alpha.1" }
 dioxus-cli-config = { path = "packages/cli-config", version = "=0.8.0-alpha.1" }
+
+# test harness
+dioxus-test-harness = { path = "packages/test-harness", version = "=0.8.0-alpha.1" }
+dioxus-test-harness-macro = { path = "packages/test-harness-macro", version = "=0.8.0-alpha.1" }
 
 # subsecond
 subsecond-types = { path = "packages/subsecond/subsecond-types", version = "=0.8.0-alpha.1" }

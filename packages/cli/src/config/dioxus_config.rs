@@ -55,6 +55,10 @@ pub(crate) struct DioxusConfig {
     /// Linux-specific configuration.
     #[serde(default)]
     pub(crate) linux: LinuxConfig,
+
+    /// `dx test` defaults.
+    #[serde(default)]
+    pub(crate) test: TestConfig,
 }
 
 /// Platform identifier for bundle resolution.
@@ -150,6 +154,7 @@ impl Default for DioxusConfig {
             macos: MacosConfig::default(),
             windows: WindowsConfig::default(),
             linux: LinuxConfig::default(),
+            test: TestConfig::default(),
         }
     }
 }
