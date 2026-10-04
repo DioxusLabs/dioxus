@@ -2,27 +2,21 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use proc_macro::{Delimiter, Group, TokenStream, TokenTree};
+
+fn group(delimiter: Delimiter, stream: TokenStream) -> TokenStream {
+    TokenTree::Group(Group::new(delimiter, stream)).into()
+}
 
 macro_rules! define_config_macro {
     ($name:ident if $($cfg:tt)+) => {
         #[proc_macro]
         pub fn $name(input: TokenStream) -> TokenStream {
             if cfg!($($cfg)+) {
-                let input = TokenStream2::from(input);
-                quote! {
-                    {
-                        #input
-                    }
-                }
+                group(Delimiter::Brace, input)
             } else {
-                quote! {
-                    ()
-                }
+                group(Delimiter::Parenthesis, TokenStream::new())
             }
-            .into()
         }
     };
 }

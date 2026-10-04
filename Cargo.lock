@@ -3389,10 +3389,6 @@ dependencies = [
 [[package]]
 name = "dioxus-config-macro"
 version = "0.8.0-alpha.1"
-dependencies = [
- "proc-macro2",
- "quote",
-]
 
 [[package]]
 name = "dioxus-config-macros"
