@@ -2,7 +2,7 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::innerlude::{VProps, Work};
+use crate::innerlude::{TaskPass, VProps, Work};
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
@@ -405,7 +405,7 @@ impl VirtualDom {
     }
 
     /// Mark a task as dirty
-    fn mark_task_dirty(&mut self, task: Task) {
+    pub(crate) fn mark_task_dirty(&mut self, task: Task) {
         let Some(scope) = self.runtime.task_scope(task) else {
             return;
         };
@@ -454,6 +454,14 @@ impl VirtualDom {
                 return;
             }
 
+            // A task that woke itself again during that pass is still queued, and its wakeup has
+            // already been taken off the channel. Hand control back to the executor before polling
+            // it again, so a task that is always ready cannot keep this future from ever returning.
+            if self.has_dirty_tasks() {
+                yield_now().await;
+                continue;
+            }
+
             // There isn't any more work we can do synchronously. Wait for any new work to be ready
             self.wait_for_event().await;
         }
@@ -500,13 +508,21 @@ impl VirtualDom {
 
     /// Poll any queued tasks, then drain effects if task wakeups did not make
     /// any scope dirty. In that case no render pass is coming to flush them.
+    ///
+    /// Each task is polled a bounded number of times per call; see [`TaskPass`].
     #[instrument(skip(self), level = "trace", name = "VirtualDom::poll_tasks")]
     fn poll_tasks(&mut self) {
         // Make sure we set the runtime since we're running user code
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
+        let mut pass = TaskPass::default();
+        self.poll_tasks_in_pass(&mut pass);
+        self.end_task_pass(pass);
+    }
+
+    fn poll_tasks_in_pass(&mut self, pass: &mut TaskPass) {
         while !self.has_dirty_scopes() {
-            let Some(task) = self.pop_task() else {
+            let Some(task) = self.pop_task_in_pass(pass) else {
                 break;
             };
 
@@ -522,7 +538,7 @@ impl VirtualDom {
         // task polling queued effects without dirtying any scope, wait_for_work
         // will not return for a render pass, so drain them before going back to
         // sleep.
-        self.drain_remaining_effects();
+        self.drain_remaining_effects(pass);
     }
 
     /// Rebuild the virtualdom without handling any of the mutations
@@ -604,7 +620,8 @@ impl VirtualDom {
     }
 
     fn render_immediate_with_writer(&mut self, to: &mut dyn WriteMutations) {
-        while let Some(work) = self.pop_work() {
+        let mut pass = TaskPass::default();
+        while let Some(work) = self.pop_work_in_pass(&mut pass) {
             match work {
                 Work::PollTask(task) => {
                     _ = self.runtime.handle_task_wakeup(task);
@@ -623,9 +640,10 @@ impl VirtualDom {
             // render would stop before the DOM converged.
             self.queue_events();
         }
+        self.end_task_pass(pass);
     }
 
-    fn drain_remaining_effects(&mut self) {
+    fn drain_remaining_effects(&mut self, pass: &mut TaskPass) {
         loop {
             let mut progressed = false;
 
@@ -638,7 +656,7 @@ impl VirtualDom {
                 }
             }
 
-            while let Some(task) = self.pop_task() {
+            while let Some(task) = self.pop_task_in_pass(pass) {
                 progressed = true;
                 _ = self.runtime.handle_task_wakeup(task);
                 self.queue_events();
