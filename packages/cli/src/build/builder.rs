@@ -6,6 +6,7 @@ use crate::{BuildPhaseProfile, opt::process_file_to};
 use anyhow::{Context, Error, bail};
 use futures_util::{FutureExt, future::OptionFuture, pin_mut};
 use itertools::Itertools;
+use send_ctrlc::{Interruptible, InterruptibleCommand, tokio::InterruptibleChild};
 use std::{
     collections::HashSet,
     env,
@@ -20,7 +21,7 @@ use subsecond_types::JumpTable;
 use target_lexicon::Architecture;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
-    process::{Child, ChildStderr, ChildStdout, Command},
+    process::{ChildStderr, ChildStdout, Command},
     task::JoinHandle,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -72,7 +73,7 @@ pub(crate) struct AppBuilder {
     pub runtime_asset_dir: Option<PathBuf>,
 
     // These might be None if the app died or the user did not specify a server
-    pub child: Option<Child>,
+    pub child: Option<InterruptibleChild>,
 
     // stdio for the app so we can read its stdout/stderr
     // we don't map stdin today (todo) but most apps don't need it
@@ -708,7 +709,8 @@ impl AppBuilder {
 
     /// Gracefully kill the process and all of its children
     ///
-    /// Uses the `SIGTERM` signal on unix and `taskkill` on windows.
+    /// Uses `send_ctrlc` to send `SIGTERM` on unix and `CTRL_BREAK_EVENT` on windows, to cleanly
+    /// shut down the child process.
     /// This complex logic is necessary for things like window state preservation to work properly.
     ///
     /// Also wipes away the entropy executables if they exist.
@@ -725,23 +727,47 @@ impl AppBuilder {
             return;
         };
 
-        // on unix, we can send a signal to the process to shut down
-        #[cfg(unix)]
-        {
-            _ = Command::new("kill")
-                .args(["-s", "TERM", &pid.to_string()])
-                .spawn();
-        }
+        // Ask the child to shut down gracefully; `kill_on_drop(true)` at spawn time is the
+        // forceful fallback if it doesn't exit within the timeout below.
+        _ = process.terminate();
 
-        // on windows, use the `taskkill` command
+        // `CTRL_BREAK_EVENT` only reaches processes attached to a console, and desktop apps
+        // save their window state on `WM_CLOSE`.
+        //
+        // We call `taskkill` without `/F` so that it sends `WM_CLOSE`.
         #[cfg(windows)]
-        {
-            _ = Command::new("taskkill")
+        tokio::spawn(async move {
+            let Ok(output) = Command::new("taskkill")
                 .args(["/PID", &pid.to_string()])
-                .spawn();
-        }
+                .stdin(Stdio::null())
+                .output()
+                .await
+            else {
+                return;
+            };
 
-        // join the wait with a 100ms timeout
+            // When terminating a child process during development, `taskkill` outputs
+            // "SUCCESS: Sent termination signal ..." when it sends `WM_CLOSE`,
+            // and "ERROR: The process ... not found." when the child has already exited from
+            // `CTRL_BREAK_EVENT`.
+            //
+            // These are expected output and dirty the console, so we filter them out of the logs.
+            let log_taskkill_output = |bytes: &[u8], is_expected: fn(&str) -> bool| {
+                String::from_utf8_lossy(bytes)
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty() && !is_expected(line))
+                    .for_each(|line| tracing::warn!("taskkill: {line}"));
+            };
+            log_taskkill_output(&output.stdout, |line| {
+                line.starts_with("SUCCESS: Sent termination signal")
+                    || (line.starts_with("ERROR: The process") && line.ends_with("not found."))
+            });
+        });
+        #[cfg(not(windows))]
+        let _ = pid;
+
+        // join the wait with a 1 second timeout
         futures_util::select! {
             _ = process.wait().fuse() => {}
             _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
@@ -1008,7 +1034,7 @@ impl AppBuilder {
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
-            .spawn()?;
+            .spawn_interruptible()?;
 
         let stdout = BufReader::new(child.stdout.take().unwrap());
         let stderr = BufReader::new(child.stderr.take().unwrap());
@@ -1070,7 +1096,7 @@ impl AppBuilder {
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
-            .spawn()?;
+            .spawn_interruptible()?;
 
         let stdout = BufReader::new(child.stdout.take().unwrap());
         let stderr = BufReader::new(child.stderr.take().unwrap());

@@ -54,6 +54,7 @@ krates = { workspace = true }
 regex = "1.12.3"
 console = "0.16.0"
 ctrlc = "3.4.7"
+send_ctrlc = { version = "0.6.0", features = ["tokio"] }
 
 axum = { workspace = true, default-features = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls-no-provider"] }

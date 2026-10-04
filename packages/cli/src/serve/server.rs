@@ -374,11 +374,23 @@ impl WebServer {
                 .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
                 .await
             {
-                tracing::warn!(
-                    "Failed to send devserver message to client (build_id: {:?}, pid: {:?}): {err}",
-                    socket.build_id,
-                    socket.pid
-                );
+                // By the time a [`DevserverMsg::Shutdown`] is sent, the CLI has already
+                // killed the spawned app processes (see `AppServer::shutdown`), so their
+                // devserver sockets are expected to already be gone. A failure to deliver that
+                // message is expected, so it's logged at `debug` instead of `warn`.
+                if matches!(msg, DevserverMsg::Shutdown) {
+                    tracing::debug!(
+                        "Failed to send devserver message to client (build_id: {:?}, pid: {:?}): {err}",
+                        socket.build_id,
+                        socket.pid
+                    );
+                } else {
+                    tracing::warn!(
+                        "Failed to send devserver message to client (build_id: {:?}, pid: {:?}): {err}",
+                        socket.build_id,
+                        socket.pid
+                    );
+                }
             }
         }
     }
