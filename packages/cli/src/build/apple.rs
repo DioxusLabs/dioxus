@@ -160,6 +160,8 @@ impl BuildRequest {
             pub executable_name: String,
             /// App version string (from Cargo.toml)
             pub version: String,
+            /// Bundle version string (CFBundleVersion)
+            pub bundle_version: String,
             /// Permission usage descriptions
             pub permissions: Vec<PlistPermission>,
             /// Additional plist entries as raw XML
@@ -231,6 +233,7 @@ impl BuildRequest {
                             executable_name: self.platform_exe_name(),
                             bundle_identifier: self.bundle_identifier(),
                             version: self.crate_version(),
+                            bundle_version: self.apple_bundle_version(),
                             permissions,
                             plist_entries,
                             raw_plist,
@@ -265,6 +268,7 @@ impl BuildRequest {
                             executable_name: self.platform_exe_name(),
                             bundle_identifier: self.bundle_identifier(),
                             version: self.crate_version(),
+                            bundle_version: self.apple_bundle_version(),
                             permissions,
                             plist_entries,
                             raw_plist,
