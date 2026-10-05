@@ -172,6 +172,8 @@ impl BuildRequest {
             pub url_schemes: Vec<String>,
             /// iOS UIBackgroundModes
             pub background_modes: Vec<String>,
+            /// Declare the UIScene life cycle (iOS only, unless the app declares its own)
+            pub scene_manifest: bool,
         }
 
         // Attempt to use the user's manually specified
@@ -237,6 +239,7 @@ impl BuildRequest {
                             minimum_system_version,
                             url_schemes: mapper.macos_url_schemes.clone(),
                             background_modes: Vec::new(), // macOS doesn't use UIBackgroundModes
+                            scene_manifest: false,
                         },
                     )
                     .map_err(|e| e.into())
@@ -256,6 +259,15 @@ impl BuildRequest {
                 let plist_entries = generate_plist_entries(&self.config.ios.plist);
                 let raw_plist = self.config.ios.raw.info_plist.clone().unwrap_or_default();
 
+                // Apps linked against the iOS 27 SDK are refused at launch unless they adopt the
+                // UIScene life cycle. Keep the app's own manifest if it declares one.
+                let scene_manifest = !self
+                    .config
+                    .ios
+                    .plist
+                    .contains_key("UIApplicationSceneManifest")
+                    && !raw_plist.contains("UIApplicationSceneManifest");
+
                 handlebars::Handlebars::new()
                     .render_template(
                         include_str!("../../assets/ios/ios.plist.hbs"),
@@ -271,6 +283,7 @@ impl BuildRequest {
                             minimum_system_version: String::new(), // Not used for iOS
                             url_schemes: mapper.ios_url_schemes.clone(),
                             background_modes: mapper.ios_background_modes.clone(),
+                            scene_manifest,
                         },
                     )
                     .map_err(|e| e.into())

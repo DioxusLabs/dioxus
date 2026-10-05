@@ -46,7 +46,6 @@ dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
 percent-encoding = { workspace = true }
 async-trait = { workspace = true }
-tao = { workspace = true, features = ["rwh_05"] }
 dioxus-history = { workspace = true }
 base64 = { workspace = true }
 libc = "0.2.174"
@@ -54,6 +53,12 @@ rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
 bytes = { workspace = true }
 webbrowser = { workspace = true }
+
+# The iOS 27 SDK refuses apps without the UIScene life cycle, which tao supports from 0.37 on. The
+# other platforms stay on the workspace version: tao 0.36 renamed the Android JNI entry points that
+# wry 0.53's `WryActivity` calls.
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+tao = { workspace = true, features = ["rwh_05"] }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"
@@ -70,6 +75,7 @@ muda = { workspace = true }
 tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
+tao = { version = "0.37.1", features = ["rwh_05"] }
 objc = "0.2.7"
 objc_id = "0.1.1"
 
