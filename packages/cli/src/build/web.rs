@@ -33,7 +33,9 @@
 //!         logo.png
 //! ```
 
-use crate::{BuildContext, BundleFormat, Result, TraceSrc, WasmBindgen, WasmOptConfig};
+use crate::{
+    BuildContext, BundleFormat, CompressionAlgorithm, Result, TraceSrc, WasmBindgen, WasmOptConfig,
+};
 use crate::{
     BuildMode, BuildRequest,
     opt::{AppManifest, js_is_module},
@@ -564,10 +566,12 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
-    /// Check if assets should be pre_compressed. This will only be true in release mode if the user
-    /// has enabled pre_compress in the web config.
-    pub fn should_pre_compress_web_assets(&self, release: bool) -> bool {
-        self.config.web.pre_compress & release
+    /// The algorithm assets should be pre_compressed with. This will only be `Some` in release mode
+    /// if the user has enabled pre_compress in the web config.
+    pub fn should_pre_compress_web_assets(&self, release: bool) -> Option<CompressionAlgorithm> {
+        release
+            .then(|| self.config.web.pre_compress.algorithm())
+            .flatten()
     }
 
     /// Check if the wasm output should be bundled to an asset type app.
