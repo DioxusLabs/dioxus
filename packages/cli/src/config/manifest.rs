@@ -371,49 +371,77 @@ pub struct IosConfig {
     #[serde(default)]
     pub imported_type_identifiers: Vec<IosTypeIdentifier>,
 
-    /// Widget extensions to compile and bundle.
-    /// Each entry defines a Swift-based widget extension (.appex) that will be
-    /// compiled and installed into the app's PlugIns folder.
-    #[serde(default)]
-    pub widget_extensions: Vec<WidgetExtensionConfig>,
+    /// App extensions to compile and bundle into the app's `PlugIns` folder.
+    /// `[[ios.widget_extensions]]` is accepted as an alias.
+    #[serde(default, alias = "widget_extensions")]
+    pub app_extensions: Vec<AppExtensionConfig>,
 }
 
-/// Configuration for an iOS Widget Extension.
+/// Default `extension_point`, kept for `[[ios.widget_extensions]]` backwards compatibility.
+pub(crate) const DEFAULT_APP_EXTENSION_POINT: &str = "com.apple.widgetkit-extension";
+
+fn default_extension_point() -> String {
+    DEFAULT_APP_EXTENSION_POINT.to_string()
+}
+
+/// Configuration for an iOS/macOS App Extension (`.appex`), compiled as a Swift
+/// executable sharing the PlugInKit `_NSExtensionMain` entry point.
 ///
-/// Widget extensions are compiled as Swift executables and bundled as .appex
-/// bundles in the app's PlugIns folder.
-///
-/// Example in Dioxus.toml:
 /// ```toml
-/// [[ios.widget_extensions]]
-/// source = "src/ios/widget"
-/// display_name = "Location Widget"
-/// bundle_id_suffix = "location-widget"
-/// deployment_target = "16.2"
-/// module_name = "GeolocationPlugin"
+/// [[ios.app_extensions]]
+/// source = "ios/notify"
+/// display_name = "Notify"
+/// bundle_id_suffix = "notify"
+/// extension_point = "com.apple.usernotifications.service"
+/// principal_class = "NotificationService"
+/// module_name = "Notify"
+/// rust_crate = "notify-core"
+/// entitlements = "ios/notify/Notify.entitlements"
+/// frameworks = ["UserNotifications"]
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct WidgetExtensionConfig {
+pub struct AppExtensionConfig {
     /// Path to the Swift package source directory (relative to project root).
     pub source: String,
 
-    /// Display name for the widget (shown in system UI).
+    /// Display name for the extension (shown in system UI).
     pub display_name: String,
 
     /// Bundle ID suffix appended to the app's bundle identifier.
-    /// For example, if the app is "com.example.app" and suffix is "location-widget",
-    /// the widget bundle ID will be "com.example.app.location-widget".
     pub bundle_id_suffix: String,
 
-    /// Minimum deployment target (e.g., "16.2").
-    /// Defaults to the app's iOS deployment target if not specified.
+    /// Minimum deployment target (e.g., "16.2"). Defaults to the app's.
     #[serde(default)]
     pub deployment_target: Option<String>,
 
-    /// Swift module name for the widget.
-    /// This MUST match the module name used by the main app's Swift plugin
-    /// for ActivityKit type matching to work.
+    /// Swift module name, qualifying `principal_class` into `NSExtensionPrincipalClass`.
     pub module_name: String,
+
+    /// The `NSExtensionPointIdentifier` this extension registers for.
+    /// Defaults to `com.apple.widgetkit-extension`.
+    #[serde(default = "default_extension_point")]
+    pub extension_point: String,
+
+    /// `NSObject` subclass iOS instantiates for this extension. A WidgetKit widget
+    /// registers through its `@main` bundle and leaves this unset.
+    #[serde(default)]
+    pub principal_class: Option<String>,
+
+    /// Frameworks to link beyond `Foundation`. Left empty, a `com.apple.widgetkit-extension`
+    /// entry links `SwiftUI`/`WidgetKit`/`ActivityKit`; any other extension point must list
+    /// what it needs.
+    #[serde(default)]
+    pub frameworks: Vec<String>,
+
+    /// Path to an `.entitlements` plist for this extension. Left unset, it is
+    /// auto-provisioned from a profile matching `<app bundle id>.<bundle_id_suffix>`.
+    #[serde(default)]
+    pub entitlements: Option<String>,
+
+    /// Name of a workspace crate to build as a static library and link into the
+    /// extension. Its `[lib]` must declare `crate-type = ["staticlib"]`.
+    #[serde(default)]
+    pub rust_crate: Option<String>,
 }
 
 /// iOS document type declaration.
@@ -1612,6 +1640,66 @@ mod tests {
                 .permissions
                 .contains_key("android.permission.FOREGROUND_SERVICE")
         );
+    }
+
+    #[test]
+    fn test_parse_app_extensions() {
+        let toml = r#"
+            [[ios.app_extensions]]
+            source = "ios/notify"
+            display_name = "Notify"
+            bundle_id_suffix = "notify"
+            extension_point = "com.apple.usernotifications.service"
+            principal_class = "NotificationService"
+            module_name = "Notify"
+            rust_crate = "notify-core"
+            entitlements = "ios/notify/Notify.entitlements"
+            frameworks = ["UserNotifications"]
+        "#;
+
+        #[derive(Deserialize)]
+        struct Config {
+            ios: IosConfig,
+        }
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.ios.app_extensions.len(), 1);
+        let ext = &config.ios.app_extensions[0];
+        assert_eq!(ext.extension_point, "com.apple.usernotifications.service");
+        assert_eq!(ext.principal_class, Some("NotificationService".to_string()));
+        assert_eq!(ext.rust_crate, Some("notify-core".to_string()));
+        assert_eq!(
+            ext.entitlements,
+            Some("ios/notify/Notify.entitlements".to_string())
+        );
+        assert_eq!(ext.frameworks, vec!["UserNotifications"]);
+    }
+
+    #[test]
+    fn test_parse_widget_extensions_alias_keeps_old_defaults() {
+        let toml = r#"
+            [[ios.widget_extensions]]
+            source = "src/ios/widget"
+            display_name = "Location Widget"
+            bundle_id_suffix = "location-widget"
+            deployment_target = "16.2"
+            module_name = "GeolocationPlugin"
+        "#;
+
+        #[derive(Deserialize)]
+        struct Config {
+            ios: IosConfig,
+        }
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.ios.app_extensions.len(), 1);
+        let ext = &config.ios.app_extensions[0];
+        assert_eq!(ext.display_name, "Location Widget");
+        assert_eq!(ext.extension_point, DEFAULT_APP_EXTENSION_POINT);
+        assert_eq!(ext.principal_class, None);
+        assert!(ext.frameworks.is_empty());
+        assert_eq!(ext.rust_crate, None);
+        assert_eq!(ext.entitlements, None);
     }
 
     #[test]

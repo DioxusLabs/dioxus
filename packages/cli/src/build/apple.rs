@@ -340,6 +340,11 @@ impl BuildRequest {
             }
         }
 
+        // Nested code must be signed before the containing app.
+        if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS) {
+            self.codesign_app_extensions(app_dev_name).await?;
+        }
+
         // codesign the app
         let output = Command::new("codesign")
             .args([
@@ -359,6 +364,89 @@ impl BuildRequest {
                 "Failed to codesign the app: {}",
                 String::from_utf8(output.stderr).unwrap_or_default()
             );
+        }
+
+        Ok(())
+    }
+
+    /// Signs each installed `.appex` with its own entitlements before the app is
+    /// signed, auto-provisioning from `<app bundle id>.<bundle_id_suffix>` unless
+    /// the config gives an explicit `entitlements` path.
+    async fn codesign_app_extensions(&self, app_dev_name: &str) -> Result<()> {
+        if self.config.ios.app_extensions.is_empty() {
+            return Ok(());
+        }
+
+        let plugins_dir = self.plugins_folder();
+        let app_bundle_id = self.bundle_identifier();
+
+        for extension_config in &self.config.ios.app_extensions {
+            let appex_name = format!(
+                "{}.appex",
+                extension_config.bundle_id_suffix.replace('-', "_")
+            );
+            let appex_path = plugins_dir.join(&appex_name);
+            if !appex_path.exists() {
+                continue;
+            }
+
+            // We don't want to drop the entitlements file until the end of the block.
+            let mut _saved_entitlements = None;
+
+            let entitlements_path = match &extension_config.entitlements {
+                Some(path) => self.package_manifest_dir().join(path),
+                None => {
+                    let extension_bundle_id =
+                        format!("{app_bundle_id}.{}", extension_config.bundle_id_suffix);
+                    let (entitlements_xml, profile_path) =
+                        Self::auto_provision_entitlements(&extension_bundle_id)
+                            .await
+                            .with_context(|| {
+                                format!(
+                                    "Failed to auto-provision entitlements for app extension '{}' (bundle id {extension_bundle_id})",
+                                    extension_config.display_name
+                                )
+                            })?;
+
+                    if self.bundle == BundleFormat::Ios {
+                        std::fs::copy(&profile_path, appex_path.join("embedded.mobileprovision"))
+                            .context("Failed to embed provisioning profile into app extension")?;
+                    }
+
+                    let entitlements_temp_file = tempfile::NamedTempFile::new()?;
+                    std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
+                    let path = entitlements_temp_file.path().to_path_buf();
+                    _saved_entitlements = Some(entitlements_temp_file);
+                    path
+                }
+            };
+
+            tracing::debug!(
+                "Codesigning app extension '{}' with entitlements: {}",
+                extension_config.display_name,
+                entitlements_path.display()
+            );
+
+            let output = Command::new("codesign")
+                .args([
+                    "--force",
+                    "--entitlements",
+                    entitlements_path.to_str().unwrap(),
+                    "--sign",
+                    app_dev_name,
+                ])
+                .arg(&appex_path)
+                .output()
+                .await
+                .context("Failed to codesign app extension - is `codesign` in your path?")?;
+
+            if !output.status.success() {
+                bail!(
+                    "Failed to codesign app extension '{}': {}",
+                    extension_config.display_name,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
 
         Ok(())
@@ -954,24 +1042,21 @@ We checked the folders:
         Ok(())
     }
 
-    /// Compile and install Apple Widget Extensions from Dioxus.toml config.
-    ///
-    /// This processes widget extensions declared in `[[ios.widget_extensions]]` by:
-    /// 1. Compiling the Swift package as a Widget Extension executable
-    /// 2. Creating the .appex bundle structure with Info.plist
-    /// 3. Installing to the app's PlugIns folder
-    pub async fn compile_widget_extensions(&self) -> Result<()> {
-        let widget_configs = &self.config.ios.widget_extensions;
-        if widget_configs.is_empty() {
+    /// Builds each `[[ios.app_extensions]]` entry's `rust_crate` as a static library,
+    /// compiles the Swift package linking it, and installs the resulting `.appex`
+    /// into the app's PlugIns folder.
+    pub async fn compile_app_extensions(&self) -> Result<()> {
+        let extension_configs = &self.config.ios.app_extensions;
+        if extension_configs.is_empty() {
             return Ok(());
         }
 
         tracing::debug!(
-            "Compiling {} Apple Widget Extension(s)",
-            widget_configs.len()
+            "Compiling {} Apple App Extension(s)",
+            extension_configs.len()
         );
 
-        let build_dir = self.target_dir.join("widget-build");
+        let build_dir = self.target_dir.join("app-extension-build");
         std::fs::create_dir_all(&build_dir)?;
 
         let app_bundle_id = self.bundle_identifier();
@@ -985,23 +1070,41 @@ We checked the folders:
         let plugins_dir = self.plugins_folder();
         std::fs::create_dir_all(&plugins_dir)?;
 
-        for widget_config in widget_configs {
-            let source_path = self.package_manifest_dir().join(&widget_config.source);
-            let deployment_target = widget_config
+        for extension_config in extension_configs {
+            let source_path = self.package_manifest_dir().join(&extension_config.source);
+            let deployment_target = extension_config
                 .deployment_target
                 .as_deref()
                 .unwrap_or(default_deployment_target);
 
-            let widget_source = super::apple::AppleWidgetSource {
-                source_path,
-                display_name: widget_config.display_name.clone(),
-                bundle_id_suffix: widget_config.bundle_id_suffix.clone(),
-                deployment_target: deployment_target.to_string(),
-                module_name: widget_config.module_name.clone(),
+            let rust_staticlib = match &extension_config.rust_crate {
+                Some(crate_name) => Some(
+                    self.build_extension_rust_staticlib(crate_name, &build_dir)
+                        .await
+                        .with_context(|| {
+                            format!(
+                                "Failed to build Rust crate '{crate_name}' for app extension '{}'",
+                                extension_config.display_name
+                            )
+                        })?,
+                ),
+                None => None,
             };
 
-            let appex_path = super::apple::compile_apple_widget(
-                &widget_source,
+            let extension_source = super::apple::AppleExtensionSource {
+                source_path,
+                display_name: extension_config.display_name.clone(),
+                bundle_id_suffix: extension_config.bundle_id_suffix.clone(),
+                deployment_target: deployment_target.to_string(),
+                module_name: extension_config.module_name.clone(),
+                extension_point: extension_config.extension_point.clone(),
+                principal_class: extension_config.principal_class.clone(),
+                frameworks: extension_config.frameworks.clone(),
+                rust_staticlib,
+            };
+
+            let appex_path = super::apple::compile_apple_extension(
+                &extension_source,
                 &self.triple,
                 &build_dir,
                 &app_bundle_id,
@@ -1010,8 +1113,8 @@ We checked the folders:
             .await
             .with_context(|| {
                 format!(
-                    "Failed to compile widget extension '{}'",
-                    widget_source.display_name
+                    "Failed to compile app extension '{}'",
+                    extension_source.display_name
                 )
             })?;
 
@@ -1019,7 +1122,7 @@ We checked the folders:
             let appex_name = appex_path
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "Widget.appex".to_string());
+                .unwrap_or_else(|| "Extension.appex".to_string());
             let dest_path = plugins_dir.join(&appex_name);
 
             if dest_path.exists() {
@@ -1029,13 +1132,70 @@ We checked the folders:
             self.copy_build_dir_recursive(&appex_path, &dest_path)?;
 
             tracing::debug!(
-                "Installed widget extension '{}' to {}",
-                widget_source.display_name,
+                "Installed app extension '{}' to {}",
+                extension_source.display_name,
                 dest_path.display()
             );
         }
 
         Ok(())
+    }
+
+    /// Builds a workspace crate as a static library for the current target, for
+    /// linking into an app extension's executable. The crate's `[lib]` must declare
+    /// `crate-type = ["staticlib"]`.
+    async fn build_extension_rust_staticlib(
+        &self,
+        crate_name: &str,
+        build_dir: &Path,
+    ) -> Result<PathBuf> {
+        let package = self
+            .workspace
+            .krates
+            .krates()
+            .find(|k| k.name == crate_name)
+            .with_context(|| format!("Crate '{crate_name}' was not found in the workspace"))?;
+
+        let triple = self.triple.to_string();
+        let target_dir = build_dir.join("rust-crates").join(crate_name);
+
+        let mut cmd = Command::new("cargo");
+        cmd.arg("build")
+            .arg("--manifest-path")
+            .arg(package.manifest_path.as_std_path())
+            .arg("--target")
+            .arg(&triple)
+            .arg("--target-dir")
+            .arg(&target_dir);
+        if self.release {
+            cmd.arg("--release");
+        }
+
+        let output = cmd
+            .output()
+            .await
+            .context("Failed to run `cargo build` - is `cargo` in your path?")?;
+
+        if !output.status.success() {
+            bail!(
+                "Failed to build Rust crate '{crate_name}': {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let profile_dir = if self.release { "release" } else { "debug" };
+        let lib_name = format!("lib{}.a", crate_name.replace('-', "_"));
+        let lib_path = target_dir.join(&triple).join(profile_dir).join(&lib_name);
+
+        if !lib_path.exists() {
+            bail!(
+                "Expected a static library at {} after building '{crate_name}'. Add \
+                 `crate-type = [\"staticlib\"]` to its `[lib]` section in Cargo.toml.",
+                lib_path.display()
+            );
+        }
+
+        Ok(lib_path)
     }
 }
 
@@ -1515,47 +1675,38 @@ fn collect_swift_files(dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(swift_files)
 }
 
-/// Information about an Apple Widget Extension to compile
-pub struct AppleWidgetSource {
+/// Information about an Apple App Extension to compile.
+pub struct AppleExtensionSource {
     /// Path to the Swift package source directory
     pub source_path: PathBuf,
-    /// Display name for the widget (shown in system UI)
+    /// Display name for the extension (shown in system UI)
     pub display_name: String,
     /// Bundle ID suffix (appended to app bundle ID)
     pub bundle_id_suffix: String,
     /// Minimum deployment target (e.g., "16.0")
     pub deployment_target: String,
-    /// Swift module name for the widget.
-    /// This MUST match the module name used by the main app's Swift plugin
-    /// for ActivityKit type matching to work (e.g., both must define
-    /// `ModuleName.LocationPermissionAttributes` as the same type).
+    /// Swift module name. For a widget, must match the main app's Swift plugin
+    /// module for ActivityKit type matching. Qualifies `principal_class`.
     pub module_name: String,
+    /// The `NSExtensionPointIdentifier` this extension registers for.
+    pub extension_point: String,
+    /// `NSObject` subclass iOS instantiates, written as `NSExtensionPrincipalClass`
+    /// qualified by `module_name`.
+    pub principal_class: Option<String>,
+    /// Frameworks to link beyond `Foundation`. Empty falls back to
+    /// `SwiftUI`/`WidgetKit`/`ActivityKit` for the default WidgetKit extension point,
+    /// and to nothing otherwise.
+    pub frameworks: Vec<String>,
+    /// A static library to link into the extension's executable.
+    pub rust_staticlib: Option<PathBuf>,
 }
 
-/// Compile an Apple Widget Extension from a Swift package source.
-///
-/// Widget Extensions are compiled as executables (not libraries) and bundled
-/// as .appex bundles which are installed in the app's PlugIns folder.
-///
-/// **Important**: Widget extensions are XPC services that require special initialization.
-/// We use `-e _NSExtensionMain` as the entry point instead of the default `_main` that
-/// Swift generates with `@main`. The `_NSExtensionMain` entry point (provided by Foundation):
-/// 1. Sets up the XPC listener
-/// 2. Initializes ExtensionFoundation's `_EXRunningExtension` singleton
-/// 3. Registers with PlugInKit
-/// 4. Then calls your Widget code
-///
-/// # Arguments
-/// * `widget` - Widget extension source configuration
-/// * `target_triple` - The target platform (e.g., aarch64-apple-ios)
-/// * `build_dir` - Directory for intermediate build files
-/// * `app_bundle_id` - The main app's bundle identifier (widget ID is derived from this)
-/// * `release` - Whether to build in release mode
-///
-/// # Returns
-/// Path to the compiled .appex bundle, ready to be installed to PlugIns/
-pub async fn compile_apple_widget(
-    widget: &AppleWidgetSource,
+/// Compiles an Apple App Extension from a Swift package source into an `.appex`
+/// bundle ready to install into PlugIns/. Links `-e _NSExtensionMain` as the entry
+/// point, the shared PlugInKit ABI every extension point uses regardless of whether
+/// it dispatches to a `principal_class` or a `@main` bundle.
+pub async fn compile_apple_extension(
+    extension: &AppleExtensionSource,
     target_triple: &Triple,
     build_dir: &Path,
     app_bundle_id: &str,
@@ -1572,37 +1723,37 @@ pub async fn compile_apple_widget(
 
     if !is_ios && !is_macos {
         anyhow::bail!(
-            "Apple Widget Extensions are only supported on iOS and macOS, not {:?}",
+            "Apple App Extensions are only supported on iOS and macOS, not {:?}",
             target_triple.operating_system
         );
     }
 
     // Validate source path exists
-    if !widget.source_path.exists() {
+    if !extension.source_path.exists() {
         anyhow::bail!(
-            "Widget Extension source path does not exist: {}",
-            widget.source_path.display()
+            "App Extension source path does not exist: {}",
+            extension.source_path.display()
         );
     }
 
     tracing::debug!(
-        "Compiling Apple Widget Extension '{}' for {}",
-        widget.display_name,
+        "Compiling Apple App Extension '{}' for {}",
+        extension.display_name,
         target_triple
     );
 
-    // Create the widget build directory
-    let widget_build_dir = build_dir.join("widget-extensions");
-    std::fs::create_dir_all(&widget_build_dir)?;
+    // Create the extension build directory
+    let extension_build_dir = build_dir.join("app-extensions");
+    std::fs::create_dir_all(&extension_build_dir)?;
 
     // Copy the Swift package to build directory
     // Use the bundle_id_suffix as a unique name since the folder name might just be "widget"
-    let widget_name = widget.bundle_id_suffix.replace("-", "_");
-    let source_dir = widget_build_dir.join(format!("{}_src", widget_name));
+    let extension_name = extension.bundle_id_suffix.replace("-", "_");
+    let source_dir = extension_build_dir.join(format!("{}_src", extension_name));
     if source_dir.exists() {
         std::fs::remove_dir_all(&source_dir)?;
     }
-    copy_dir_recursive(&widget.source_path, &source_dir)?;
+    copy_dir_recursive(&extension.source_path, &source_dir)?;
 
     // Get Swift target triple and SDK
     let (swift_triple, sdk_name) = swift_target_and_sdk(target_triple)?;
@@ -1613,22 +1764,22 @@ pub async fn compile_apple_widget(
 
     if swift_files.is_empty() {
         anyhow::bail!(
-            "No Swift source files found in widget extension Sources directory: {}",
+            "No Swift source files found in app extension Sources directory: {}",
             swift_sources_dir.display()
         );
     }
 
     tracing::debug!(
-        "Found {} Swift files for widget: {:?}",
+        "Found {} Swift files for extension: {:?}",
         swift_files.len(),
         swift_files
     );
 
     // Build output path
-    let exec_path = widget_build_dir.join(&widget_name);
+    let exec_path = extension_build_dir.join(&extension_name);
 
-    // Compile the widget extension using swiftc directly
-    // Widget extensions are XPC services that require _NSExtensionMain as the entry point
+    // Compile the extension using swiftc directly
+    // App extensions are XPC services that require _NSExtensionMain as the entry point
     let mut cmd = Command::new("xcrun");
     cmd.arg("--sdk").arg(&sdk_name).arg("swiftc");
 
@@ -1645,15 +1796,16 @@ pub async fn compile_apple_widget(
     let is_simulator = swift_triple.contains("simulator");
     let base_triple = swift_triple.replace("-simulator", "");
     let swift_target = if is_simulator {
-        format!("{}{}-simulator", base_triple, widget.deployment_target)
+        format!("{}{}-simulator", base_triple, extension.deployment_target)
     } else {
-        format!("{}{}", base_triple, widget.deployment_target)
+        format!("{}{}", base_triple, extension.deployment_target)
     };
     cmd.arg("-target").arg(&swift_target);
 
     // Module name - use a consistent name that matches the main app's plugin module
-    // This is critical for ActivityKit type matching between app and widget
-    cmd.arg("-module-name").arg(&widget.module_name);
+    // This is critical for ActivityKit type matching between app and widget, and
+    // qualifies `principal_class` into `NSExtensionPrincipalClass`.
+    cmd.arg("-module-name").arg(&extension.module_name);
 
     // Optimization flags
     if release {
@@ -1663,8 +1815,8 @@ pub async fn compile_apple_widget(
     // Extension-specific flags
     cmd.arg("-application-extension");
 
-    // Critical: Use _NSExtensionMain as the entry point for widget extensions
-    // Without this, the widget crashes because ExtensionFoundation's singleton isn't initialized
+    // Critical: Use _NSExtensionMain as the entry point for app extensions
+    // Without this, the extension crashes because ExtensionFoundation's singleton isn't initialized
     cmd.arg("-Xlinker")
         .arg("-e")
         .arg("-Xlinker")
@@ -1673,13 +1825,29 @@ pub async fn compile_apple_widget(
     // Link Objective-C runtime (required for Swift/ObjC interop)
     cmd.arg("-lobjc");
 
-    // Link required frameworks
+    // Link required frameworks. An unconfigured WidgetKit extension point keeps its
+    // original defaults; every other extension point only links what it asks for.
     cmd.arg("-framework").arg("Foundation");
-    cmd.arg("-framework").arg("SwiftUI");
-    cmd.arg("-framework").arg("WidgetKit");
-    cmd.arg("-framework").arg("ActivityKit");
+    let frameworks: Vec<String> = if !extension.frameworks.is_empty() {
+        extension.frameworks.clone()
+    } else if extension.extension_point == crate::DEFAULT_APP_EXTENSION_POINT {
+        ["SwiftUI", "WidgetKit", "ActivityKit"]
+            .into_iter()
+            .map(String::from)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    for framework in &frameworks {
+        cmd.arg("-framework").arg(framework);
+    }
 
-    tracing::debug!("Running swiftc for widget: {:?}", cmd);
+    // Link the extension's Rust crate, built as a static library for this target.
+    if let Some(rust_staticlib) = &extension.rust_staticlib {
+        cmd.arg(rust_staticlib);
+    }
+
+    tracing::debug!("Running swiftc for app extension: {:?}", cmd);
 
     let output = cmd.output().await?;
 
@@ -1687,18 +1855,18 @@ pub async fn compile_apple_widget(
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         anyhow::bail!(
-            "Swift compilation failed for widget extension '{}':\n{}\n{}",
-            widget_name,
+            "Swift compilation failed for app extension '{}':\n{}\n{}",
+            extension_name,
             stdout,
             stderr
         );
     }
 
-    tracing::debug!("Compiled widget executable: {}", exec_path.display());
+    tracing::debug!("Compiled app extension executable: {}", exec_path.display());
 
     // Create the .appex bundle
-    let appex_name = format!("{}.appex", widget_name);
-    let appex_dir = widget_build_dir.join(&appex_name);
+    let appex_name = format!("{}.appex", extension_name);
+    let appex_dir = extension_build_dir.join(&appex_name);
 
     // Remove existing appex if present
     if appex_dir.exists() {
@@ -1707,12 +1875,12 @@ pub async fn compile_apple_widget(
     std::fs::create_dir_all(&appex_dir)?;
 
     // Copy the executable into the appex bundle
-    let bundle_exec = appex_dir.join(&widget_name);
+    let bundle_exec = appex_dir.join(&extension_name);
     std::fs::copy(&exec_path, &bundle_exec)?;
 
-    // Create Info.plist for the widget extension
-    let widget_bundle_id = format!("{}.{}", app_bundle_id, widget.bundle_id_suffix);
-    let min_os_version = &widget.deployment_target;
+    // Create Info.plist for the app extension
+    let extension_bundle_id = format!("{}.{}", app_bundle_id, extension.bundle_id_suffix);
+    let min_os_version = &extension.deployment_target;
 
     let platform_info = if is_ios {
         format!(
@@ -1739,6 +1907,24 @@ pub async fn compile_apple_widget(
         )
     };
 
+    let mut extension_dict = format!(
+        r#"        <key>NSExtensionPointIdentifier</key>
+        <string>{extension_point}</string>"#,
+        extension_point = extension.extension_point,
+    );
+    if let Some(principal_class) = &extension.principal_class {
+        extension_dict.push_str(&format!(
+            "\n        <key>NSExtensionPrincipalClass</key>\n        <string>{}.{principal_class}</string>",
+            extension.module_name,
+        ));
+    }
+
+    let live_activities_key = if extension.extension_point == crate::DEFAULT_APP_EXTENSION_POINT {
+        "\n    <key>NSSupportsLiveActivities</key>\n    <true/>"
+    } else {
+        ""
+    };
+
     let info_plist = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1749,13 +1935,13 @@ pub async fn compile_apple_widget(
     <key>CFBundleDisplayName</key>
     <string>{display_name}</string>
     <key>CFBundleExecutable</key>
-    <string>{widget_name}</string>
+    <string>{extension_name}</string>
     <key>CFBundleIdentifier</key>
-    <string>{widget_bundle_id}</string>
+    <string>{extension_bundle_id}</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>{widget_name}</string>
+    <string>{extension_name}</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>CFBundleShortVersionString</key>
@@ -1765,22 +1951,21 @@ pub async fn compile_apple_widget(
 {platform_info}
     <key>NSExtension</key>
     <dict>
-        <key>NSExtensionPointIdentifier</key>
-        <string>com.apple.widgetkit-extension</string>
-    </dict>
-    <key>NSSupportsLiveActivities</key>
-    <true/>
+{extension_dict}
+    </dict>{live_activities_key}
 </dict>
 </plist>"#,
-        display_name = widget.display_name,
-        widget_name = widget_name,
-        widget_bundle_id = widget_bundle_id,
+        display_name = extension.display_name,
+        extension_name = extension_name,
+        extension_bundle_id = extension_bundle_id,
         platform_info = platform_info,
+        extension_dict = extension_dict,
+        live_activities_key = live_activities_key,
     );
 
     std::fs::write(appex_dir.join("Info.plist"), info_plist)?;
 
-    tracing::debug!("Created Widget Extension bundle: {}", appex_dir.display());
+    tracing::debug!("Created App Extension bundle: {}", appex_dir.display());
 
     Ok(appex_dir)
 }
