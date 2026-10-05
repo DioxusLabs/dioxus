@@ -15,6 +15,7 @@ pub use manganis_core::{
     // Standard asset options
     CssAssetOptions,
     CssModuleAssetOptions,
+    FetchPriority,
     FolderAssetOptions,
     ImageAssetOptions,
     ImageFormat,

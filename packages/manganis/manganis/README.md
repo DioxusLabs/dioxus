@@ -38,6 +38,43 @@ const REQUIRED: Asset = asset!("/assets/style.css");
 const OPTIONAL: Option<Asset> = option_asset!("/assets/missing.css");
 ```
 
+## Preloading
+
+`with_preload(true)` makes the CLI write a `<link rel="preload">` for the asset into the head of
+`index.html`, so the browser starts fetching it before the code that uses it runs.
+
+Two options control how a preloaded asset competes with the rest of the page:
+
+- **`with_fetch_priority(..)`**: sets the `fetchpriority` attribute of the generated tag to `high`
+  or `low`. The default, `FetchPriority::Auto`, leaves the attribute off and lets the browser pick
+  a priority from the resource type.
+- **`with_preload_order(..)`**: places the tag among the other preload tags. Browsers fetch
+  resources of the same computed priority in the order they discover them, so ordering is what
+  separates assets that share a `fetchpriority`. Tags are written in ascending order of this value
+  (default `0`), and assets with an equal order are written alphabetically by bundled path.
+
+```rust, ignore
+use manganis::{asset, Asset, AssetOptions, FetchPriority};
+
+// Fetched ahead of everything else on the page
+const HERO: Asset = asset!(
+    "/assets/hero.avif",
+    AssetOptions::image()
+        .with_preload(true)
+        .with_fetch_priority(FetchPriority::High)
+        .with_preload_order(-1)
+);
+
+// Fetched early, but out of the way of the assets the first render needs
+const ANALYTICS: Asset = asset!(
+    "/assets/analytics.js",
+    AssetOptions::js()
+        .with_preload(true)
+        .with_fetch_priority(FetchPriority::Low)
+        .with_preload_order(1)
+);
+```
+
 ## JavaScript assets
 
 The CLI auto-detects whether each `.js` asset is an ES module (top-level
