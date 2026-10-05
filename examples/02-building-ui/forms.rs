@@ -37,7 +37,7 @@ fn app() -> Element {
                 evt.prevent_default();
 
                 // Deserialize directly into our struct
-                match evt.parsed_values::<Signup>() {
+                match evt.deserialize_values::<Signup>() {
                     Ok(signup) => submitted.set(Some(signup)),
                     Err(err) => eprintln!("failed to parse form: {err}"),
                 }

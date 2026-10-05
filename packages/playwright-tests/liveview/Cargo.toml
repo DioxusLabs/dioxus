@@ -11,3 +11,5 @@ dioxus = { workspace = true }
 dioxus-liveview = { workspace = true, features = ["axum"] }
 tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true, default-features = true, features = ["ws"] }
+futures-util = { workspace = true }
+tower-http = { workspace = true, features = ["cors"] }
