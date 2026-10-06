@@ -21,3 +21,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 tracing = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 wasm-used = { workspace = true}
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

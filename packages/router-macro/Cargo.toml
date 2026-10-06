@@ -32,3 +32,6 @@ web = [] #todo(jon) remove this before releasing 0.7!
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

@@ -16,3 +16,6 @@ rand = { workspace = true }
 serde_json = { workspace = true }
 dirs = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v4"] }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

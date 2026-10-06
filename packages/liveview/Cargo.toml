@@ -56,3 +56,6 @@ doc-scrape-examples = true
 name = "axum_stress"
 required-features = ["axum"]
 doc-scrape-examples = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

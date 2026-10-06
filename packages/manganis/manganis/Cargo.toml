@@ -31,3 +31,6 @@ objc2 = { workspace = true }
 [features]
 default = []
 dioxus = ["manganis-core/dioxus"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

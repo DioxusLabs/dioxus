@@ -16,3 +16,6 @@ dunce = { workspace = true, optional = true }
 [features]
 default = ["canonicalize"]
 canonicalize = ["dep:dunce"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

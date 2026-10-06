@@ -38,3 +38,6 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 [features]
 default = []
 serve = ["dep:futures-util", "dep:futures-channel"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
