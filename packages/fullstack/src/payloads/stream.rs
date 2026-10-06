@@ -488,6 +488,67 @@ pub fn encode_stream_frame<T: Serialize, E: Encoding>(data: T) -> Option<Bytes> 
     Some(Bytes::from(bytes).slice(offset..))
 }
 
+// A frame's length prefix can itself straddle two physical reads, and so can its payload - the
+// transport (HTTP/1.1, HTTP/2, TCP itself) gives no guarantee that one "chunk" handed to us by
+// the underlying byte stream lines up with one frame written on the sending side. So instead of
+// decoding fresh out of whichever raw chunk just arrived (and discarding any leftover partial
+// frame when that chunk runs out, as this used to do - silently corrupting any frame split
+// across a chunk boundary), this accumulates a buffer across as many chunks as it takes to see a
+// complete frame, the same way a stateful codec like `tokio_util::codec::Decoder` would.
+enum FrameLen {
+    Incomplete,
+    Malformed,
+    Complete(usize),
+}
+
+fn frame_len(data: &[u8]) -> FrameLen {
+    if data.len() < 2 {
+        return FrameLen::Incomplete;
+    }
+
+    let first = data[0];
+    let second = data[1];
+
+    let fin = first & 0x80 != 0;
+    let opcode = first & 0x0F;
+    let rsv = first & 0x70;
+    if !fin || opcode != 0x02 || rsv != 0 {
+        return FrameLen::Malformed;
+    }
+    if second & 0x80 != 0 {
+        return FrameLen::Malformed;
+    }
+
+    let mut offset = 2usize;
+    let mut payload_len = (second & 0x7F) as usize;
+
+    if payload_len == 126 {
+        if data.len() < offset + 2 {
+            return FrameLen::Incomplete;
+        }
+        payload_len = u16::from_be_bytes([data[offset], data[offset + 1]]) as usize;
+        offset += 2;
+    } else if payload_len == 127 {
+        if data.len() < offset + 8 {
+            return FrameLen::Incomplete;
+        }
+        let mut len_bytes = [0u8; 8];
+        len_bytes.copy_from_slice(&data[offset..offset + 8]);
+        let Ok(len) = usize::try_from(u64::from_be_bytes(len_bytes)) else {
+            return FrameLen::Malformed;
+        };
+        payload_len = len;
+        offset += 8;
+    }
+
+    let total = offset + payload_len;
+    if data.len() < total {
+        FrameLen::Incomplete
+    } else {
+        FrameLen::Complete(total)
+    }
+}
+
 fn byte_stream_to_client_stream<E, T, S, E1>(
     stream: S,
 ) -> Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>
@@ -496,41 +557,62 @@ where
     E: Encoding,
     T: DeserializeOwned + 'static,
 {
-    Box::pin(stream.flat_map(|bytes| {
-        enum DecodeIteratorState {
-            Empty,
-            Failed,
-            Checked(Bytes),
-            UnChecked(Bytes),
-        }
+    struct State<S> {
+        stream: Pin<Box<S>>,
+        buf: bytes::BytesMut,
+        done: bool,
+    }
 
-        let mut state = match bytes {
-            Ok(bytes) => DecodeIteratorState::UnChecked(bytes),
-            Err(_) => DecodeIteratorState::Failed,
-        };
+    let state = State {
+        stream: Box::pin(stream),
+        buf: bytes::BytesMut::new(),
+        done: false,
+    };
 
-        futures::stream::iter(std::iter::from_fn(move || {
-            match std::mem::replace(&mut state, DecodeIteratorState::Empty) {
-                DecodeIteratorState::Empty => None,
-                DecodeIteratorState::Failed => Some(Err(StreamingError::Failed)),
-                DecodeIteratorState::Checked(mut bytes) => {
-                    let r = decode_stream_frame_multi::<T, E>(&mut bytes);
-                    if r.is_some() {
-                        state = DecodeIteratorState::Checked(bytes)
-                    }
-                    r
-                }
-                DecodeIteratorState::UnChecked(mut bytes) => {
-                    let r = decode_stream_frame_multi::<T, E>(&mut bytes);
-                    if r.is_some() {
-                        state = DecodeIteratorState::Checked(bytes);
-                        r
-                    } else {
-                        Some(Err(StreamingError::Decoding))
-                    }
-                }
+    Box::pin(futures::stream::unfold(state, |mut state| async move {
+        loop {
+            if state.done {
+                return None;
             }
-        }))
+
+            match frame_len(&state.buf) {
+                FrameLen::Complete(total) => {
+                    let mut frame = state.buf.split_to(total).freeze();
+                    return match decode_stream_frame_multi::<T, E>(&mut frame) {
+                        Some(Ok(value)) => Some((Ok(value), state)),
+                        Some(Err(err)) => {
+                            state.done = true;
+                            Some((Err(err), state))
+                        }
+                        None => {
+                            state.done = true;
+                            Some((Err(StreamingError::Decoding), state))
+                        }
+                    };
+                }
+                FrameLen::Malformed => {
+                    state.done = true;
+                    return Some((Err(StreamingError::Decoding), state));
+                }
+                FrameLen::Incomplete => match state.stream.next().await {
+                    Some(Ok(bytes)) => {
+                        state.buf.extend_from_slice(&bytes);
+                        continue;
+                    }
+                    Some(Err(_)) => {
+                        state.done = true;
+                        return Some((Err(StreamingError::Failed), state));
+                    }
+                    None => {
+                        if state.buf.is_empty() {
+                            return None;
+                        }
+                        state.done = true;
+                        return Some((Err(StreamingError::Decoding), state));
+                    }
+                },
+            }
+        }
     }))
 }
 
@@ -627,4 +709,68 @@ fn offset_payload_len(frame: &Bytes) -> Option<Result<(usize, usize), StreamingE
         return Some(Err(StreamingError::Decoding));
     }
     Some(Ok((offset, payload_len)))
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+    use futures::stream;
+
+    // Reproduces the bug this module's `frame_len`/`byte_stream_to_client_stream` rework fixes:
+    // a frame whose bytes are split across more than one item from the underlying byte stream
+    // (exactly what happens once a frame is a few KB, since HTTP/TCP have no message boundaries
+    // and readers are free to hand data back in whatever pieces they received it in) used to be
+    // reported as `StreamingError::Decoding` instead of being reassembled.
+    #[tokio::test]
+    async fn frame_split_across_many_physical_chunks_decodes_correctly() {
+        let payload = vec![0xABu8; 5_000];
+        let framed = encode_stream_frame::<Vec<u8>, CborEncoding>(payload.clone())
+            .expect("failed to encode frame");
+
+        // Simulate a transport that hands the frame back in arbitrarily small pieces instead of
+        // all at once.
+        let physical_chunks: Vec<Result<Bytes, std::io::Error>> = framed
+            .chunks(37)
+            .map(|chunk| Ok(Bytes::copy_from_slice(chunk)))
+            .collect();
+        assert!(
+            physical_chunks.len() > 1,
+            "test setup should actually split the frame across multiple chunks"
+        );
+
+        let mut decoded = byte_stream_to_client_stream::<CborEncoding, Vec<u8>, _, _>(
+            stream::iter(physical_chunks),
+        );
+
+        let value = decoded
+            .next()
+            .await
+            .expect("stream ended before yielding a value")
+            .expect("frame failed to decode");
+        assert_eq!(value, payload);
+        assert!(decoded.next().await.is_none());
+    }
+
+    // A single physical chunk containing several frames back to back should still yield each of
+    // them in order, without needing another read from the underlying stream.
+    #[tokio::test]
+    async fn multiple_frames_in_one_physical_chunk_decode_in_order() {
+        let mut framed = Vec::new();
+        framed.extend(encode_stream_frame::<u32, CborEncoding>(1).unwrap());
+        framed.extend(encode_stream_frame::<u32, CborEncoding>(2).unwrap());
+        framed.extend(encode_stream_frame::<u32, CborEncoding>(3).unwrap());
+
+        let mut decoded =
+            byte_stream_to_client_stream::<CborEncoding, u32, _, _>(stream::iter(vec![Ok::<
+                _,
+                std::io::Error,
+            >(
+                Bytes::from(framed),
+            )]));
+
+        assert_eq!(decoded.next().await.unwrap().unwrap(), 1);
+        assert_eq!(decoded.next().await.unwrap().unwrap(), 2);
+        assert_eq!(decoded.next().await.unwrap().unwrap(), 3);
+        assert!(decoded.next().await.is_none());
+    }
 }
