@@ -870,6 +870,13 @@ impl TraceController {
                     "build_args": cmd.build_args.anonymized(),
                 }),
             ),
+            Commands::Clippy(cmd) => (
+                "clippy".to_string(),
+                json!({
+                    "build_args": cmd.build_args.anonymized(),
+                    "clippy_args": !cmd.clippy_args.is_empty(),
+                }),
+            ),
             Commands::Config(config) => match config {
                 Config::Init { force, .. } => (
                     "config init".to_string(),

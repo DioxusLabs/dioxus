@@ -3,6 +3,7 @@ pub(crate) mod build;
 pub(crate) mod build_assets;
 pub(crate) mod bundle;
 pub(crate) mod check;
+pub(crate) mod clippy;
 pub(crate) mod component;
 pub(crate) mod config;
 pub(crate) mod create;
@@ -106,6 +107,10 @@ pub(crate) enum Commands {
     /// Check the project for any issues.
     #[clap(name = "check")]
     Check(check::Check),
+
+    /// Run clippy on the project with Dioxus-aware lint configuration.
+    #[clap(name = "clippy")]
+    Clippy(clippy::Clippy),
 
     /// Dioxus config file controls.
     #[clap(subcommand)]
