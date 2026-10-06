@@ -15,7 +15,8 @@ impl WebsysDom {
 
     #[cfg(feature = "mounted")]
     pub(crate) fn flush_queued_mounted_events(&mut self) {
-        for id in self.queued_mounted_events.drain(..) {
+        for raw in self.interpreter.base().take_mounted_ids() {
+            let id = ElementId::from_raw(raw as usize);
             let node = self.interpreter.base().get_node(id.raw() as u32);
             if let Some(element) = node.dyn_ref::<web_sys::Element>() {
                 let event = dioxus_core::Event::new(
@@ -29,19 +30,10 @@ impl WebsysDom {
             }
         }
     }
-
-    #[cfg(feature = "mounted")]
-    pub(crate) fn send_mount_event(&mut self, id: ElementId) {
-        self.queued_mounted_events.push(id);
-    }
 }
 
 impl WriteMutations for WebsysDom {
     fn push_id(&mut self, id: ElementId) {
-        #[cfg(feature = "mounted")]
-        {
-            self.current_writing_id = id;
-        }
         self.interpreter.push_id(id.raw() as u32)
     }
 
@@ -121,7 +113,7 @@ impl WriteMutations for WebsysDom {
         // mounted events are fired immediately after the element is mounted.
         if name == "mounted" {
             #[cfg(feature = "mounted")]
-            self.send_mount_event(self.current_writing_id);
+            self.interpreter.queue_top_mounted_event();
             return;
         }
 
