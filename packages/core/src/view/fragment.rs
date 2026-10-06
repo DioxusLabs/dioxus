@@ -43,11 +43,14 @@ impl<Children> FragmentBuilder<Children> {
 
 impl<Children: ViewTemplate> ViewTemplate for FragmentBuilder<Children> {
     const TEMPLATE_TREE: &'static TemplateRawTree = Children::TEMPLATE_TREE;
+    const HAS_DYNAMIC: bool = Children::HAS_DYNAMIC;
 }
 
 impl<Children: View> View for FragmentBuilder<Children> {
     #[inline]
     fn push(self, dynamic: &mut DynamicValues) {
-        self.children.push(dynamic);
+        if Children::HAS_DYNAMIC {
+            self.children.push(dynamic);
+        }
     }
 }

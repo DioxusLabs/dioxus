@@ -26,6 +26,7 @@ impl<T> InitializeFromFunction<T> for T {
 pub struct Global<T, R = T> {
     constructor: fn() -> R,
     key: GlobalKey<'static>,
+    normalized_file: std::sync::OnceLock<&'static str>,
     phantom: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -122,6 +123,7 @@ where
         Self {
             constructor,
             key: GlobalKey::new(key),
+            normalized_file: std::sync::OnceLock::new(),
             phantom: std::marker::PhantomData,
         }
     }
@@ -139,6 +141,7 @@ where
                 column: 0,
                 index: 0,
             },
+            normalized_file: std::sync::OnceLock::new(),
             phantom: std::marker::PhantomData,
         }
     }
@@ -162,13 +165,49 @@ where
                 column: column as _,
                 index: index as _,
             },
+            normalized_file: std::sync::OnceLock::new(),
             phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// The key with its file path normalized to forward slashes, matching the compile-time
+    /// `const_format` normalization the CLI applies (`file!()` may contain backslashes on
+    /// Windows). The normalized path is computed at most once per call site and only when the
+    /// raw path actually contains a backslash.
+    fn normalized_key(&self) -> GlobalKey<'static> {
+        let GlobalKey::File {
+            file,
+            line,
+            column,
+            index,
+        } = &self.key
+        else {
+            return self.key.clone();
+        };
+        let (file, line, column, index) = (*file, *line, *column, *index);
+        if !file.contains('\\') {
+            return self.key.clone();
+        }
+        // Match `str_replace!(file!(), "\\\\", "/")` then `str_replace!(PATH, '\\', "/")`:
+        // escaped backslashes are collapsed first, then single backslashes.
+        let file = *self.normalized_file.get_or_init(|| {
+            Box::leak(
+                file.replace("\\\\", "/")
+                    .replace('\\', "/")
+                    .into_boxed_str(),
+            )
+        });
+        GlobalKey::File {
+            file,
+            line,
+            column,
+            index,
         }
     }
 
     /// Get the key for this global
     pub fn key(&self) -> GlobalKey<'static> {
-        self.key.clone()
+        self.normalized_key()
     }
 
     /// Resolve the global value. This will try to get the existing value from the current virtual dom, and if it doesn't exist, it will create a new one.
@@ -282,6 +321,30 @@ impl GlobalLazyContext {
     }
 }
 
+/// The hot-reload template slot every `rsx!` site reads in debug builds.
+#[doc(hidden)]
+pub type HotReloadTemplateSignal = GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>>;
+
+/// Read guard over a [`HotReloadTemplateSignal`].
+#[doc(hidden)]
+pub type HotReloadTemplateRead = ReadableRef<'static, HotReloadTemplateSignal>;
+
+/// Read an `rsx!` site's hot-reload slot, if a runtime is active.
+#[doc(hidden)]
+pub fn read_hot_reload_template(
+    signal: &'static HotReloadTemplateSignal,
+) -> Option<HotReloadTemplateRead> {
+    Runtime::try_current().map(|_| signal.read())
+}
+
+/// Borrow the hot-reloaded template out of a [`read_hot_reload_template`] result.
+#[doc(hidden)]
+pub fn hot_reload_template(
+    read: &Option<HotReloadTemplateRead>,
+) -> Option<&dioxus_core::internal::HotReloadedTemplate> {
+    read.as_ref().and_then(|read| read.as_ref())
+}
+
 /// Get the global context for signals
 pub fn get_global_context() -> GlobalLazyContext {
     let rt = Runtime::current();
@@ -297,6 +360,12 @@ mod tests {
 
     /// Test that keys of global signals are correctly generated and different from one another.
     /// We don't want signals to merge, but we also want them to use both string IDs and memory addresses.
+    // GlobalSignal contains a OnceLock for lazy file normalization, which trips the interior
+    // mutability const lints; consts are intentional here (see the comment in the body).
+    #[allow(
+        clippy::declare_interior_mutable_const,
+        clippy::borrow_interior_mutable_const
+    )]
     #[test]
     fn test_global_keys() {
         // we're using consts since it's harder than statics due to merging - these won't be merged
@@ -315,5 +384,35 @@ mod tests {
 
         let e = MYSIGNAL3.key();
         assert_ne!(a, e);
+    }
+
+    /// The runtime file normalization must match the compile-time `const_format` normalization
+    /// that was previously emitted per `rsx!` site: `\\` collapses to `/` first, then `\` to `/`.
+    #[allow(
+        clippy::declare_interior_mutable_const,
+        clippy::borrow_interior_mutable_const
+    )]
+    #[test]
+    fn test_normalized_file_key() {
+        const WINDOWS: GlobalSignal<i32> =
+            GlobalSignal::with_location(|| 0, "C:\\\\Users\\\\x\\\\src\\\\main.rs", 1, 2, 0);
+        let GlobalKey::File { file, .. } = WINDOWS.key() else {
+            panic!("expected a file key")
+        };
+        // `\\` -> `/` first, so `\\U` becomes `/U`, not `//U`.
+        assert_eq!(file, "C:/Users/x/src/main.rs");
+
+        const PLAIN: GlobalSignal<i32> = GlobalSignal::with_location(|| 0, "src/main.rs", 1, 2, 0);
+        let GlobalKey::File { file, .. } = PLAIN.key() else {
+            panic!("expected a file key")
+        };
+        assert_eq!(file, "src/main.rs");
+
+        const SINGLE: GlobalSignal<i32> =
+            GlobalSignal::with_location(|| 0, "C:\\Users\\x\\main.rs", 1, 2, 0);
+        let GlobalKey::File { file, .. } = SINGLE.key() else {
+            panic!("expected a file key")
+        };
+        assert_eq!(file, "C:/Users/x/main.rs");
     }
 }
