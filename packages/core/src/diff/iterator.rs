@@ -278,71 +278,80 @@ impl DiffState<'_, '_, '_, '_> {
         let new_suffix_start = new.len() - suffix;
 
         let mut plan = FragmentPlacementPlan::new(new.len());
-        let mut old_is_shared = vec![false; old.len()];
 
         for idx in 0..prefix {
             plan.reuse(idx, idx, &old[idx], &new[idx]);
-            old_is_shared[idx] = true;
         }
 
         for offset in 0..suffix {
             let old_idx = old_suffix_start + offset;
             let new_idx = new_suffix_start + offset;
             plan.reuse(new_idx, old_idx, &old[old_idx], &new[new_idx]);
-            old_is_shared[old_idx] = true;
         }
 
-        if prefix < old_suffix_start && prefix < new_suffix_start {
-            let old_key_to_old_index = old[prefix..old_suffix_start]
-                .iter()
-                .enumerate()
-                .map(|(i, o)| (o.key().unwrap(), prefix + i))
-                .collect::<FxHashMap<_, _>>();
-
-            let mut shared_middle_indices = Vec::new();
-            let mut shared_old_indices = Vec::new();
-            let new_index_to_old_index = new[prefix..new_suffix_start]
-                .iter()
-                .enumerate()
-                .map(|(middle_new_idx, node)| {
-                    let key = node.key().unwrap();
-                    if let Some(&index) = old_key_to_old_index.get(key) {
-                        if !old_is_shared[index] {
-                            old_is_shared[index] = true;
-                            shared_middle_indices.push(middle_new_idx);
-                            shared_old_indices.push(index);
-                        }
-                        Some(index)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Box<[_]>>();
-
-            let mut in_lis = vec![false; new_index_to_old_index.len()];
-            if !shared_old_indices.is_empty() {
-                let mut lis_sequence = Vec::with_capacity(shared_old_indices.len());
-                let mut allocation = vec![0; shared_old_indices.len() * 2];
-                let (predecessors, starts) = allocation.split_at_mut(shared_old_indices.len());
-
-                longest_increasing_subsequence::lis_with(
-                    &shared_old_indices,
-                    &mut lis_sequence,
-                    |a, b| a < b,
-                    predecessors,
-                    starts,
+        if prefix == old_suffix_start || prefix == new_suffix_start {
+            self.execute_fragment_plan(
+                FragmentInputs {
+                    old,
+                    old_mounts,
+                    new,
+                    parent,
+                    new_children,
+                    new_offset: 0,
+                },
+                plan,
+                fallback_site,
+            );
+            if prefix < old_suffix_start {
+                self.dom.remove_nodes(
+                    self.to.as_deref_mut(),
+                    &old[prefix..old_suffix_start],
+                    &old_mounts[prefix..old_suffix_start],
                 );
-
-                for idx in lis_sequence {
-                    in_lis[shared_middle_indices[idx]] = true;
-                }
             }
+            return;
+        }
 
-            for (middle_new_idx, old_index) in new_index_to_old_index.iter().copied().enumerate() {
-                let Some(old_index) = old_index else { continue };
-                let new_idx = prefix + middle_new_idx;
-                plan.reuse(new_idx, old_index, &old[old_index], &new[new_idx]);
-                plan.stable[new_idx] = plan.stable[new_idx] && in_lis[middle_new_idx];
+        let mut old_is_shared = vec![false; old.len()];
+        old_is_shared[..prefix].fill(true);
+        old_is_shared[old_suffix_start..].fill(true);
+
+        let old_key_to_old_index = old[prefix..old_suffix_start]
+            .iter()
+            .enumerate()
+            .map(|(i, o)| (o.key().unwrap(), prefix + i))
+            .collect::<FxHashMap<_, _>>();
+
+        let mut shared = Vec::new();
+        for (middle_new_idx, node) in new[prefix..new_suffix_start].iter().enumerate() {
+            let Some(&old_index) = old_key_to_old_index.get(node.key().unwrap()) else {
+                continue;
+            };
+            if old_is_shared[old_index] {
+                continue;
+            }
+            old_is_shared[old_index] = true;
+            let new_idx = prefix + middle_new_idx;
+            plan.new_to_old[new_idx] = Some(old_index);
+            shared.push((new_idx, old_index));
+        }
+
+        if !shared.is_empty() {
+            let mut lis_sequence = Vec::with_capacity(shared.len());
+            let mut allocation = vec![0; shared.len() * 2];
+            let (predecessors, starts) = allocation.split_at_mut(shared.len());
+
+            longest_increasing_subsequence::lis_with(
+                &shared,
+                &mut lis_sequence,
+                |a, b| a.1 < b.1,
+                predecessors,
+                starts,
+            );
+
+            for idx in lis_sequence {
+                let (new_idx, old_idx) = shared[idx];
+                plan.stable[new_idx] = old[old_idx].template() == new[new_idx].template();
             }
         }
 
