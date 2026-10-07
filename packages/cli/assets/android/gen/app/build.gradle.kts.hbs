@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     {{#each gradle_plugins}}
     id("{{ this }}")
     {{/each}}
@@ -9,6 +8,10 @@ plugins {
 android {
     namespace="{{ application_id }}"
     compileSdk = {{ compile_sdk }}
+    // API 37's latest platform is published as minor version 37.2.
+    if (compileSdk == 37) {
+        compileSdkMinor = 2
+    }
     defaultConfig {
         applicationId = "{{ application_id }}"
         minSdk = {{ min_sdk }}
@@ -49,9 +52,6 @@ android {
                     .toList().toTypedArray()
             )
         }
-    }
-    kotlinOptions {
-        jvmTarget = "17"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
