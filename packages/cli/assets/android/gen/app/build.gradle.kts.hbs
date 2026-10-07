@@ -29,6 +29,11 @@ android {
         }
     }
     {{/if}}
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
     buildTypes {
         getByName("debug") {
             isDebuggable = true
