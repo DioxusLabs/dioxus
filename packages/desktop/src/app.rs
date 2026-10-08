@@ -26,6 +26,12 @@ pub(crate) struct App {
     pub(crate) dom: VirtualDom,
     pub(crate) initial_dom_rebuild_done: bool,
 
+    /// Hot-reload messages that arrived before the initial DOM rebuild. Applying them (and
+    /// polling the vdom) before `rebuild` runs corrupts the initial render, so they are queued
+    /// and replayed right after the first rebuild.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub(crate) pending_hot_reload_msgs: Vec<dioxus_devtools::DevserverMsg>,
+
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
     pub(crate) exit_on_last_window_close: bool,
@@ -58,6 +64,8 @@ impl App {
             control_flow: ControlFlow::Wait,
             dom: virtual_dom,
             initial_dom_rebuild_done: false,
+            #[cfg(all(feature = "devtools", debug_assertions))]
+            pending_hot_reload_msgs: Vec::new(),
             float_all: false,
             show_devtools: false,
             tray_icon_show_window_on_click,
@@ -281,6 +289,13 @@ impl App {
         if !self.initial_dom_rebuild_done {
             self.rebuild_dom();
             self.send_touched_edits();
+
+            #[cfg(all(feature = "devtools", debug_assertions))]
+            if self.initial_dom_rebuild_done {
+                for msg in std::mem::take(&mut self.pending_hot_reload_msgs) {
+                    self.handle_hot_reload_msg(msg);
+                }
+            }
         }
 
         self.schedule_poll();
@@ -308,8 +323,15 @@ impl App {
         const TOAST_TIMEOUT: Duration = Duration::from_secs(2);
         const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
+        if !self.initial_dom_rebuild_done {
+            self.pending_hot_reload_msgs.push(msg);
+            return;
+        }
+
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
+                let mut patch_error = None;
+
                 if !self.webviews.is_empty() {
                     {
                         // This is a place where wry says it's threadsafe but it's actually not.
@@ -317,7 +339,10 @@ impl App {
                         #[cfg(target_os = "android")]
                         let _lock = crate::android_sync_lock::android_runtime_lock();
 
-                        dioxus_devtools::apply_changes(&self.dom, &hr_msg);
+                        if let Err(err) = dioxus_devtools::try_apply_changes(&self.dom, &hr_msg) {
+                            tracing::error!("Failed to apply hot-patch: {err}");
+                            patch_error = Some(err);
+                        }
                     }
 
                     self.poll_vdom();
@@ -332,13 +357,22 @@ impl App {
                 if hr_msg.jump_table.is_some()
                     && hr_msg.for_build_id == Some(dioxus_cli_config::build_id())
                 {
-                    self.send_toast_to_all(
-                        "Hot-patch success!",
-                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
-                        "success",
-                        TOAST_TIMEOUT,
-                        false,
-                    );
+                    match patch_error {
+                        None => self.send_toast_to_all(
+                            "Hot-patch success!",
+                            &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                            "success",
+                            TOAST_TIMEOUT,
+                            false,
+                        ),
+                        Some(err) => self.send_toast_to_all(
+                            "Hot-patch failed!",
+                            &format!("Failed to apply hot-patch: {err}"),
+                            "error",
+                            TOAST_TIMEOUT_LONG,
+                            false,
+                        ),
+                    }
                 }
             }
             DevserverMsg::FullReloadCommand => {

@@ -610,6 +610,16 @@ pub fn synthetic_click_event(node: &Node, modifiers: Modifiers) -> Box<dyn Any> 
     ))
 }
 
+pub fn synthetic_form_event(
+    value: impl Into<String>,
+    values: impl Into<Vec<(String, FormValue)>>,
+) -> Box<dyn Any> {
+    Box::new(NativeFormData {
+        value: value.into(),
+        values: values.into(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

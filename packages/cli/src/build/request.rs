@@ -204,7 +204,7 @@ use crate::{
 };
 use anyhow::{Context, bail};
 use cargo_metadata::diagnostic::Diagnostic;
-use cargo_toml::{Profile, Profiles, StripSetting};
+use cargo_toml::{DebugSetting, Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::PRODUCT_NAME_ENV;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -1824,13 +1824,23 @@ impl BuildRequest {
         // these args, they will be captured and re-ran for the fast compiles in the future, so whatever
         // we set here will be set for all future hot patches too.
         if matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+            let is_wasm = self.is_wasm_or_wasi();
+
             // rustc gives us some portable flags required:
-            // - link-dead-code: prevents rust from passing -dead_strip to the linker since that's the default.
             // - save-temps=true: keeps the incremental object files around, which we need for manually linking.
-            cargo_args.extend_from_slice(&[
-                "-Csave-temps=true".to_string(),
-                "-Clink-dead-code".to_string(),
-            ]);
+            // - link-dead-code: prevents rust from passing -dead_strip to the linker since that's the default,
+            //   and makes rustc export every function so patches can resolve against the base binary.
+            //
+            // On wasm we rely on `--no-gc-sections` + `--whole-archive` for retention and promote the
+            // symbol table to the indirect function table ourselves, so `-Clink-dead-code` isn't needed.
+            // It also must not be used there: it switches `#[inline]` functions to a single shared
+            // instantiation per crate, which defeats `#[inline(always)]` across codegen units at
+            // opt-level=0. wasm-bindgen's `describe_generic_import` trampoline then survives as a real
+            // function, and wasm-bindgen misinterprets it as a descriptor and panics.
+            cargo_args.push("-Csave-temps=true".to_string());
+            if !is_wasm {
+                cargo_args.push("-Clink-dead-code".to_string());
+            }
 
             // We need to set some extra args that ensure all symbols make it into the final output
             // and that the linker doesn't strip them out.
@@ -1880,11 +1890,7 @@ impl BuildRequest {
             // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
             //
             // It's fine that these exist in the base module but not in the patch.
-            if matches!(
-                self.triple.architecture,
-                target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
-            ) || self.triple.operating_system == OperatingSystem::Wasi
-            {
+            if is_wasm {
                 // cargo_args.push("-Ctarget-cpu=mvp".into()); // disabled due to changes in wasm-bindgne
                 cargo_args.push("-Clink-arg=--no-gc-sections".into());
                 cargo_args.push("-Clink-arg=--growable-table".into());
@@ -1986,6 +1992,9 @@ impl BuildRequest {
             // todo: actually use this to copy over the binary to our staging
             let mut command = Command::new(rustc_objcopy);
             command.env("LD_LIBRARY_PATH", &dylib_path);
+            // macOS's dyld does not read LD_LIBRARY_PATH; rust-objcopy links against
+            // @rpath/libLLVM.dylib which lives in the sysroot's lib dir.
+            command.env("DYLD_FALLBACK_LIBRARY_PATH", &dylib_path);
             command
                 .arg(strip_arg)
                 .arg(&artifacts.exe)
@@ -2473,43 +2482,72 @@ impl BuildRequest {
     }
 
     /// Checks the strip setting for the package, resolving profiles recursively
+    ///
+    /// If the profile doesn't set `strip` explicitly, this mirrors Cargo's implicit default:
+    /// since Rust 1.77, Cargo strips debuginfo when the profile has debuginfo disabled
+    /// (as the `release` profile does by default). Since we build with `strip=false` to keep
+    /// symbols alive for the asset system, we need to replicate that default when stripping
+    /// manually afterwards.
     pub(crate) fn get_strip_setting(&self) -> StripSetting {
         let cargo_toml = &self.workspace.cargo_toml;
-        let profile = &self.profile;
         let release = self.release;
-        let profile = match (cargo_toml.profile.custom.get(profile), release) {
-            (Some(custom_profile), _) => Some(custom_profile),
-            (_, true) => cargo_toml.profile.release.as_ref(),
-            (_, false) => cargo_toml.profile.dev.as_ref(),
-        };
+        let profile = cargo_toml.profile.custom.get(&self.profile);
 
-        let Some(profile) = profile else {
-            return StripSetting::None;
-        };
-
-        // Get the strip setting from the profile or the profile it inherits from
-        fn get_strip(profile: &Profile, profiles: &Profiles) -> Option<StripSetting> {
-            profile.strip.as_ref().copied().or_else(|| {
-                // If we can't find the strip setting, check if we inherit from another profile
-                profile.inherits.as_ref().and_then(|inherits| {
-                    let profile = match inherits.as_str() {
-                        "dev" => profiles.dev.as_ref(),
-                        "release" => profiles.release.as_ref(),
-                        "test" => profiles.test.as_ref(),
-                        "bench" => profiles.bench.as_ref(),
-                        other => profiles.custom.get(other),
-                    };
-                    profile.and_then(|p| get_strip(p, profiles))
+        // Resolve a profile setting, following the `inherits` chain
+        fn resolve<T>(
+            profile: Option<&Profile>,
+            profiles: &Profiles,
+            release: bool,
+            get: fn(&Profile) -> Option<T>,
+        ) -> Option<T> {
+            fn resolve_inner<T>(
+                profile: &Profile,
+                profiles: &Profiles,
+                get: fn(&Profile) -> Option<T>,
+            ) -> Option<T> {
+                get(profile).or_else(|| {
+                    // If we can't find the setting, check if we inherit from another profile
+                    profile.inherits.as_ref().and_then(|inherits| {
+                        let profile = match inherits.as_str() {
+                            "dev" => profiles.dev.as_ref(),
+                            "release" => profiles.release.as_ref(),
+                            "test" => profiles.test.as_ref(),
+                            "bench" => profiles.bench.as_ref(),
+                            other => profiles.custom.get(other),
+                        };
+                        profile.and_then(|p| resolve_inner(p, profiles, get))
+                    })
                 })
-            })
+            }
+
+            let base = match (profile, release) {
+                (Some(custom_profile), _) => Some(custom_profile),
+                (_, true) => profiles.release.as_ref(),
+                (_, false) => profiles.dev.as_ref(),
+            };
+            base.and_then(|p| resolve_inner(p, profiles, get))
         }
 
-        let Some(strip) = get_strip(profile, &cargo_toml.profile) else {
-            // If the profile doesn't have a strip option, return None
-            return StripSetting::None;
-        };
+        if let Some(strip) = resolve(profile, &cargo_toml.profile, release, |p| {
+            p.strip.as_ref().copied()
+        }) {
+            return strip;
+        }
 
-        strip
+        // No explicit strip setting: apply Cargo's implicit default. Cargo strips debuginfo
+        // when the resolved debug setting is off, which is the default for release profiles.
+        let debug =
+            resolve(profile, &cargo_toml.profile, release, |p| p.debug).unwrap_or(if release {
+                DebugSetting::None
+            } else {
+                DebugSetting::Full
+            });
+
+        if debug == DebugSetting::None {
+            StripSetting::Debuginfo
+        } else {
+            StripSetting::None
+        }
     }
 
     /// returns the path to root build folder. This will be our working directory for the build.

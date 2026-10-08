@@ -150,6 +150,13 @@ pub(crate) fn proxy_to(
 
         let uri = req.uri().clone();
 
+        // Set X-Forwarded-Host for backend if an upstream proxy has not already set it.
+        if !req.headers().contains_key("x-forwarded-host") {
+            if let Some(host) = req.headers().get(HOST).cloned() {
+                req.headers_mut().insert("x-forwarded-host", host);
+            }
+        }
+
         // Set Host header for backend (send_with_retry handles TCP connection via url)
         if let Some(authority) = url.authority() {
             req.headers_mut().insert(

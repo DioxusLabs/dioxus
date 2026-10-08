@@ -495,7 +495,7 @@ fn set_attribute_inner(
         return;
     }
 
-    let name = qual_name(local_name, ns);
+    let name = qual_name(local_name, Some(ns.unwrap_or("")));
 
     // FIXME: more principled handling of special case attributes
     match value {
