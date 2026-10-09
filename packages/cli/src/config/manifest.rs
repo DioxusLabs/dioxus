@@ -558,10 +558,10 @@ pub struct AndroidConfig {
     #[serde(default)]
     pub icon: Option<Vec<String>>,
 
-    /// Additional resources to bundle.
-    /// Overrides `bundle.resources` for Android builds.
+    /// Android resource files, relative to the crate, copied into the `res/` subdirectory named
+    /// by their parent, so `android/xml/rules.xml` becomes `@xml/rules`.
     #[serde(default)]
-    pub resources: Option<Vec<String>>,
+    pub resources: Vec<PathBuf>,
 
     /// Copyright notice.
     /// Overrides `bundle.copyright` for Android builds.
@@ -611,7 +611,7 @@ pub struct AndroidConfig {
     #[serde(default)]
     pub features: Vec<String>,
 
-    /// Path to custom AndroidManifest.xml to merge.
+    /// AndroidManifest.xml, relative to the crate, that Gradle merges into the generated one.
     #[serde(default)]
     pub manifest: Option<PathBuf>,
 
