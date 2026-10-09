@@ -15,8 +15,18 @@ pub(crate) fn process_image(
         .decode();
 
     if let Ok(image) = &mut image {
-        if let ImageSize::Manual { width, height } = image_options.size() {
-            *image = image.resize_exact(width, height, image::imageops::FilterType::Lanczos3);
+        let filter = image::imageops::FilterType::Lanczos3;
+        match image_options.size() {
+            ImageSize::Manual { width, height } => {
+                *image = image.resize_exact(width, height, filter);
+            }
+            ImageSize::Width(width) => {
+                *image = image.resize(width, u32::MAX, filter);
+            }
+            ImageSize::Height(height) => {
+                *image = image.resize(u32::MAX, height, filter);
+            }
+            ImageSize::Automatic => {}
         }
     }
 
@@ -140,4 +150,45 @@ pub(crate) fn compress_jpg(image: DynamicImage, output_location: &Path) -> anyho
     let w = &mut BufWriter::new(file);
     w.write_all(&jpeg_bytes)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::GenericImageView;
+    use manganis_core::{AssetOptions, AssetVariant};
+
+    #[test]
+    fn resizes_image_to_width_while_preserving_aspect_ratio() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source = temp_dir.path().join("source.png");
+        let output = temp_dir.path().join("output.png");
+        DynamicImage::new_rgba8(80, 40).save(&source).unwrap();
+
+        let options = AssetOptions::image().with_width(40).into_asset_options();
+        let AssetVariant::Image(options) = options.variant() else {
+            unreachable!()
+        };
+
+        process_image(options, &source, &output).unwrap();
+
+        assert_eq!(image::open(output).unwrap().dimensions(), (40, 20));
+    }
+
+    #[test]
+    fn resizes_image_to_height_while_preserving_aspect_ratio() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source = temp_dir.path().join("source.png");
+        let output = temp_dir.path().join("output.png");
+        DynamicImage::new_rgba8(80, 40).save(&source).unwrap();
+
+        let options = AssetOptions::image().with_height(20).into_asset_options();
+        let AssetVariant::Image(options) = options.variant() else {
+            unreachable!()
+        };
+
+        process_image(options, &source, &output).unwrap();
+
+        assert_eq!(image::open(output).unwrap().dimensions(), (40, 20));
+    }
 }
