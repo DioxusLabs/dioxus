@@ -2028,6 +2028,9 @@ impl BuildRequest {
                 let dest = self.root_dir().join("Info.plist");
                 let plist = self.info_plist_contents(self.bundle)?;
                 std::fs::write(dest, plist)?;
+                self.write_ios_app_icon()
+                    .await
+                    .context("Failed to build the iOS app icon")?;
             }
 
             // AndroidManifest.xml

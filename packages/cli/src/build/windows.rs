@@ -176,7 +176,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    fn canonicalize_icon_path(&self, icon_path: &PathBuf) -> Result<PathBuf> {
+    pub(crate) fn canonicalize_icon_path(&self, icon_path: &Path) -> Result<PathBuf> {
         if icon_path.is_absolute() && icon_path.is_file() {
             return Ok(dunce::canonicalize(icon_path)?);
         }
