@@ -21,6 +21,14 @@ impl WorkspaceRustcArgs {
             rustc_args: Default::default(),
         }
     }
+
+    /// The captured rustc invocation used to replay a workspace crate in a thin build.
+    /// `None` means the fat build never compiled the crate.
+    pub fn replay_args(&self, crate_name: &str) -> Option<&RustcArgs> {
+        self.rustc_args
+            .get(&format!("{crate_name}.lib"))
+            .or_else(|| self.rustc_args.get(&format!("{crate_name}.bin")))
+    }
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
