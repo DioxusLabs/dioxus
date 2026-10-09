@@ -375,15 +375,6 @@ impl AppBuilder {
             return;
         };
 
-        let tip_crate_name = self.build.tip_package_name();
-        let captured = &artifacts.workspace_rustc.rustc_args;
-
-        let is_in_target = |name: &str| {
-            name == tip_crate_name
-                || captured.contains_key(&format!("{name}.lib"))
-                || captured.contains_key(&format!("{name}.bin"))
-        };
-
         // On web, our patches are fully relocatable, so we don't need to worry about ASLR, but
         // for all other platforms, we need to use the ASLR reference to know where to insert the patch.
         let aslr_reference = match self.aslr_reference {
@@ -413,17 +404,14 @@ impl AppBuilder {
         // ALL crates modified since the fat build. We compute the full cascade closure here
         // (while we have &mut self) so it doesn't need to be round-tripped through BuildArtifacts.
         //
-        // Note: compile_workspace_deps() independently computes which crates to compile for THIS
-        // patch (starting from changed_crates + cascade). That serves a different purpose — it only
-        // compiles what changed now, not everything ever modified. Both use workspace_dependents_of
-        // for the BFS, so they stay in sync automatically.
         // Track the tip by *package* name — that's the identity used by the file→crate
         // mapping and the workspace dependents graph (the bin target name can differ).
-        // now it filters crates that are not in the target (e.g. dev-dependencies)
         let tip_crate_name = self.build.tip_package_name();
         self.modified_crates.insert(tip_crate_name.clone());
 
-        // Add changed crates and their transitive workspace dependents (cascade).
+        // Add changed crates and their transitive workspace dependents (cascade), skipping
+        // workspace crates the fat build never compiled (e.g. a sibling binary, or a
+        // dev-dependency or target-gated dependency of another member).
         let mut to_visit: Vec<String> = changed_crates.clone();
         let mut visited = HashSet::new();
         while let Some(c) = to_visit.pop() {
@@ -431,7 +419,7 @@ impl AppBuilder {
                 continue;
             }
 
-            if !is_in_target(&c) {
+            if c != tip_crate_name && artifacts.workspace_rustc.replay_args(&c).is_none() {
                 continue;
             }
 

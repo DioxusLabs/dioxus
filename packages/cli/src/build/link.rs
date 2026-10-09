@@ -152,8 +152,8 @@ impl BuildRequest {
         let replayed_crates = self.workspace_hotpatch_replay_order(modified_crates)?;
         tracing::debug!("replaying crates: {replayed_crates:?}");
         for crate_name in &replayed_crates {
-            let rustc_args = self
-                .workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
+            let rustc_args = workspace_rustc_args
+                .replay_args(crate_name)
                 .with_context(|| format!("Missing rustc args for replay: '{crate_name}'"))?;
             self.compile_dep_crate(ctx, crate_name, rustc_args)
                 .await
@@ -659,25 +659,6 @@ impl BuildRequest {
         }
 
         Ok(())
-    }
-
-    fn workspace_hotpatch_replay_args<'a>(
-        &self,
-        workspace_rustc_args: &'a WorkspaceRustcArgs,
-        crate_name: &str,
-    ) -> Option<&'a RustcArgs> {
-        let lib_key = format!("{crate_name}.lib");
-        // if crate_name == self.tip_crate_name() {
-        //     return workspace_rustc_args
-        //         .rustc_args
-        //         .get(&format!("{crate_name}.bin"));
-        // }
-
-        workspace_rustc_args.rustc_args.get(&lib_key).or_else(|| {
-            workspace_rustc_args
-                .rustc_args
-                .get(&format!("{crate_name}.bin"))
-        })
     }
 
     /// Topological sort of modified workspace crates for rustc replay.
