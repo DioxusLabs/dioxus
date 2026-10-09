@@ -44,3 +44,8 @@ webonly = [
 ]
 binary-protocol = ["sledgehammer", "dep:dioxus-core", "dep:dioxus-core-types", "dep:dioxus-html"]
 minimal_bindings = []
+
+[[example]]
+name = "cleanup-fixture"
+path = "examples/cleanup_fixture.rs"
+required-features = ["binary-protocol"]

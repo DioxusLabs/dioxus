@@ -14,6 +14,12 @@ extern "C" {
     #[wasm_bindgen(method, js_name = "getNode")]
     pub fn get_node(this: &BaseInterpreter, id: u32) -> Node;
 
+    #[wasm_bindgen(method, js_name = "queueMounted")]
+    pub fn queue_mounted(this: &BaseInterpreter, id: u32);
+
+    #[wasm_bindgen(method, js_name = "takeMountedIds")]
+    pub fn take_mounted_ids(this: &BaseInterpreter) -> Vec<u32>;
+
     #[wasm_bindgen(method, js_name = "pushRoot")]
     pub fn push_root(this: &BaseInterpreter, node: Node);
 
@@ -93,6 +99,9 @@ mod js {
     }
     fn remove_current_attribute(field: &str<u8, attr>, ns: &str<u8, ns_cache>) {
         "{this.removeTopAttribute($field$, $ns$ || null);}"
+    }
+    fn queue_top_mounted_event() {
+        "{this.queueTopMounted();}"
     }
     fn new_top_event_listener(event_name: &str<u8, evt>, bubbles: u8) {
         "{this.addTopEventListener($event_name$, $bubbles$ === 1);}"
