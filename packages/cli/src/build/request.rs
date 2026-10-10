@@ -2096,21 +2096,21 @@ impl BuildRequest {
                 .context("Failed to embed Swift standard libraries")?;
         }
 
-        // Compile and install Apple Widget Extensions from Dioxus.toml config
+        // Compile and install Apple App Extensions from Dioxus.toml config
         if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
-            && !self.config.ios.widget_extensions.is_empty()
+            && !self.config.ios.app_extensions.is_empty()
         {
             let names: Vec<_> = self
                 .config
                 .ios
-                .widget_extensions
+                .app_extensions
                 .iter()
                 .map(|w| w.display_name.clone())
                 .collect();
-            ctx.status_compiling_native_plugins(format!("Widget build: {}", names.join(", ")));
-            self.compile_widget_extensions()
+            ctx.status_compiling_native_plugins(format!("Extension build: {}", names.join(", ")));
+            self.compile_app_extensions()
                 .await
-                .context("Failed to compile widget extensions")?;
+                .context("Failed to compile app extensions")?;
         }
 
         Ok(())

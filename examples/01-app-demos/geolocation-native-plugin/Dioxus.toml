@@ -11,7 +11,7 @@ background_modes = ["location"]
 [ios.plist]
 NSSupportsLiveActivities = true
 
-[[ios.widget_extensions]]
+[[ios.app_extensions]]
 source = "src/ios/widget"
 display_name = "Location Widget"
 bundle_id_suffix = "location-widget"
