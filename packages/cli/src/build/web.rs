@@ -46,7 +46,6 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use uuid::Uuid;
 
 impl BuildRequest {
     pub async fn verify_web_tooling(&self) -> Result<()> {
@@ -222,15 +221,6 @@ impl BuildRequest {
             // It's not registered as an asset since it will get included in the main.js file
             let js_output_path = bindgen_outdir.join("__wasm_split.js");
             std::fs::write(&js_output_path, &glue)?;
-
-            // Make sure to write some entropy to the main.js file so it gets a new hash
-            // If we don't do this, the main.js file will be cached and never pick up the chunk names
-            let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, glue.as_bytes());
-            std::fs::OpenOptions::new()
-                .append(true)
-                .open(self.wasm_bindgen_js_output_file())
-                .context("Failed to open main.js file")?
-                .write_all(format!("/*{uuid}*/").as_bytes())?;
 
             // Write the main wasm_bindgen file and register it with the asset system
             // This will overwrite the file in place

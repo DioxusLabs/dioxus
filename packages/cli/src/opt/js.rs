@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::process::Command;
 
 use anyhow::Context;
 use manganis_core::JsAssetOptions;
@@ -10,7 +11,7 @@ pub(crate) fn process_js(
     output_path: &Path,
     esbuild_path: Option<&Path>,
 ) -> anyhow::Result<()> {
-    if js_options.minified() || js_options.is_module() {
+    if uses_esbuild(js_options) {
         if let Some(esbuild) = esbuild_path {
             match run_esbuild(esbuild, source, output_path, js_options) {
                 Ok(()) => return Ok(()),
@@ -38,7 +39,25 @@ pub(crate) fn process_js(
     Ok(())
 }
 
-/// Run esbuild to minify a JavaScript file in place.
+/// Whether `process_js` hands the asset to esbuild rather than copying it verbatim.
+fn uses_esbuild(js_options: &JsAssetOptions) -> bool {
+    js_options.minified() || js_options.is_module()
+}
+
+/// Run esbuild on `source`, writing the result to `output_path`.
+fn run_esbuild(
+    esbuild: &Path,
+    source: &Path,
+    output_path: &Path,
+    js_options: &JsAssetOptions,
+) -> anyhow::Result<()> {
+    let mut cmd = esbuild_command(esbuild, source, js_options);
+    cmd.arg(format!("--outfile={}", output_path.display()));
+    run_esbuild_command(cmd)?;
+    Ok(())
+}
+
+/// The esbuild invocation for `source`, without an output file, so it writes to stdout.
 ///
 /// When `is_module` is true, the file is treated as ES module input:
 /// `--bundle --format=esm` inlines local relative imports (notably the
@@ -51,15 +70,9 @@ pub(crate) fn process_js(
 /// When `is_module` is false, only `--minify` is passed and esbuild preserves
 /// the input's format verbatim — a classic IIFE/UMD script stays a classic
 /// script with no wrapper added.
-fn run_esbuild(
-    esbuild: &Path,
-    source: &Path,
-    output_path: &Path,
-    js_options: &JsAssetOptions,
-) -> anyhow::Result<()> {
-    let mut cmd = std::process::Command::new(esbuild);
+fn esbuild_command(esbuild: &Path, source: &Path, js_options: &JsAssetOptions) -> Command {
+    let mut cmd = Command::new(esbuild);
     cmd.arg(source);
-    cmd.arg(format!("--outfile={}", output_path.display()));
     cmd.arg("--log-level=warning");
 
     if js_options.minified() {
@@ -76,6 +89,11 @@ fn run_esbuild(
         cmd.arg("--external:http://*");
     }
 
+    cmd
+}
+
+/// Run an esbuild command and return its stdout.
+fn run_esbuild_command(mut cmd: Command) -> anyhow::Result<Vec<u8>> {
     tracing::debug!("Running esbuild: {:?}", cmd);
 
     let output = cmd.output().context("Failed to run esbuild")?;
@@ -85,14 +103,36 @@ fn run_esbuild(
         anyhow::bail!("esbuild failed: {stderr}");
     }
 
-    Ok(())
+    Ok(output.stdout)
 }
 
+/// Hash what `process_js` writes for `source`.
+///
+/// A bundled module inlines the files it imports, so the esbuild output is hashed and the
+/// name changes whenever any of those files change. Without esbuild, or when it fails,
+/// `process_js` copies the file verbatim and the file contents are hashed.
 pub(crate) fn hash_js(
-    _js_options: &JsAssetOptions,
+    js_options: &JsAssetOptions,
     source: &Path,
     hasher: &mut impl std::hash::Hasher,
 ) -> anyhow::Result<()> {
+    if uses_esbuild(js_options) {
+        if let Some(esbuild) = crate::esbuild::Esbuild::path_if_installed() {
+            match run_esbuild_command(esbuild_command(&esbuild, source, js_options)) {
+                Ok(processed) => {
+                    hasher.write(&processed);
+                    return Ok(());
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        "Failed to hash JS with esbuild ({}): {err}",
+                        source.display()
+                    );
+                }
+            }
+        }
+    }
+
     hash_file_contents(source, hasher)
 }
 
@@ -677,5 +717,47 @@ mod lexer {
                 "(function () { var x = 1; })();\nexport const y = 2;"
             ));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use manganis::AssetOptions;
+
+    use crate::{esbuild::Esbuild, opt::AppManifest};
+
+    fn bundled_name(entry: &Path) -> String {
+        AppManifest::new()
+            .register_asset(
+                entry,
+                AssetOptions::js().with_minify(true).into_asset_options(),
+            )
+            .unwrap()
+            .bundled_path()
+            .to_string()
+    }
+
+    #[tokio::test]
+    async fn bundled_name_tracks_imported_modules() {
+        Esbuild::get_or_install().await.unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let entry = dir.path().join("main.js");
+        let snippet = dir.path().join("snippets").join("dep.js");
+        std::fs::create_dir(snippet.parent().unwrap()).unwrap();
+        std::fs::write(
+            &entry,
+            "import { greet } from './snippets/dep.js';\nglobalThis.out = greet();\n",
+        )
+        .unwrap();
+        std::fs::write(&snippet, "export function greet() { return 'old'; }\n").unwrap();
+
+        let original = bundled_name(&entry);
+        assert_eq!(bundled_name(&entry), original);
+
+        std::fs::write(&snippet, "export function greet() { return 'new'; }\n").unwrap();
+        assert_ne!(bundled_name(&entry), original);
     }
 }
