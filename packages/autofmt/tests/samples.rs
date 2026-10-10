@@ -77,7 +77,34 @@ twoway![
     long_if_else_attr,
     empty_component_body,
     empty_braces_oneliner,
+    multiline_string_literals,
 ];
+
+#[test]
+fn multiline_strings_in_conditions_and_spreads_are_idempotent() {
+    let src = r#"rsx! {
+    div {
+        if label == "first
+            second" {
+            "string in an if condition"
+        }
+        button {
+            ..attributes_from("first
+                second"),
+            "string in a spread attribute"
+        }
+    }
+}"#;
+    // The first pass may still move these into their usual layout; it must settle after that.
+    let once =
+        dioxus_autofmt::apply_formats(src, dioxus_autofmt::fmt_file(src, Default::default()));
+    let twice =
+        dioxus_autofmt::apply_formats(&once, dioxus_autofmt::fmt_file(&once, Default::default()));
+    let thrice =
+        dioxus_autofmt::apply_formats(&twice, dioxus_autofmt::fmt_file(&twice, Default::default()));
+    pretty_assertions::assert_eq!(&once, &twice, "pass 1 vs pass 2");
+    pretty_assertions::assert_eq!(&twice, &thrice, "pass 2 vs pass 3");
+}
 
 fn assert_idempotent(src: &str) {
     let src = src.replace("\r", "");
