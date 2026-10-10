@@ -96,6 +96,8 @@ pub struct DesktopWindowContext {
     pub(crate) query: QueryEngine,
     pub(crate) close_behaviour: Cell<crate::WindowCloseBehaviour>,
     component_window_callbacks: RefCell<Option<ComponentWindowCallbacks>>,
+    /// Scripts that created head elements, run again in a reloaded page.
+    head_elements: RefCell<Vec<String>>,
 
     #[cfg(target_os = "ios")]
     pub(crate) views: RefCell<Vec<objc2::rc::Retained<objc2_ui_kit::UIView>>>,
@@ -119,6 +121,7 @@ impl DesktopWindowContext {
             query: QueryEngine::default(),
             close_behaviour: Cell::new(close_behaviour),
             component_window_callbacks: RefCell::new(None),
+            head_elements: RefCell::new(Vec::new()),
             #[cfg(target_os = "ios")]
             views: RefCell::new(Vec::new()),
         }
@@ -163,6 +166,19 @@ impl DesktopWindowContext {
     pub(crate) fn notify_window_destroyed(&self) {
         if let Some(callbacks) = self.component_window_callbacks.borrow_mut().as_mut() {
             (callbacks.on_destroyed)();
+        }
+    }
+
+    /// Run `script`, which creates a head element, and keep it for a page that replaces this one.
+    pub(crate) fn create_head_element(&self, script: String) {
+        _ = self.webview.evaluate_script(&script);
+        self.head_elements.borrow_mut().push(script);
+    }
+
+    /// Recreate every recorded head element in a page that replaced the one they were made in.
+    pub(crate) fn replay_head_elements(&self) {
+        for script in self.head_elements.borrow().iter() {
+            _ = self.webview.evaluate_script(script);
         }
     }
 }
