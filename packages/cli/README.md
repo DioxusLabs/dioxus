@@ -68,3 +68,5 @@ title = "Hello"
 
 [web.resource.dev]
 ```
+
+Web builds follow file and directory symlinks in `public_dir`, preserving their public-relative paths.
