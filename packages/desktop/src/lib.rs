@@ -22,6 +22,7 @@ mod hooks;
 mod ipc;
 mod menubar;
 mod mobile;
+mod page_gate;
 mod protocol;
 mod query;
 mod shortcut;

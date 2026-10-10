@@ -5,7 +5,7 @@ use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
     DesktopContext, DesktopService, WindowConfig, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, page_gate::PageLoadGate, protocol,
 };
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
@@ -13,7 +13,10 @@ use dioxus_core::{RenderTargetId, Runtime, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
 use std::rc::Rc;
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 use std::{cell::OnceCell, time::Duration};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 
@@ -59,6 +62,8 @@ pub(crate) struct WebviewEdits {
     target_id: RenderTargetId,
     pub wry_queue: WryQueue,
     desktop_context: Rc<OnceCell<WeakDesktopContext>>,
+    /// How many index documents this webview has been served, which numbers its pages.
+    served_pages: Arc<AtomicU32>,
 }
 
 impl WebviewEdits {
@@ -68,7 +73,18 @@ impl WebviewEdits {
             target_id,
             wry_queue,
             desktop_context: Default::default(),
+            served_pages: Default::default(),
         }
+    }
+
+    /// Number a newly served index document.
+    pub(crate) fn serve_page(&self) -> u32 {
+        self.served_pages.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Whether a newer page than `page` has been served, so `page` is being replaced.
+    pub(crate) fn is_replaced(&self, page: u32) -> bool {
+        page < self.served_pages.load(Ordering::Relaxed)
     }
 
     pub fn handle_event(
@@ -230,6 +246,9 @@ impl WebviewEdits {
 pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
+    /// The page that last reported `initialize`, so a later page is a reload.
+    pub(crate) initialized_page: Option<u32>,
+    pub(crate) page_gate: Arc<PageLoadGate>,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -248,6 +267,14 @@ impl WebviewInstance {
     /// this exposes it as the webview's identity to the app layer.
     pub(crate) fn target_id(&self) -> RenderTargetId {
         self.desktop_context.target_id
+    }
+
+    /// Make the page that reported `initialize` open the edits connection at its current location.
+    pub(crate) fn connect_initialized_page(&self) {
+        if let Some(page) = self.initialized_page {
+            let connect = self.edits.wry_queue.connect_script(page);
+            _ = self.desktop_context.webview.evaluate_script(&connect);
+        }
     }
 
     pub(crate) fn new(
@@ -390,7 +417,7 @@ impl WebviewInstance {
         };
 
         let navigation_handler = cfg.navigation_handler.take();
-        let page_loaded = AtomicBool::new(false);
+        let page_gate = Arc::new(PageLoadGate::default());
 
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
@@ -403,29 +430,30 @@ impl WebviewInstance {
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
-            .with_navigation_handler(move |var| {
-                // Serve the index and assets.
-                if var.starts_with("dioxus://")
-                    || var.starts_with("http://dioxus.")
-                    || var.starts_with("https://dioxus.")
-                {
-                    // After the page has loaded once, don't allow any more navigation
-                    let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
-                    return !page_loaded;
-                }
+            .with_navigation_handler({
+                let page_gate = page_gate.clone();
+                move |var| {
+                    // Serve the index and assets.
+                    if var.starts_with("dioxus://")
+                        || var.starts_with("http://dioxus.")
+                        || var.starts_with("https://dioxus.")
+                    {
+                        return page_gate.allow_app_page(&var);
+                    }
 
-                // External links always open somewhere else. Prevents the webview from navigating
-                if var.starts_with("http://")
-                    || var.starts_with("https://")
-                    || var.starts_with("mailto:")
-                {
-                    _ = webbrowser::open(&var);
-                    return false;
-                }
+                    // External links always open somewhere else. Prevents the webview from navigating
+                    if var.starts_with("http://")
+                        || var.starts_with("https://")
+                        || var.starts_with("mailto:")
+                    {
+                        _ = webbrowser::open(&var);
+                        return false;
+                    }
 
-                // By default, external links are allowed. This keeps things like iframes working.
-                // However, users can customize this to allow/disallow domains/routes/patterns.
-                navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+                    // By default, external links are allowed. This keeps things like iframes working.
+                    // However, users can customize this to allow/disallow domains/routes/patterns.
+                    navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+                }
             })
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
 
@@ -442,6 +470,16 @@ impl WebviewInstance {
         {
             use wry::WebViewBuilderExtWindows;
             webview = webview.with_browser_accelerator_keys(false);
+        }
+
+        // wry implements the termination delegate method, so WebKit no longer reloads the page itself.
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            use wry::WebViewBuilderExtDarwin as _;
+            let (proxy, window_id) = (app_context.proxy.to_owned(), window.id());
+            webview = webview.with_on_web_content_process_terminate_handler(move || {
+                _ = proxy.send_event(UserWindowEvent::WebContentProcessTerminated(window_id));
+            });
         }
 
         if !cfg.disable_file_drop_handler {
@@ -557,6 +595,8 @@ impl WebviewInstance {
         WebviewInstance {
             edits,
             desktop_context,
+            initialized_page: None,
+            page_gate,
             _menu: menu,
             _web_context: web_context,
         }
@@ -686,6 +726,34 @@ mod tests {
                     .now_or_never()
                     .expect("dropped pending webview should cancel immediately")
                     .is_err()
+            );
+        });
+    }
+
+    /// The page-numbering invariant `redraw_reloaded_page` relies on: each served page gets a
+    /// strictly increasing number, and a page is replaced exactly when a later one has been served.
+    #[test]
+    fn serve_page_numbers_pages_and_detects_replacement() {
+        let dom = VirtualDom::new(empty_app);
+
+        dom.in_runtime(|| {
+            let target_id = Runtime::current().create_render_target();
+            let websocket = crate::edits::EditWebsocket::start();
+            let wry_queue = websocket.create_queue();
+            let edits = WebviewEdits::new(Runtime::current(), target_id, wry_queue);
+
+            let first = edits.serve_page();
+            let second = edits.serve_page();
+            assert_eq!(first, 1);
+            assert_eq!(second, 2);
+
+            assert!(
+                edits.is_replaced(first),
+                "an earlier page is replaced by a later one"
+            );
+            assert!(
+                !edits.is_replaced(second),
+                "the latest page has not been replaced"
             );
         });
     }
