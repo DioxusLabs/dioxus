@@ -1094,20 +1094,25 @@ impl<'a> Writer<'a> {
                     out.push('\n');
                 }
 
-                // Handle multi-line method chains
-                if let Some(mut ml) = multiline {
-                    src_lines.next();
+                // Handle multi-line method chains. Copying the source lines out verbatim is
+                // only correct when they render exactly this one pretty line; if they cover
+                // more, the leftover pretty lines are emitted after the copy and duplicate it.
+                // So collect them on a clone of the iterator and only commit on an exact match.
+                let multiline = multiline.and_then(|first| {
+                    let mut probe = src_lines.clone();
+                    let mut ml = first;
+                    probe.next();
                     let mut acc = ml[0].replace(" ", "").replace(",", "");
 
-                    while let Some(src) = src_lines.peek() {
+                    while let Some(src) = probe.peek() {
                         let t = src.trim();
                         if t.starts_with("//") {
                             ml.push(src);
-                            src_lines.next();
+                            probe.next();
                             continue;
                         }
                         if t.is_empty() {
-                            src_lines.next();
+                            probe.next();
                             continue;
                         }
 
@@ -1115,7 +1120,7 @@ impl<'a> Writer<'a> {
                         ml.push(src);
 
                         if acc.contains(&compacted) {
-                            src_lines.next();
+                            probe.next();
                             break;
                         }
 
@@ -1125,11 +1130,17 @@ impl<'a> Writer<'a> {
                             || matches!(t.chars().next(), Some('+' | '-' | '*' | '/' | '?'));
 
                         if cont || compacted.starts_with(&acc) {
-                            src_lines.next();
+                            probe.next();
                             continue;
                         }
                         break;
                     }
+
+                    (acc == compacted).then_some((ml, probe))
+                });
+
+                if let Some((ml, probe)) = multiline {
+                    src_lines = probe;
 
                     // Write multi-line with adjusted indentation
                     let base_indent = if source_has_line_comments && ml[0].trim_end().ends_with('{')
