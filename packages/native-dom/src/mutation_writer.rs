@@ -511,6 +511,18 @@ fn set_attribute_inner(
             }
         }
     }
+
+    // Like the web renderer, bind an option's `selected` as the property (its selectedness),
+    // not only the attribute: a re-render then changes the selection even after the user
+    // picked an option (which stops the attribute from mattering)
+    if local_name == "selected"
+        && ns.is_none()
+        && docm
+            .element_name(node_id)
+            .is_some_and(|name| &*name.local == "option")
+    {
+        docm.set_option_selected(node_id, value.is_some() && !is_falsy);
+    }
 }
 
 /// HTML boolean attributes are "on" whenever they are present, regardless of their value, so a

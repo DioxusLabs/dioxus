@@ -323,10 +323,12 @@ impl EventHandler for DioxusEventHandler<'_> {
                 Some(wrap_event_data(BlitzKeyboardData(kevent.clone())))
             }
 
-            DomEventData::Input(data) => Some(wrap_event_data(NativeFormData {
-                value: data.value.clone(),
-                values: vec![],
-            })),
+            DomEventData::Input(data) | DomEventData::Change(data) => {
+                Some(wrap_event_data(NativeFormData {
+                    value: data.value.clone(),
+                    values: vec![],
+                }))
+            }
 
             // TODO: Implement IME handling
             DomEventData::Ime(_) => None,
