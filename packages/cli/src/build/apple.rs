@@ -83,17 +83,20 @@ fn collect_ios_dt_metadata(deployment_target: &str) -> IosDtMetadata {
 
     let sdk_version = run("xcrun", &["--sdk", "iphoneos", "--show-sdk-version"]);
     let sdk_build = run("xcrun", &["--sdk", "iphoneos", "--show-sdk-build-version"]);
-    let xcode = run(
-        "defaults",
-        &["read", "/Applications/Xcode.app/Contents/Info", "DTXcode"],
-    );
+    // `xcode-select -p` prints `<Xcode.app>/Contents/Developer`, the Xcode xcrun uses above.
+    // `DTXcodeBuild` in `Contents/Info` is the build that compiled Xcode itself, so the build
+    // Xcode writes into apps comes from `Contents/version` instead (e.g. 27A266a, not 27A266).
+    let developer_dir = PathBuf::from(run("xcode-select", &["-p"]));
+    let xcode_plist = |name| {
+        developer_dir
+            .with_file_name(name)
+            .to_string_lossy()
+            .into_owned()
+    };
+    let xcode = run("defaults", &["read", &xcode_plist("Info"), "DTXcode"]);
     let xcode_build = run(
         "defaults",
-        &[
-            "read",
-            "/Applications/Xcode.app/Contents/Info",
-            "DTXcodeBuild",
-        ],
+        &["read", &xcode_plist("version"), "ProductBuildVersion"],
     );
     let os_build = run("sw_vers", &["-buildVersion"]);
 
