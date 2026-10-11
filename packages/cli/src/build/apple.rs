@@ -43,6 +43,9 @@ use std::{
 use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
 
+/// Minimum iOS version when `[ios] deployment_target` is unset, shared by the app and its widgets.
+const DEFAULT_IOS_DEPLOYMENT_TARGET: &str = "16.0";
+
 /// iOS-only Info.plist metadata probed from the local Xcode/SDK install.
 ///
 /// Apple Transporter rejects App Store IPAs that don't carry these keys
@@ -342,13 +345,13 @@ impl BuildRequest {
                 // requires (DTPlatformName, DTPlatformVersion, DTSDKName, DTXcode, etc.).
                 // Falls back to empty strings if probes fail — the build still produces
                 // a valid .app, just one that won't pass App Store validation.
-                let deployment_target = self
-                    .config
-                    .ios
-                    .deployment_target
-                    .clone()
-                    .unwrap_or_else(|| "15.0".to_string());
-                let ios_dt = collect_ios_dt_metadata(&deployment_target);
+                let ios_dt = collect_ios_dt_metadata(
+                    self.config
+                        .ios
+                        .deployment_target
+                        .as_deref()
+                        .unwrap_or(DEFAULT_IOS_DEPLOYMENT_TARGET),
+                );
 
                 handlebars::Handlebars::new()
                     .render_template(
@@ -437,13 +440,13 @@ impl BuildRequest {
         // BEFORE any codesign call — codesign hashes the bundle and any later
         // change invalidates the signature.
         if self.bundle == BundleFormat::Ios {
-            let deployment_target = self
-                .config
-                .ios
-                .deployment_target
-                .clone()
-                .unwrap_or_else(|| "15.0".to_string());
-            let ios_dt = collect_ios_dt_metadata(&deployment_target);
+            let ios_dt = collect_ios_dt_metadata(
+                self.config
+                    .ios
+                    .deployment_target
+                    .as_deref()
+                    .unwrap_or(DEFAULT_IOS_DEPLOYMENT_TARGET),
+            );
             let crate_dir = self.crate_dir();
 
             // PrivacyInfo.xcprivacy is mandatory for App Store submissions
@@ -1335,7 +1338,7 @@ We checked the folders:
             .ios
             .deployment_target
             .as_deref()
-            .unwrap_or("16.0");
+            .unwrap_or(DEFAULT_IOS_DEPLOYMENT_TARGET);
 
         let plugins_dir = self.plugins_folder();
         std::fs::create_dir_all(&plugins_dir)?;
