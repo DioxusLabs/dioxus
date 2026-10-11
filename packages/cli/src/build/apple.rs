@@ -768,13 +768,16 @@ impl BuildRequest {
                     .context("Failed to parse `security find-identity -v -p codesigning`")
             })??;
 
-        let (label, pattern) = if appstore {
-            ("Apple Distribution", r#""Apple Distribution: (.+)""#)
+        let label = if appstore {
+            "Apple Distribution"
         } else {
-            ("Apple Development", r#""Apple Development: (.+)""#)
+            "Apple Development"
         };
+        // Keep the label: "Apple Distribution: Name (TEAM)" and "Developer ID Application: Name (TEAM)"
+        // share the same suffix, so codesign rejects the bare name as ambiguous.
+        let pattern = format!(r#""({label}: [^"]+)""#);
 
-        let app_dev_name = regex::Regex::new(pattern)
+        let app_dev_name = regex::Regex::new(&pattern)
             .unwrap()
             .captures(&identities)
             .and_then(|caps| caps.get(1))
