@@ -114,6 +114,114 @@ fn collect_ios_dt_metadata(deployment_target: &str) -> IosDtMetadata {
     }
 }
 
+#[derive(serde::Deserialize, Debug)]
+struct ProvisioningProfile {
+    #[serde(rename = "TeamIdentifier")]
+    team_identifier: Vec<String>,
+    #[serde(rename = "Entitlements")]
+    entitlements: ProfileEntitlements,
+    #[allow(dead_code)]
+    #[serde(rename = "ApplicationIdentifierPrefix")]
+    application_identifier_prefix: Vec<String>,
+    #[serde(rename = "ProvisionedDevices", default)]
+    provisioned_devices: Vec<String>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct ProfileEntitlements {
+    #[serde(rename = "application-identifier")]
+    application_identifier: String,
+    #[serde(rename = "keychain-access-groups")]
+    keychain_access_groups: Vec<String>,
+}
+
+/// Check if a provisioning profile's application-identifier matches the given bundle ID.
+/// The app ID is in the format "TEAMID.com.example.app" or "TEAMID.*" for wildcard profiles.
+fn profile_matches_bundle_id(app_identifier: &str, bundle_id: &str) -> bool {
+    // Strip the team ID prefix (everything before and including the first dot)
+    let app_id_suffix = match app_identifier.split_once('.') {
+        Some((_, suffix)) => suffix,
+        None => return false,
+    };
+
+    // Wildcard profile matches everything
+    if app_id_suffix == "*" {
+        return true;
+    }
+
+    // Check exact match
+    if app_id_suffix == bundle_id {
+        return true;
+    }
+
+    // Check wildcard prefix match (e.g. "com.example.*" matches "com.example.app")
+    if let Some(prefix) = app_id_suffix.strip_suffix(".*") {
+        return bundle_id.starts_with(prefix);
+    }
+
+    false
+}
+
+/// Picks the profile for `bundle_id`: an exact app ID beats a wildcard, then more provisioned
+/// devices win. With `appstore`, profiles tied to devices are skipped.
+fn pick_provisioning_profile(
+    profiles: impl IntoIterator<Item = (PathBuf, ProvisioningProfile)>,
+    bundle_id: &str,
+    appstore: bool,
+) -> Option<(PathBuf, ProvisioningProfile)> {
+    let mut best_match: Option<(PathBuf, ProvisioningProfile, bool, usize)> = None;
+
+    for (path, profile) in profiles {
+        let app_id = &profile.entitlements.application_identifier;
+        if !profile_matches_bundle_id(app_id, bundle_id) {
+            tracing::debug!(
+                "Skipping profile {} (app ID {app_id} does not match bundle ID {bundle_id})",
+                path.display()
+            );
+            continue;
+        }
+
+        // App Store profiles carry no `ProvisionedDevices`.
+        if appstore && !profile.provisioned_devices.is_empty() {
+            tracing::debug!(
+                "Skipping profile {} ({} provisioned devices — not an App Store profile)",
+                path.display(),
+                profile.provisioned_devices.len()
+            );
+            continue;
+        }
+
+        let is_exact = !app_id.ends_with(".*") && !app_id.ends_with("*");
+        let num_devices = profile.provisioned_devices.len();
+
+        tracing::debug!(
+            "Found matching profile {} (app ID: {app_id}, exact: {is_exact}, devices: {num_devices})",
+            path.display()
+        );
+
+        // Prefer: exact match > more provisioned devices (newer profiles have more devices)
+        let dominated = match &best_match {
+            Some((_, _, prev_exact, prev_devices)) => {
+                if *prev_exact && !is_exact {
+                    true // existing exact match beats wildcard
+                } else if is_exact && !*prev_exact {
+                    false // new exact match beats existing wildcard
+                } else {
+                    // same specificity — prefer more provisioned devices
+                    num_devices <= *prev_devices
+                }
+            }
+            None => false,
+        };
+
+        if !dominated {
+            best_match = Some((path, profile, is_exact, num_devices));
+        }
+    }
+
+    best_match.map(|(path, profile, _, _)| (path, profile))
+}
+
 impl BuildRequest {
     /// Currently does nothing, but eventually we need to check that the mobile tooling is installed.
     ///
@@ -942,27 +1050,6 @@ We checked the folders:
             )
         }
 
-        #[derive(serde::Deserialize, Debug)]
-        struct ProvisioningProfile {
-            #[serde(rename = "TeamIdentifier")]
-            team_identifier: Vec<String>,
-            #[serde(rename = "Entitlements")]
-            entitlements: ProfileEntitlements,
-            #[allow(dead_code)]
-            #[serde(rename = "ApplicationIdentifierPrefix")]
-            application_identifier_prefix: Vec<String>,
-            #[serde(rename = "ProvisionedDevices", default)]
-            provisioned_devices: Vec<String>,
-        }
-
-        #[derive(serde::Deserialize, Debug)]
-        struct ProfileEntitlements {
-            #[serde(rename = "application-identifier")]
-            application_identifier: String,
-            #[serde(rename = "keychain-access-groups")]
-            keychain_access_groups: Vec<String>,
-        }
-
         // The .mobileprovision file has some random binary thrown into it, but it's still basically a plist
         // Let's use the plist markers to find the start and end of the plist
         fn cut_plist(bytes: &[u8], byte_match: &[u8]) -> Option<usize> {
@@ -984,105 +1071,22 @@ We checked the folders:
             plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")
         }
 
-        /// Check if a provisioning profile's application-identifier matches the given bundle ID.
-        /// The app ID is in the format "TEAMID.com.example.app" or "TEAMID.*" for wildcard profiles.
-        fn profile_matches_bundle_id(app_identifier: &str, bundle_id: &str) -> bool {
-            // Strip the team ID prefix (everything before and including the first dot)
-            let app_id_suffix = match app_identifier.split_once('.') {
-                Some((_, suffix)) => suffix,
-                None => return false,
-            };
-
-            // Wildcard profile matches everything
-            if app_id_suffix == "*" {
-                return true;
-            }
-
-            // Check exact match
-            if app_id_suffix == bundle_id {
-                return true;
-            }
-
-            // Check wildcard prefix match (e.g. "com.example.*" matches "com.example.app")
-            if let Some(prefix) = app_id_suffix.strip_suffix(".*") {
-                return bundle_id.starts_with(prefix);
-            }
-
-            false
-        }
-
-        // Collect all provisioning profiles and find the best match for the bundle ID.
-        // Priority: exact app ID match > more provisioned devices > newer file.
-        let mut best_match: Option<(PathBuf, ProvisioningProfile, bool, usize)> = None;
-
-        for entry in profiles_folder.read_dir()?.flatten() {
-            let path = entry.path();
-            let is_mobileprovision = path
-                .extension()
-                .map(|e| e == "mobileprovision")
-                .unwrap_or(false);
-
-            if !is_mobileprovision {
-                continue;
-            }
-
-            let profile = match parse_profile(&path) {
-                Ok(p) => p,
+        let profiles = profiles_folder
+            .read_dir()?
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|e| e == "mobileprovision"))
+            .filter_map(|path| match parse_profile(&path) {
+                Ok(profile) => Some((path, profile)),
                 Err(e) => {
                     tracing::debug!("Skipping profile {}: {e}", path.display());
-                    continue;
+                    None
                 }
-            };
+            });
 
-            let app_id = &profile.entitlements.application_identifier;
-            if !profile_matches_bundle_id(app_id, bundle_id) {
-                tracing::debug!(
-                    "Skipping profile {} (app ID {app_id} does not match bundle ID {bundle_id})",
-                    path.display()
-                );
-                continue;
-            }
-
-            // App Store profiles carry no `ProvisionedDevices`.
-            if appstore && !profile.provisioned_devices.is_empty() {
-                tracing::debug!(
-                    "Skipping profile {} ({} provisioned devices — not an App Store profile)",
-                    path.display(),
-                    profile.provisioned_devices.len()
-                );
-                continue;
-            }
-
-            let is_exact = !app_id.ends_with(".*") && !app_id.ends_with("*");
-            let num_devices = profile.provisioned_devices.len();
-
-            tracing::debug!(
-                "Found matching profile {} (app ID: {app_id}, exact: {is_exact}, devices: {num_devices})",
-                path.display()
-            );
-
-            // Prefer: exact match > more provisioned devices (newer profiles have more devices)
-            let dominated = match &best_match {
-                Some((_, _, prev_exact, prev_devices)) => {
-                    if *prev_exact && !is_exact {
-                        true // existing exact match beats wildcard
-                    } else if is_exact && !*prev_exact {
-                        false // new exact match beats existing wildcard
-                    } else {
-                        // same specificity — prefer more provisioned devices
-                        num_devices <= *prev_devices
-                    }
-                }
-                None => false,
-            };
-
-            if !dominated {
-                best_match = Some((path, profile, is_exact, num_devices));
-            }
-        }
-
-        let (profile_path, mbfile) = match best_match {
-            Some((path, profile, _, _)) => {
+        let (profile_path, mbfile) = match pick_provisioning_profile(profiles, bundle_id, appstore)
+        {
+            Some((path, profile)) => {
                 tracing::info!(
                     "Using provisioning profile: {} (app ID: {})",
                     path.display(),
