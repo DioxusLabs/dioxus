@@ -443,11 +443,6 @@ impl BuildRequest {
             let ios_dt = collect_ios_dt_metadata(&deployment_target);
             let crate_dir = self.crate_dir();
 
-            // Compile AppIcon.xcassets via actool and merge the resulting
-            // CFBundleIcons keys into Info.plist. Apple rejects App Store
-            // uploads without a 120x120 iPhone icon present in the bundle.
-            Self::inject_ios_app_icon(&crate_dir, &target_exe, &deployment_target).await?;
-
             // PrivacyInfo.xcprivacy is mandatory for App Store submissions
             // since 2024. Auto-copy from `ios/PrivacyInfo.xcprivacy` if the
             // user provides one at the conventional location.
@@ -495,86 +490,6 @@ impl BuildRequest {
                 String::from_utf8(output.stderr).unwrap_or_default()
             );
         }
-
-        Ok(())
-    }
-
-    /// Compile `AppIcon.xcassets` (at the crate root) into the .app bundle
-    /// and merge the resulting CFBundleIcons keys into Info.plist.
-    ///
-    /// No-op when no `AppIcon.xcassets` is found — the build still produces a
-    /// `.app`, just one Apple App Store will reject for missing icons.
-    async fn inject_ios_app_icon(
-        crate_dir: &Path,
-        app_root: &Path,
-        deployment_target: &str,
-    ) -> Result<()> {
-        let xcassets = crate_dir.join("AppIcon.xcassets");
-        if !xcassets.exists() {
-            return Ok(());
-        }
-
-        let tmpdir = tempfile::tempdir()?;
-        let partial_plist = tmpdir.path().join("appicon-partial.plist");
-
-        let output = Command::new("xcrun")
-            .args(["actool", "--compile"])
-            .arg(app_root)
-            .args([
-                "--platform",
-                "iphoneos",
-                "--minimum-deployment-target",
-                deployment_target,
-                "--app-icon",
-                "AppIcon",
-                "--output-partial-info-plist",
-            ])
-            .arg(&partial_plist)
-            .arg(&xcassets)
-            .output()
-            .await
-            .context("Failed to run `xcrun actool` — install Xcode command line tools")?;
-
-        if !output.status.success() {
-            bail!(
-                "actool failed to compile AppIcon.xcassets: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        if !partial_plist.exists() {
-            // actool exited successfully but produced no partial plist
-            // (xcassets had no AppIcon entry). Nothing to merge.
-            return Ok(());
-        }
-
-        let main_plist_path = app_root.join("Info.plist");
-        let mut main = plist::Value::from_file(&main_plist_path)
-            .with_context(|| format!("Failed to read {}", main_plist_path.display()))?;
-        let partial = plist::Value::from_file(&partial_plist)
-            .with_context(|| format!("Failed to read {}", partial_plist.display()))?;
-
-        let main_dict = main
-            .as_dictionary_mut()
-            .context("Main Info.plist root is not a dictionary")?;
-
-        // actool may emit CFBundleIcons~ipad variants the bundle doesn't
-        // actually ship. Drop them first so the merge stays consistent.
-        main_dict.remove("CFBundleIcons");
-        main_dict.remove("CFBundleIcons~ipad");
-
-        if let Some(partial_dict) = partial.as_dictionary() {
-            for (k, v) in partial_dict {
-                main_dict.insert(k.clone(), v.clone());
-            }
-        }
-
-        plist::to_file_xml(&main_plist_path, &main).with_context(|| {
-            format!(
-                "Failed to write merged Info.plist at {}",
-                main_plist_path.display()
-            )
-        })?;
 
         Ok(())
     }
