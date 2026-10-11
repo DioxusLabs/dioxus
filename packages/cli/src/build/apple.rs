@@ -46,12 +46,7 @@ use tokio::process::Command;
 /// Minimum iOS version when `[ios] deployment_target` is unset, shared by the app and its widgets.
 const DEFAULT_IOS_DEPLOYMENT_TARGET: &str = "16.0";
 
-/// iOS-only Info.plist metadata probed from the local Xcode/SDK install.
-///
-/// Apple Transporter rejects App Store IPAs that don't carry these keys
-/// (DTPlatformName, DTSDKName, etc.). Xcode injects them automatically;
-/// `dx` reproduces the same set so device + App Store bundles match what
-/// the App Store expects.
+/// `DT*` and related `Info.plist` keys that Xcode adds and App Store validation requires.
 #[derive(Serialize, Default, Clone)]
 pub struct IosDtMetadata {
     pub dt_platform_name: String,
@@ -67,11 +62,7 @@ pub struct IosDtMetadata {
     pub cf_bundle_package_type: String,
 }
 
-/// Probe the local Xcode toolchain for iOS bundle metadata.
-///
-/// Each probe is best-effort: a failure leaves the corresponding field empty
-/// (which keeps the build working on machines without a full Xcode install,
-/// just without App Store-grade Info.plist output).
+/// Probes the local Xcode install, leaving a field empty when its probe fails.
 fn collect_ios_dt_metadata(deployment_target: &str) -> IosDtMetadata {
     fn run(cmd: &str, args: &[&str]) -> String {
         std::process::Command::new(cmd)
@@ -87,8 +78,7 @@ fn collect_ios_dt_metadata(deployment_target: &str) -> IosDtMetadata {
     let sdk_version = run("xcrun", &["--sdk", "iphoneos", "--show-sdk-version"]);
     let sdk_build = run("xcrun", &["--sdk", "iphoneos", "--show-sdk-build-version"]);
     // `xcode-select -p` prints `<Xcode.app>/Contents/Developer`, the Xcode xcrun uses above.
-    // `DTXcodeBuild` in `Contents/Info` is the build that compiled Xcode itself, so the build
-    // Xcode writes into apps comes from `Contents/version` instead (e.g. 27A266a, not 27A266).
+    // Xcode writes its `version` build into apps, `Info` holds the build that compiled Xcode.
     let developer_dir = PathBuf::from(run("xcode-select", &["-p"]));
     let xcode_plist = |name| {
         developer_dir
@@ -341,10 +331,6 @@ impl BuildRequest {
                 let plist_entries = generate_plist_entries(&self.config.ios.plist);
                 let raw_plist = self.config.ios.raw.info_plist.clone().unwrap_or_default();
 
-                // Probe Xcode toolchain for the DT* / SDK metadata Apple Transporter
-                // requires (DTPlatformName, DTPlatformVersion, DTSDKName, DTXcode, etc.).
-                // Falls back to empty strings if probes fail — the build still produces
-                // a valid .app, just one that won't pass App Store validation.
                 let ios_dt = collect_ios_dt_metadata(
                     self.config
                         .ios
@@ -434,11 +420,7 @@ impl BuildRequest {
             _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
         };
 
-        // iOS bundles need several pre-codesign passes so Apple App Store
-        // validation accepts the output. All bundle-content modifications
-        // (icon catalog, PrivacyInfo, widget Info.plist patching) must happen
-        // BEFORE any codesign call — codesign hashes the bundle and any later
-        // change invalidates the signature.
+        // Everything that changes the bundle has to happen before the first codesign call.
         if self.bundle == BundleFormat::Ios {
             let ios_dt = collect_ios_dt_metadata(
                 self.config
@@ -449,18 +431,8 @@ impl BuildRequest {
             );
             let crate_dir = self.crate_dir();
 
-            // PrivacyInfo.xcprivacy is mandatory for App Store submissions
-            // since 2024. Auto-copy from `ios/PrivacyInfo.xcprivacy` if the
-            // user provides one at the conventional location.
             Self::copy_ios_privacy_info(&crate_dir, &target_exe)?;
 
-            // App extensions get their own Info.plist with the same DT*,
-            // LSRequiresIPhoneOS, CFBundleSupportedPlatforms,
-            // UIRequiredDeviceCapabilities, and version strings the main
-            // bundle carries. Apple App Store requires version parity between
-            // an app and its extensions (CFBundleVersion +
-            // CFBundleShortVersionString) and rejects uploads when they
-            // diverge.
             Self::sync_widget_info_plists(&target_exe, &ios_dt, &self.crate_version())?;
 
             if let Some(profile_path) = &provisioning_profile_path {
@@ -469,10 +441,7 @@ impl BuildRequest {
                     .context("Failed to embed provisioning profile into .app bundle")?;
             }
 
-            // iOS app extensions live under .app/PlugIns/*.appex and must be
-            // signed BEFORE the parent .app (codesign computes the parent
-            // signature over the nested bundle hashes — sign children last
-            // and the parent signature is invalidated).
+            // Extensions are signed before the app, whose signature covers theirs.
             Self::sign_ios_app_extensions(&target_exe, app_dev_name, self.appstore).await?;
         }
 
@@ -500,9 +469,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Copy `ios/PrivacyInfo.xcprivacy` (at the crate root) into the .app
-    /// bundle. Apple has required a PrivacyInfo manifest in App Store
-    /// submissions since 2024. No-op if the file isn't present.
+    /// Copies `ios/PrivacyInfo.xcprivacy` from the crate root into the app, if present.
     fn copy_ios_privacy_info(crate_dir: &Path, app_root: &Path) -> Result<()> {
         let src = crate_dir.join("ios").join("PrivacyInfo.xcprivacy");
         if !src.exists() {
@@ -519,11 +486,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Patch each `PlugIns/*.appex` Info.plist with the same iOS bundle
-    /// metadata the main app carries (DT* keys, LSRequiresIPhoneOS,
-    /// CFBundleSupportedPlatforms, UIRequiredDeviceCapabilities). Apple
-    /// validates app extension Info.plists independently and rejects
-    /// uploads where these keys are missing or mismatched.
+    /// Gives each `.appex` the platform, version and `DT*` keys of the main bundle.
     fn sync_widget_info_plists(
         app_root: &Path,
         ios_dt: &IosDtMetadata,
@@ -576,9 +539,7 @@ impl BuildRequest {
                 plist::Value::String(version.to_string()),
             );
 
-            // DT* / SDK metadata mirroring the main bundle. Skip empties so
-            // we don't pollute the plist with blank entries on machines
-            // missing parts of the Xcode toolchain.
+            // Skip keys whose probe found nothing.
             let dt_entries: [(&str, &str); 9] = [
                 ("DTPlatformName", &ios_dt.dt_platform_name),
                 ("DTPlatformVersion", &ios_dt.dt_platform_version),
@@ -603,12 +564,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Sign every `.appex` bundle under `<app>/PlugIns/` so the parent .app
-    /// signature is valid and App Store upload accepts the nested extensions.
-    ///
-    /// Each extension gets its own provisioning profile matched by its
-    /// CFBundleIdentifier and is signed with the same signing identity as the
-    /// parent app.
+    /// Signs each `.appex` with its own provisioning profile and the app's identity.
     async fn sign_ios_app_extensions(
         app_root: &Path,
         dev_name: &str,
@@ -704,9 +660,6 @@ impl BuildRequest {
                     .context("Failed to parse `security find-identity -v -p codesigning`")
             })??;
 
-        // App Store distribution requires an "Apple Distribution" certificate
-        // (issued by the paid Apple Developer Program). Otherwise we look for
-        // the standard "Apple Development" identity used for device builds.
         let (label, pattern) = if appstore {
             ("Apple Distribution", r#""Apple Distribution: (.+)""#)
         } else {
@@ -1090,10 +1043,7 @@ We checked the folders:
                 continue;
             }
 
-            // App Store distribution profiles have no ProvisionedDevices entry
-            // (they're not tied to a specific device list). Filter out dev /
-            // ad-hoc profiles here so the auto-discovery picks a profile that
-            // Apple will accept for App Store upload.
+            // App Store profiles carry no `ProvisionedDevices`.
             if appstore && !profile.provisioned_devices.is_empty() {
                 tracing::debug!(
                     "Skipping profile {} ({} provisioned devices — not an App Store profile)",
@@ -1157,9 +1107,7 @@ We checked the folders:
             }
         };
 
-        // App Store binaries must ship with `get-task-allow=false` (or the key
-        // omitted). Apple rejects the upload otherwise. Dev / device builds
-        // keep `get-task-allow=true` so the debugger can attach.
+        // App Store uploads require `get-task-allow=false`, the debugger needs `true`.
         let get_task_allow = if appstore { "false" } else { "true" };
 
         let entitlements_xml = format!(

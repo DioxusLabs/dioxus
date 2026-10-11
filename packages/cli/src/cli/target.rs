@@ -149,14 +149,7 @@ pub(crate) struct TargetArgs {
 
     /// Bundle the iOS app for App Store distribution.
     ///
-    /// When set, codesigning auto-detect looks for an "Apple Distribution" identity
-    /// instead of "Apple Development", and provisioning profile auto-discovery
-    /// prefers App Store profiles (those without a `ProvisionedDevices` key) over
-    /// development / ad-hoc profiles.
-    ///
-    /// Combine with `--release` to produce an `.ipa` Apple Transporter will accept.
-    /// Requires a paid Apple Developer Program account with a valid Distribution
-    /// certificate and an App Store provisioning profile installed locally.
+    /// Signs with an "Apple Distribution" identity and an App Store provisioning profile.
     #[clap(long, default_value_t = false, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) appstore: bool,
 
