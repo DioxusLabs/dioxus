@@ -2317,3 +2317,63 @@ fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
         serde_json::Value::Null => String::new(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn widget_plist_takes_app_version_and_skips_empty_metadata() {
+        let app = tempfile::tempdir().unwrap();
+        let appex = app.path().join("PlugIns").join("widget.appex");
+        std::fs::create_dir_all(&appex).unwrap();
+        let mut dict = plist::Dictionary::new();
+        dict.insert("CFBundleVersion".to_string(), "0.0.1".into());
+        plist::to_file_xml(appex.join("Info.plist"), &dict).unwrap();
+
+        let ios_dt = IosDtMetadata {
+            dt_sdk_name: "iphoneos18.2".to_string(),
+            ..Default::default()
+        };
+        BuildRequest::sync_widget_info_plists(app.path(), &ios_dt, "1.2.3").unwrap();
+
+        let value = plist::Value::from_file(appex.join("Info.plist")).unwrap();
+        let dict = value.as_dictionary().unwrap();
+        let get = |key| dict.get(key).and_then(plist::Value::as_string);
+        assert_eq!(get("CFBundleVersion"), Some("1.2.3"));
+        assert_eq!(get("CFBundleShortVersionString"), Some("1.2.3"));
+        assert_eq!(get("DTSDKName"), Some("iphoneos18.2"));
+        assert_eq!(get("DTXcode"), None);
+    }
+
+    fn profile(app_id: &str, devices: &[&str]) -> ProvisioningProfile {
+        ProvisioningProfile {
+            team_identifier: vec!["TEAM".to_string()],
+            entitlements: ProfileEntitlements {
+                application_identifier: app_id.to_string(),
+                keychain_access_groups: vec!["TEAM.*".to_string()],
+            },
+            application_identifier_prefix: vec!["TEAM".to_string()],
+            provisioned_devices: devices.iter().map(|d| d.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn appstore_skips_profiles_tied_to_devices() {
+        let profiles = || {
+            vec![
+                ("dev".into(), profile("TEAM.com.example.app", &["device"])),
+                ("store".into(), profile("TEAM.com.example.app", &[])),
+                ("other".into(), profile("TEAM.com.other.app", &[])),
+            ]
+        };
+        let pick = |profiles, appstore| {
+            pick_provisioning_profile(profiles, "com.example.app", appstore).map(|(path, _)| path)
+        };
+
+        assert_eq!(pick(profiles(), true), Some(PathBuf::from("store")));
+        assert_eq!(pick(profiles(), false), Some(PathBuf::from("dev")));
+        let dev_only = vec![("dev".into(), profile("TEAM.com.example.app", &["device"]))];
+        assert_eq!(pick(dev_only, true), None);
+    }
+}
