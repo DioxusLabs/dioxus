@@ -43,8 +43,11 @@ use std::{
 use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
 
-/// Minimum iOS version when `[ios] deployment_target` is unset, shared by the app and its widgets.
-const DEFAULT_IOS_DEPLOYMENT_TARGET: &str = "16.0";
+/// Minimum iOS version of the app when `[ios] deployment_target` is unset.
+const DEFAULT_IOS_DEPLOYMENT_TARGET: &str = "15.0";
+
+/// Minimum iOS version of a widget when neither it nor `[ios]` sets one.
+const DEFAULT_IOS_WIDGET_DEPLOYMENT_TARGET: &str = "16.0";
 
 /// `DT*` and related `Info.plist` keys that Xcode adds and App Store validation requires.
 #[derive(Serialize, Default, Clone)]
@@ -1293,7 +1296,7 @@ We checked the folders:
             .ios
             .deployment_target
             .as_deref()
-            .unwrap_or(DEFAULT_IOS_DEPLOYMENT_TARGET);
+            .unwrap_or(DEFAULT_IOS_WIDGET_DEPLOYMENT_TARGET);
 
         let plugins_dir = self.plugins_folder();
         std::fs::create_dir_all(&plugins_dir)?;
