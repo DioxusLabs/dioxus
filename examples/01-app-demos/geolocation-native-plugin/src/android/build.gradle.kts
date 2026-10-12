@@ -1,8 +1,7 @@
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 
 plugins {
-    id("com.android.library") version "8.4.2"
-    kotlin("android") version "1.9.24"
+    id("com.android.library") version "9.4.0"
 }
 
 android {
@@ -11,7 +10,6 @@ android {
 
     defaultConfig {
         minSdk = 24
-        targetSdk = 34
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -27,10 +25,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 }
 
