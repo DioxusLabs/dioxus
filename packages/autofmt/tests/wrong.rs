@@ -49,3 +49,4 @@ twoway!("comments-constructs-tab" => comments_constructs_tab (IndentOptions::new
 twoway!("nested-rsx-closure" => nested_rsx_closure (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("jsx-4sp" => jsx_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("jsx-comments" => jsx_comments (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("jsx-nested-rsx-closure" => jsx_nested_rsx_closure (IndentOptions::new(IndentType::Spaces, 4, false)));
