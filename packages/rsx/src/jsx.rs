@@ -842,4 +842,19 @@ mod tests {
             block.to_token_stream().to_string()
         );
     }
+
+    #[test]
+    fn diagnostics_follow_the_element() {
+        use quote::ToTokens;
+
+        // rust-analyzer finds the cursor in the expansion by offset, so text that depends on the
+        // tag name (like these diagnostics) has to come after the name for it to be completed
+        for input in [quote! { <di }, quote! { <di> }, quote! { <div> sp </div> }] {
+            let body: crate::CallBody = syn::parse2(input).unwrap();
+            let expanded = body.to_token_stream().to_string();
+            let name = expanded.find("html ::").unwrap();
+            let diagnostic = expanded.find("compile_error").unwrap();
+            assert!(name < diagnostic, "{expanded}");
+        }
+    }
 }
