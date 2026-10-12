@@ -125,6 +125,8 @@ impl BuildRequest {
             min_sdk: u32,
             target_sdk: u32,
             compile_sdk: u32,
+            compile_sdk_minor: Option<u32>,
+            build_tools_version: Option<String>,
             /// Android permission strings (e.g., "android.permission.CAMERA")
             permissions: Vec<String>,
             /// Android hardware features (e.g., "android.hardware.location.gps")
@@ -176,6 +178,9 @@ impl BuildRequest {
         // Foreground service types as pipe-separated string
         let foreground_service_type = mapper.android_foreground_service_types.join("|");
 
+        let compile_sdk = self.config.android.compile_sdk.unwrap_or(34);
+        let android_tools = self.workspace.android_tools().ok();
+
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
@@ -183,7 +188,13 @@ impl BuildRequest {
             android_bundle: self.config.bundle.android.clone(),
             min_sdk: self.config.android.min_sdk.unwrap_or(24),
             target_sdk: self.config.android.target_sdk.unwrap_or(34),
-            compile_sdk: self.config.android.compile_sdk.unwrap_or(34),
+            compile_sdk,
+            compile_sdk_minor: android_tools
+                .as_ref()
+                .and_then(|tools| tools.compile_sdk_minor(compile_sdk)),
+            build_tools_version: android_tools
+                .as_ref()
+                .and_then(|tools| tools.build_tools_version()),
             permissions,
             features,
             raw_manifest,
@@ -1216,6 +1227,45 @@ impl AndroidTools {
             .unwrap_or_else(|| self.ndk.parent().unwrap().parent().unwrap().to_path_buf())
     }
 
+    /// The highest installed minor release of `compile_sdk`, e.g. `2` for `platforms/android-37.2`.
+    ///
+    /// AGP resolves `compileSdk = 37` to `android-37.0`, so the minor version must be set
+    /// explicitly to build against a newer installed platform. Previews like `android-37.2-beta1` are ignored.
+    pub(crate) fn compile_sdk_minor(&self, compile_sdk: u32) -> Option<u32> {
+        std::fs::read_dir(self.sdk().join("platforms"))
+            .ok()?
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name();
+                let (major, minor) = name.to_str()?.strip_prefix("android-")?.split_once('.')?;
+                if major.parse::<u32>().ok()? != compile_sdk {
+                    return None;
+                }
+                minor.parse::<u32>().ok()
+            })
+            .max()
+            .filter(|&minor| minor > 0)
+    }
+
+    /// The newest installed stable build-tools version, e.g. `"37.0.0"`. Release candidates are ignored.
+    ///
+    /// AGP ignores (with a warning) a version below its minimum supported build-tools version.
+    pub(crate) fn build_tools_version(&self) -> Option<String> {
+        std::fs::read_dir(self.sdk().join("build-tools"))
+            .ok()?
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().into_string().ok()?;
+                let version = name
+                    .split('.')
+                    .map(|part| part.parse::<u32>().ok())
+                    .collect::<Option<Vec<_>>>()?;
+                Some((version, name))
+            })
+            .max()
+            .map(|(_, name)| name)
+    }
+
     pub(crate) fn emulator(&self) -> PathBuf {
         self.sdk().join("emulator").join("emulator")
     }
@@ -1383,5 +1433,55 @@ impl AndroidTools {
             .inspect_err(|_| tracing::trace!("{name} not set"))
             .ok()
             .map(PathBuf::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AndroidTools;
+
+    #[test]
+    fn compile_sdk_minor_picks_highest_installed_stable_minor() {
+        let sdk = tempfile::tempdir().unwrap();
+        let platforms = sdk.path().join("platforms");
+        for platform in [
+            "android-34",
+            "android-36.1",
+            "android-37.0",
+            "android-37.2",
+            "android-37.3-beta1",
+        ] {
+            std::fs::create_dir_all(platforms.join(platform)).unwrap();
+        }
+        let tools = AndroidTools {
+            sdk: Some(sdk.path().to_path_buf()),
+            ndk: Default::default(),
+            adb: Default::default(),
+            java_home: None,
+        };
+
+        assert_eq!(tools.compile_sdk_minor(37), Some(2));
+        assert_eq!(tools.compile_sdk_minor(36), Some(1));
+        // `android-34` has no minor release, and `android-35` is not installed.
+        assert_eq!(tools.compile_sdk_minor(34), None);
+        assert_eq!(tools.compile_sdk_minor(35), None);
+    }
+
+    #[test]
+    fn build_tools_version_picks_newest_stable_version() {
+        let sdk = tempfile::tempdir().unwrap();
+        let tools = AndroidTools {
+            sdk: Some(sdk.path().to_path_buf()),
+            ndk: Default::default(),
+            adb: Default::default(),
+            java_home: None,
+        };
+        assert_eq!(tools.build_tools_version(), None);
+
+        // Compared numerically, so "9.0.0" must not beat "36.1.0"; the newer rc is skipped.
+        for version in ["9.0.0", "34.0.0", "36.1.0", "36.0.0", "37.0.0-rc1"] {
+            std::fs::create_dir_all(sdk.path().join("build-tools").join(version)).unwrap();
+        }
+        assert_eq!(tools.build_tools_version().as_deref(), Some("36.1.0"));
     }
 }
