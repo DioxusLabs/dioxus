@@ -410,13 +410,6 @@ mod tests {
         assert_eq!(main.children.len(), 100);
     }
 
-    thread_local! {
-        static ITEM_COUNT: Cell<usize> = const { Cell::new(0) };
-        static SUSPENDED: Cell<bool> = const { Cell::new(false) };
-        static GENERATION: Cell<usize> = const { Cell::new(0) };
-        static WAKER: Cell<Option<std::task::Waker>> = const { Cell::new(None) };
-    }
-
     fn node_count(doc: &DioxusDocument) -> usize {
         doc.inner.borrow().tree().len()
     }
@@ -452,20 +445,23 @@ mod tests {
     #[test]
     fn removed_nodes_are_dropped() {
         fn app() -> Element {
+            let item_count = consume_context::<Rc<Cell<usize>>>();
             rsx!(
-                for id in 0..ITEM_COUNT.get() {
+                for id in 0..item_count.get() {
                     div { key: "{id}", span { "{id}" } }
                 }
             )
         }
 
-        let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
+        let item_count = Rc::new(Cell::new(0));
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&item_count));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
         doc.initial_build();
 
         let cycle = |doc: &mut DioxusDocument| {
-            ITEM_COUNT.set(50);
+            item_count.set(50);
             rerender(doc);
-            ITEM_COUNT.set(0);
+            item_count.set(0);
             rerender(doc);
             node_count(doc)
         };
@@ -479,16 +475,24 @@ mod tests {
 
     #[test]
     fn suspended_nodes_are_dropped_and_recreated() {
+        #[derive(Default)]
+        struct State {
+            suspended: Cell<bool>,
+            generation: Cell<usize>,
+            waker: Cell<Option<std::task::Waker>>,
+        }
+
         // `generation` only exists to defeat memoization so that the component re-renders
         #[component]
         fn Child(generation: usize) -> Element {
+            let state = consume_context::<Rc<State>>();
             let mut resolved = use_signal(|| false);
-            if SUSPENDED.get() {
+            if state.suspended.get() {
                 resolved.set(false);
                 let task = spawn(async move {
                     std::future::poll_fn(|cx| {
-                        if SUSPENDED.get() {
-                            WAKER.set(Some(cx.waker().clone()));
+                        if state.suspended.get() {
+                            state.waker.set(Some(cx.waker().clone()));
                             std::task::Poll::Pending
                         } else {
                             std::task::Poll::Ready(())
@@ -503,25 +507,28 @@ mod tests {
         }
 
         fn app() -> Element {
+            let state = consume_context::<Rc<State>>();
             rsx!(
                 SuspenseBoundary {
                     fallback: |_| rsx!( p { "loading" } ),
-                    Child { generation: GENERATION.get() }
+                    Child { generation: state.generation.get() }
                 }
             )
         }
 
-        let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
+        let state = Rc::new(State::default());
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&state));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
         doc.initial_build();
         assert_eq!(main_text(&doc), "content");
 
         let cycle = |doc: &mut DioxusDocument| {
-            SUSPENDED.set(true);
-            GENERATION.set(GENERATION.get() + 1);
+            state.suspended.set(true);
+            state.generation.set(state.generation.get() + 1);
             rerender(doc);
             assert_eq!(main_text(doc), "loading");
-            SUSPENDED.set(false);
-            WAKER.take().unwrap().wake();
+            state.suspended.set(false);
+            state.waker.take().unwrap().wake();
             poll_until_idle(doc);
             assert_eq!(main_text(doc), "content");
             node_count(doc)
@@ -542,9 +549,10 @@ mod tests {
             checked: bool,
             editing: bool,
         }
-        thread_local! {
-            static ITEMS: RefCell<Vec<Item>> = const { RefCell::new(Vec::new()) };
-            static FILTER: Cell<u8> = const { Cell::new(0) };
+        #[derive(Default)]
+        struct State {
+            items: RefCell<Vec<Item>>,
+            filter: Cell<u8>,
         }
 
         #[component]
@@ -564,8 +572,9 @@ mod tests {
         }
 
         fn app() -> Element {
-            let items = ITEMS.with(|i| i.borrow().clone());
-            let filter = FILTER.get();
+            let state = consume_context::<Rc<State>>();
+            let items = state.items.borrow().clone();
+            let filter = state.filter.get();
             let active = items.iter().filter(|i| !i.checked).count();
             let visible: Vec<Item> = items
                 .iter()
@@ -599,7 +608,9 @@ mod tests {
             }
         }
 
-        let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
+        let state = Rc::new(State::default());
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&state));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
         doc.initial_build();
 
         let mut seed = 0x2545F4914F6CDD1Du64;
@@ -612,8 +623,8 @@ mod tests {
         let mut next_id = 0;
         for _ in 0..3000 {
             let r = rng();
-            ITEMS.with(|items| {
-                let mut items = items.borrow_mut();
+            {
+                let mut items = state.items.borrow_mut();
                 let len = items.len();
                 match r % 8 {
                     0 | 1 => {
@@ -635,16 +646,16 @@ mod tests {
                         let i = (r >> 8) as usize % len;
                         items[i].editing ^= true;
                     }
-                    5 => FILTER.set(((r >> 8) % 3) as u8),
+                    5 => state.filter.set(((r >> 8) % 3) as u8),
                     6 => items.retain(|i| !i.checked),
                     7 if len > 12 => items.clear(),
                     _ => {}
                 }
-            });
+            }
             doc.vdom.mark_dirty(ScopeId::APP);
             doc.poll(None);
         }
-        ITEMS.with(|items| items.borrow_mut().clear());
+        state.items.borrow_mut().clear();
         doc.vdom.mark_dirty(ScopeId::APP);
         doc.poll(None);
         eprintln!(
