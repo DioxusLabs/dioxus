@@ -33,14 +33,18 @@ impl ClientRequest {
     // Shrink monomorphization bloat by moving this to its own function
     fn fetch_inner(method: http::Method, path: String, query: String) -> ClientRequest {
         // On wasm, this doesn't matter since we always use relative URLs when making requests anyways
-        let mut server_url = get_server_url();
-
-        if server_url.is_empty() {
-            server_url = "http://this.is.not.a.real.url:9000";
-        }
+        let server_url = get_server_url();
+        let (server_url, origin) = if server_url.is_empty() || server_url.starts_with('/') {
+            (
+                server_url.trim_end_matches('/'),
+                "http://this.is.not.a.real.url:9000",
+            )
+        } else {
+            (server_url, "")
+        };
 
         let url = format!(
-            "{server_url}{path}{params}",
+            "{origin}{server_url}{path}{params}",
             params = if query.is_empty() {
                 "".to_string()
             } else {
