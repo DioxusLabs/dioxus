@@ -82,6 +82,7 @@ if (!process.env._DX_BUILT) {
 
 module.exports = defineConfig({
   testDir: ".",
+  respectGitIgnore: true,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
