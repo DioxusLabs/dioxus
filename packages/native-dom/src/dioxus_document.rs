@@ -453,7 +453,7 @@ mod tests {
             )
         }
 
-        let item_count = Rc::new(Cell::new(0));
+        let item_count = Rc::new(Cell::new(0usize));
         let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&item_count));
         let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
         doc.initial_build();
@@ -461,6 +461,11 @@ mod tests {
         let cycle = |doc: &mut DioxusDocument| {
             item_count.set(50);
             rerender(doc);
+            let main_id = doc.main_element_id;
+            assert_eq!(
+                doc.inner.borrow().get_node(main_id).unwrap().children.len(),
+                50
+            );
             item_count.set(0);
             rerender(doc);
             node_count(doc)
@@ -621,7 +626,8 @@ mod tests {
             seed
         };
         let mut next_id = 0;
-        for _ in 0..3000 {
+        let mut counts = Vec::new();
+        for step in 1..=3000 {
             let r = rng();
             {
                 let mut items = state.items.borrow_mut();
@@ -652,15 +658,54 @@ mod tests {
                     _ => {}
                 }
             }
-            doc.vdom.mark_dirty(ScopeId::APP);
-            doc.poll(None);
+            rerender(&mut doc);
+            if step % 1000 == 0 {
+                state.items.borrow_mut().clear();
+                rerender(&mut doc);
+                counts.push(node_count(&doc));
+            }
         }
-        state.items.borrow_mut().clear();
-        doc.vdom.mark_dirty(ScopeId::APP);
-        doc.poll(None);
-        eprintln!(
-            "STRESS final node count {}",
-            doc.inner.borrow().tree().len()
-        );
+        // The first round creates the (retained) template prototype nodes.
+        assert_eq!(counts[1], counts[2]);
+    }
+
+    #[test]
+    fn mounted_data_of_removed_element_reports_error() {
+        #[derive(Default)]
+        struct State {
+            show: Cell<bool>,
+            mounted: RefCell<Option<Rc<MountedData>>>,
+        }
+
+        fn app() -> Element {
+            let state = consume_context::<Rc<State>>();
+            rsx!(if state.show.get() {
+                div {
+                    onmounted: move |e| *state.mounted.borrow_mut() = Some(e.data()),
+                }
+            })
+        }
+
+        let state = Rc::new(State::default());
+        state.show.set(true);
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&state));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+        let mounted = state.mounted.take().unwrap();
+        state.show.set(false);
+        rerender(&mut doc);
+
+        fn is_err<T>(fut: impl Future<Output = Result<T, MountedError>>) -> bool {
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            let fut = std::pin::pin!(fut);
+            matches!(fut.poll(&mut cx), std::task::Poll::Ready(Err(_)))
+        }
+        assert!(is_err(mounted.get_scroll_offset()));
+        assert!(is_err(mounted.get_scroll_size()));
+        assert!(is_err(mounted.get_client_rect()));
+        assert!(is_err(mounted.scroll_to(ScrollBehavior::Instant)));
+        assert!(is_err(
+            mounted.scroll(Default::default(), ScrollBehavior::Instant)
+        ));
     }
 }
