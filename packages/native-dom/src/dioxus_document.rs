@@ -369,7 +369,7 @@ mod tests {
     use blitz_dom::DocumentConfig;
     use dioxus::prelude::*;
     use dioxus_core::ScopeId;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
 
     #[test]
@@ -408,5 +408,248 @@ mod tests {
         let inner = doc.inner.borrow();
         let main = inner.get_node(doc.main_element_id).unwrap();
         assert_eq!(main.children.len(), 100);
+    }
+
+    thread_local! {
+        static ITEM_COUNT: Cell<usize> = const { Cell::new(0) };
+        static SUSPENDED: Cell<bool> = const { Cell::new(false) };
+        static GENERATION: Cell<usize> = const { Cell::new(0) };
+        static WAKER: Cell<Option<std::task::Waker>> = const { Cell::new(None) };
+    }
+
+    fn node_count(doc: &DioxusDocument) -> usize {
+        doc.inner.borrow().tree().len()
+    }
+
+    fn rerender(doc: &mut DioxusDocument) {
+        doc.vdom.mark_dirty(ScopeId::APP);
+        poll_until_idle(doc);
+    }
+
+    fn poll_until_idle(doc: &mut DioxusDocument) {
+        for _ in 0..8 {
+            if !doc.poll(None) {
+                return;
+            }
+        }
+        panic!("document did not become idle");
+    }
+
+    fn main_text(doc: &DioxusDocument) -> String {
+        let inner = doc.inner.borrow();
+        let mut text = String::new();
+        let mut stack = vec![doc.main_element_id];
+        while let Some(id) = stack.pop() {
+            let node = inner.get_node(id).unwrap();
+            if let Some(data) = node.text_data() {
+                text.push_str(&data.content);
+            }
+            stack.extend(node.children.iter().rev().copied());
+        }
+        text
+    }
+
+    #[test]
+    fn removed_nodes_are_dropped() {
+        fn app() -> Element {
+            rsx!(
+                for id in 0..ITEM_COUNT.get() {
+                    div { key: "{id}", span { "{id}" } }
+                }
+            )
+        }
+
+        let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
+        doc.initial_build();
+
+        let cycle = |doc: &mut DioxusDocument| {
+            ITEM_COUNT.set(50);
+            rerender(doc);
+            ITEM_COUNT.set(0);
+            rerender(doc);
+            node_count(doc)
+        };
+
+        // The first cycle creates the (retained) template prototype nodes.
+        let baseline = cycle(&mut doc);
+        for _ in 0..5 {
+            assert_eq!(cycle(&mut doc), baseline);
+        }
+    }
+
+    #[test]
+    fn suspended_nodes_are_dropped_and_recreated() {
+        // `generation` only exists to defeat memoization so that the component re-renders
+        #[component]
+        fn Child(generation: usize) -> Element {
+            let mut resolved = use_signal(|| false);
+            if SUSPENDED.get() {
+                resolved.set(false);
+                let task = spawn(async move {
+                    std::future::poll_fn(|cx| {
+                        if SUSPENDED.get() {
+                            WAKER.set(Some(cx.waker().clone()));
+                            std::task::Poll::Pending
+                        } else {
+                            std::task::Poll::Ready(())
+                        }
+                    })
+                    .await;
+                    resolved.set(true);
+                });
+                suspend(task)?;
+            }
+            rsx!( div { span { "content" } } )
+        }
+
+        fn app() -> Element {
+            rsx!(
+                SuspenseBoundary {
+                    fallback: |_| rsx!( p { "loading" } ),
+                    Child { generation: GENERATION.get() }
+                }
+            )
+        }
+
+        let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
+        doc.initial_build();
+        assert_eq!(main_text(&doc), "content");
+
+        let cycle = |doc: &mut DioxusDocument| {
+            SUSPENDED.set(true);
+            GENERATION.set(GENERATION.get() + 1);
+            rerender(doc);
+            assert_eq!(main_text(doc), "loading");
+            SUSPENDED.set(false);
+            WAKER.take().unwrap().wake();
+            poll_until_idle(doc);
+            assert_eq!(main_text(doc), "content");
+            node_count(doc)
+        };
+
+        let baseline = cycle(&mut doc);
+        for _ in 0..5 {
+            assert_eq!(cycle(&mut doc), baseline);
+        }
+    }
+
+    #[test]
+    fn todo_like_stress() {
+        use std::cell::RefCell;
+        #[derive(Clone, PartialEq)]
+        struct Item {
+            id: u32,
+            checked: bool,
+            editing: bool,
+        }
+        thread_local! {
+            static ITEMS: RefCell<Vec<Item>> = const { RefCell::new(Vec::new()) };
+            static FILTER: Cell<u8> = const { Cell::new(0) };
+        }
+
+        #[component]
+        fn Entry(item: Item) -> Element {
+            rsx! {
+                li { class: if item.checked { "completed" },
+                    div { class: "view",
+                        input { r#type: "checkbox", id: "cbg-{item.id}" }
+                        label { "todo {item.id}" }
+                        button { class: "destroy" }
+                    }
+                    if item.editing {
+                        input { class: "edit", value: "todo {item.id}" }
+                    }
+                }
+            }
+        }
+
+        fn app() -> Element {
+            let items = ITEMS.with(|i| i.borrow().clone());
+            let filter = FILTER.get();
+            let active = items.iter().filter(|i| !i.checked).count();
+            let visible: Vec<Item> = items
+                .iter()
+                .filter(|i| match filter {
+                    1 => !i.checked,
+                    2 => i.checked,
+                    _ => true,
+                })
+                .cloned()
+                .collect();
+            rsx! {
+                section {
+                    if !items.is_empty() {
+                        input { id: "toggle-all", r#type: "checkbox" }
+                        label { r#for: "toggle-all" }
+                    }
+                    ul {
+                        for item in visible {
+                            Entry { key: "{item.id}", item }
+                        }
+                    }
+                    if !items.is_empty() {
+                        footer {
+                            span { strong { "{active} " } span { match active { 1 => "item", _ => "items" } " left" } }
+                            if items.iter().any(|i| i.checked) {
+                                button { "Clear completed" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
+        doc.initial_build();
+
+        let mut seed = 0x2545F4914F6CDD1Du64;
+        let mut rng = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let mut next_id = 0;
+        for _ in 0..3000 {
+            let r = rng();
+            ITEMS.with(|items| {
+                let mut items = items.borrow_mut();
+                let len = items.len();
+                match r % 8 {
+                    0 | 1 => {
+                        items.push(Item {
+                            id: next_id,
+                            checked: false,
+                            editing: false,
+                        });
+                        next_id += 1;
+                    }
+                    2 if len > 0 => {
+                        items.remove((r >> 8) as usize % len);
+                    }
+                    3 if len > 0 => {
+                        let i = (r >> 8) as usize % len;
+                        items[i].checked ^= true;
+                    }
+                    4 if len > 0 => {
+                        let i = (r >> 8) as usize % len;
+                        items[i].editing ^= true;
+                    }
+                    5 => FILTER.set(((r >> 8) % 3) as u8),
+                    6 => items.retain(|i| !i.checked),
+                    7 if len > 12 => items.clear(),
+                    _ => {}
+                }
+            });
+            doc.vdom.mark_dirty(ScopeId::APP);
+            doc.poll(None);
+        }
+        ITEMS.with(|items| items.borrow_mut().clear());
+        doc.vdom.mark_dirty(ScopeId::APP);
+        doc.poll(None);
+        eprintln!(
+            "STRESS final node count {}",
+            doc.inner.borrow().tree().len()
+        );
     }
 }
