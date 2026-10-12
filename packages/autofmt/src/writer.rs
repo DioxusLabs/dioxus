@@ -1,4 +1,4 @@
-use crate::{IndentOptions, buffer::Buffer};
+use crate::{IndentOptions, buffer::Buffer, prettier_please::NestedRsx};
 use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -64,6 +64,8 @@ pub struct Writer<'a> {
     pub raw_src: &'a str,
     pub src: Vec<&'a str>,
     pub cached_formats: HashMap<LineColumn, String>,
+    /// The `rsx!` calls nested in each of the cached expressions
+    nested_rsx: HashMap<LineColumn, Vec<NestedRsx>>,
     pub out: Buffer,
     pub invalid_exprs: Vec<Span>,
 }
@@ -78,6 +80,7 @@ impl<'a> Writer<'a> {
                 ..Default::default()
             },
             cached_formats: HashMap::new(),
+            nested_rsx: HashMap::new(),
             invalid_exprs: Vec::new(),
         }
     }
@@ -1256,7 +1259,14 @@ impl<'a> Writer<'a> {
         }
 
         let pretty = self.retrieve_formatted_expr(&expr).to_string();
+        let nested_rsx = self
+            .nested_rsx
+            .get(&expr.span().start())
+            .cloned()
+            .unwrap_or_default();
         let source = src_span.source_text().unwrap_or_default();
+        let src_line_count = source.lines().count();
+        let first_src_line = src_span.start().line;
         let source_has_line_comments = source
             .lines()
             .any(|line| line.trim_start().starts_with("//"));
@@ -1274,9 +1284,63 @@ impl<'a> Writer<'a> {
         if src_lines.peek().is_none() {
             out = pretty;
         } else {
-            for line in pretty.lines() {
+            for (idx, line) in pretty.lines().enumerate() {
                 let trimmed = line.trim();
                 let compacted = line.replace(" ", "").replace(",", "");
+
+                // A nested rsx! is already formatted with its comments, and its lines don't
+                // correspond to those of the source. Only the lines of its delimiters are matched
+                // with the source, and the source lines between them are skipped.
+                let nested = nested_rsx
+                    .iter()
+                    .find(|nested| nested.formatted_lines.contains(&idx));
+                let mut skip_src_to = None;
+                let mut is_nested_close = false;
+                if let Some(nested) = nested {
+                    let consumed = src_line_count - src_lines.clone().count();
+                    let src_open = nested.src_lines.start().saturating_sub(first_src_line);
+                    let src_close = nested.src_lines.end().saturating_sub(first_src_line);
+                    let is_open = idx == *nested.formatted_lines.start();
+                    let is_close = idx == *nested.formatted_lines.end();
+
+                    // The comments before the closing delimiter are still taken from the source
+                    if is_close && !is_open {
+                        let trailing_comments = source
+                            .lines()
+                            .take(src_close)
+                            .skip(consumed)
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                            .rev()
+                            .take_while(|line| {
+                                let line = line.trim();
+                                line.is_empty() || line.starts_with("//")
+                            })
+                            .count();
+                        for _ in consumed..src_close.saturating_sub(trailing_comments) {
+                            src_lines.next();
+                        }
+                        is_nested_close = true;
+                    }
+
+                    let has_src_line = match (is_open, is_close) {
+                        (true, true) => {
+                            skip_src_to = Some(src_close + 1);
+                            consumed <= src_open
+                        }
+                        (true, false) => consumed <= src_open,
+                        (false, true) => src_close > src_open && consumed <= src_close,
+                        (false, false) => false,
+                    };
+
+                    if !has_src_line {
+                        if !out.is_empty() {
+                            out.push('\n');
+                        }
+                        out.push_str(line);
+                        continue;
+                    }
+                }
 
                 // Pretty comments: consume matching source lines, preserve preceding empty lines
                 if trimmed.starts_with("//") {
@@ -1344,8 +1408,8 @@ impl<'a> Writer<'a> {
 
                     let src_compacted = src.replace(" ", "").replace(",", "");
 
-                    // Exact match
-                    if src_compacted.contains(&compacted) {
+                    // Exact match, or the line of the closing delimiter of a nested rsx!
+                    if src_compacted.contains(&compacted) || is_nested_close {
                         break;
                     }
 
@@ -1457,6 +1521,13 @@ impl<'a> Writer<'a> {
                     {
                         out.push_str(" // ");
                         out.push_str(c.as_str().replace("//", "").trim());
+                    }
+                }
+
+                if let Some(skip_src_to) = skip_src_to {
+                    let consumed = src_line_count - src_lines.clone().count();
+                    for _ in consumed..skip_src_to {
+                        src_lines.next();
                     }
                 }
             }
@@ -1617,8 +1688,9 @@ impl<'a> Writer<'a> {
         }
 
         if !self.cached_formats.contains_key(&loc) {
-            let formatted = self.unparse_expr(expr);
+            let (formatted, nested_rsx) = self.unparse_expr_with_nested_rsx(expr);
             self.cached_formats.insert(loc, formatted);
+            self.nested_rsx.insert(loc, nested_rsx);
         }
 
         self.cached_formats
