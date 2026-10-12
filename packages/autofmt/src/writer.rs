@@ -391,12 +391,14 @@ impl<'a> Writer<'a> {
     /// Write an attribute in the tag syntax: `name`, `name="literal"` or `name={expr}`
     fn write_tag_attribute(&mut self, attr: &Attribute, on_own_line: bool) -> Result {
         match &attr.name {
-            // Dashed custom attributes don't need to be quoted in the tag syntax: `data-count="1"`
+            // Dashed custom attributes don't need to be quoted in the tag syntax: `data-count="1"`.
+            // A name without a dash stays quoted, as it would be a built-in attribute otherwise.
             AttributeName::Custom(name)
-                if name
-                    .value()
-                    .split('-')
-                    .all(|seg| syn::parse_str::<syn::Ident>(seg).is_ok()) =>
+                if name.value().contains('-')
+                    && name
+                        .value()
+                        .split('-')
+                        .all(|seg| syn::parse_str::<syn::Ident>(seg).is_ok()) =>
             {
                 write!(self.out, "{}", name.value())?
             }

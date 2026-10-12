@@ -7,6 +7,7 @@ pub fn app() -> Element {
             <img src="image.png" />
             <button disabled onclick={move |_| println!("clicked")}>"Click me"</button>
             <my-web-component data-count="1" "custom^attr"="value" />
+            <iframe src="x" "sandbox"="allow-scripts" />
             <div {..attrs} />
             <MyComponent prop="value">"children"</MyComponent>
             <some::cool::Component />
