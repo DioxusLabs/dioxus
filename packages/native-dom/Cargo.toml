@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "svg", "system-fonts"]
+default = ["accessibility", "svg", "system-fonts", "text-transform-icu"]
 
 # DOM features
 svg = ["blitz-dom/svg"]
@@ -21,6 +21,8 @@ system-fonts = ["blitz-dom/system-fonts"]
 # complex-scripts: enable dictionary-based line-breaking
 complex-scripts = ["blitz-dom/complex-scripts"]
 autofocus = ["blitz-dom/autofocus"]
+text-transform-icu = ["blitz-dom/text-transform-icu"]
+writing-mode = ["blitz-dom/writing-mode"]
 
 [dependencies]
 # Blitz dependencies

@@ -195,22 +195,22 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "=0
 warnings = { version = "0.2.1" }
 
 # blitz / native
-blitz-dom = { version = "=0.3.0-beta.2", default-features = false }
-blitz-net = { version = "=0.3.0-beta.2" }
-blitz-html = { version = "=0.3.0-beta.2" }
-blitz-paint = { version = "=0.3.0-beta.2" }
-blitz-traits = { version = "=0.3.0-beta.2" }
-blitz-shell = { version = "=0.3.0-beta.2", default-features = false }
+blitz-dom = { version = "=0.3.0-beta.3", default-features = false }
+blitz-net = { version = "=0.3.0-beta.3" }
+blitz-html = { version = "=0.3.0-beta.3" }
+blitz-paint = { version = "=0.3.0-beta.3" }
+blitz-traits = { version = "=0.3.0-beta.3" }
+blitz-shell = { version = "=0.3.0-beta.3", default-features = false }
 peniko = { version = "0.6.1", default-features = false }
-anyrender = { version = "0.13.0" }
-anyrender_vello = { version = "0.14.0" }
-anyrender_vello_cpu = { version = "0.17.0" }
-anyrender_vello_hybrid = { version = "0.10.0" }
-anyrender_skia = { version = "0.11.0" }
-wgpu_context = { version = "0.9.0" }
-wgpu = { version = "29.0.3" }
-vello = "0.10"
-winit = { version = "=0.31.0-beta.2" }
+anyrender = { version = "0.14.0" }
+anyrender_vello = { version = "0.15.0" }
+anyrender_vello_cpu = { version = "0.18.0" }
+anyrender_vello_hybrid = { version = "0.11.0" }
+anyrender_skia = { version = "0.12.0" }
+wgpu_context = { version = "0.10.0" }
+wgpu = { version = "30.0.1" }
+vello = "0.11"
+winit = { version = "=0.31.0-beta.3" }
 atomic_refcell = "0.1.13"
 
 # a fork of pretty please for tests - let's get off of this if we can!
@@ -231,11 +231,11 @@ futures = "0.3.32"
 futures-channel = "0.3.32"
 futures-util = { version = "0.3.32", default-features = false }
 rustc-hash = "2.1.1"
-wasm-bindgen = "0.2.121"
-wasm-bindgen-futures = "0.4.71"
-wasm-bindgen-test = "0.3.71"
-js-sys = "0.3.98"
-web-sys = { version = "0.3.98", default-features = false }
+wasm-bindgen = "0.2.127"
+wasm-bindgen-futures = "0.4.77"
+wasm-bindgen-test = "0.3.77"
+js-sys = "0.3.104"
+web-sys = { version = "0.3.104", default-features = false }
 html_parser = "0.7.0"
 thiserror = "2.0.18"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
@@ -333,8 +333,8 @@ serde_repr = "0.1.19"
 hyper-util = "0.1.12"
 krates = { version = "0.17.5" }
 libloading = "0.8.8"
-libc = "0.2.182"
-memmap2 = "0.9.10"
+libc = "0.2.183"
+memmap2 = "0.9.11"
 memfd = "0.6.4"
 xxhash-rust = { version = "0.8.15", default-features = false }
 serde_qs = "0.15.0"
@@ -360,7 +360,7 @@ percent-encoding = "2.3.2"
 # Opt in via the `dioxus-desktop/linux-libxdo` feature instead. `gtk` is kept —
 # it is what actually renders menus and tray icons on Linux.
 muda = { version = "0.19.1", default-features = false, features = ["gtk"] }
-objc2 = { version = "0.6.4", features = ["exception"] }
+objc2 = { version = "0.6.5", features = ["exception"] }
 objc2-foundation = { version = "0.3.2", default-features = false }
 objc2-ui-kit = { version = "0.3.2", default-features = false }
 objc2-app-kit = { version = "0.3.2", default-features = false }
