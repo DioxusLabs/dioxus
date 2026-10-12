@@ -369,7 +369,7 @@ mod tests {
     use blitz_dom::DocumentConfig;
     use dioxus::prelude::*;
     use dioxus_core::ScopeId;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
 
     #[test]
@@ -408,5 +408,320 @@ mod tests {
         let inner = doc.inner.borrow();
         let main = inner.get_node(doc.main_element_id).unwrap();
         assert_eq!(main.children.len(), 100);
+    }
+
+    fn node_count(doc: &DioxusDocument) -> usize {
+        doc.inner.borrow().tree().len()
+    }
+
+    fn rerender(doc: &mut DioxusDocument) {
+        doc.vdom.mark_dirty(ScopeId::APP);
+        poll_until_idle(doc);
+    }
+
+    fn poll_until_idle(doc: &mut DioxusDocument) {
+        for _ in 0..8 {
+            if !doc.poll(None) {
+                return;
+            }
+        }
+        panic!("document did not become idle");
+    }
+
+    fn main_text(doc: &DioxusDocument) -> String {
+        let inner = doc.inner.borrow();
+        let mut text = String::new();
+        let mut stack = vec![doc.main_element_id];
+        while let Some(id) = stack.pop() {
+            let node = inner.get_node(id).unwrap();
+            if let Some(data) = node.text_data() {
+                text.push_str(&data.content);
+            }
+            stack.extend(node.children.iter().rev().copied());
+        }
+        text
+    }
+
+    #[test]
+    fn removed_nodes_are_dropped() {
+        fn app() -> Element {
+            let item_count = consume_context::<Rc<Cell<usize>>>();
+            rsx!(
+                for id in 0..item_count.get() {
+                    div { key: "{id}", span { "{id}" } }
+                }
+            )
+        }
+
+        let item_count = Rc::new(Cell::new(0usize));
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&item_count));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+
+        let cycle = |doc: &mut DioxusDocument| {
+            item_count.set(50);
+            rerender(doc);
+            let main_id = doc.main_element_id;
+            assert_eq!(
+                doc.inner.borrow().get_node(main_id).unwrap().children.len(),
+                50
+            );
+            item_count.set(0);
+            rerender(doc);
+            node_count(doc)
+        };
+
+        // The first cycle creates the (retained) template prototype nodes.
+        let baseline = cycle(&mut doc);
+        for _ in 0..5 {
+            assert_eq!(cycle(&mut doc), baseline);
+        }
+    }
+
+    #[test]
+    fn suspended_nodes_are_dropped_and_recreated() {
+        #[derive(Default)]
+        struct State {
+            suspended: Cell<bool>,
+            generation: Cell<usize>,
+            waker: Cell<Option<std::task::Waker>>,
+        }
+
+        // `generation` only exists to defeat memoization so that the component re-renders
+        #[component]
+        fn Child(generation: usize) -> Element {
+            let state = consume_context::<Rc<State>>();
+            let mut resolved = use_signal(|| false);
+            if state.suspended.get() {
+                resolved.set(false);
+                let task = spawn(async move {
+                    std::future::poll_fn(|cx| {
+                        if state.suspended.get() {
+                            state.waker.set(Some(cx.waker().clone()));
+                            std::task::Poll::Pending
+                        } else {
+                            std::task::Poll::Ready(())
+                        }
+                    })
+                    .await;
+                    resolved.set(true);
+                });
+                suspend(task)?;
+            }
+            rsx!( div { span { "content" } } )
+        }
+
+        fn app() -> Element {
+            let state = consume_context::<Rc<State>>();
+            rsx!(
+                SuspenseBoundary {
+                    fallback: |_| rsx!( p { "loading" } ),
+                    Child { generation: state.generation.get() }
+                }
+            )
+        }
+
+        let state = Rc::new(State::default());
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&state));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+        assert_eq!(main_text(&doc), "content");
+
+        let cycle = |doc: &mut DioxusDocument| {
+            state.suspended.set(true);
+            state.generation.set(state.generation.get() + 1);
+            rerender(doc);
+            assert_eq!(main_text(doc), "loading");
+            state.suspended.set(false);
+            state.waker.take().unwrap().wake();
+            poll_until_idle(doc);
+            assert_eq!(main_text(doc), "content");
+            node_count(doc)
+        };
+
+        let baseline = cycle(&mut doc);
+        for _ in 0..5 {
+            assert_eq!(cycle(&mut doc), baseline);
+        }
+    }
+
+    #[test]
+    fn todo_like_stress() {
+        use std::cell::RefCell;
+        #[derive(Clone, PartialEq)]
+        struct Item {
+            id: u32,
+            checked: bool,
+            editing: bool,
+        }
+        #[derive(Default)]
+        struct State {
+            items: RefCell<Vec<Item>>,
+            filter: Cell<u8>,
+        }
+
+        #[component]
+        fn Entry(item: Item) -> Element {
+            rsx! {
+                li { class: if item.checked { "completed" },
+                    div { class: "view",
+                        input { r#type: "checkbox", id: "cbg-{item.id}" }
+                        label { "todo {item.id}" }
+                        button { class: "destroy" }
+                    }
+                    if item.editing {
+                        input { class: "edit", value: "todo {item.id}" }
+                    }
+                }
+            }
+        }
+
+        fn app() -> Element {
+            let state = consume_context::<Rc<State>>();
+            let items = state.items.borrow().clone();
+            let filter = state.filter.get();
+            let active = items.iter().filter(|i| !i.checked).count();
+            let visible: Vec<Item> = items
+                .iter()
+                .filter(|i| match filter {
+                    1 => !i.checked,
+                    2 => i.checked,
+                    _ => true,
+                })
+                .cloned()
+                .collect();
+            rsx! {
+                section {
+                    if !items.is_empty() {
+                        input { id: "toggle-all", r#type: "checkbox" }
+                        label { r#for: "toggle-all" }
+                    }
+                    ul {
+                        for item in visible {
+                            Entry { key: "{item.id}", item }
+                        }
+                    }
+                    if !items.is_empty() {
+                        footer {
+                            span { strong { "{active} " } span { match active { 1 => "item", _ => "items" } " left" } }
+                            if items.iter().any(|i| i.checked) {
+                                button { "Clear completed" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let state = Rc::new(State::default());
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&state));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+
+        let mut seed = 0x2545F4914F6CDD1Du64;
+        let mut rng = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let mut next_id = 0;
+        let mut counts = Vec::new();
+        for step in 1..=3000 {
+            let r = rng();
+            {
+                let mut items = state.items.borrow_mut();
+                let len = items.len();
+                match r % 8 {
+                    0 | 1 => {
+                        items.push(Item {
+                            id: next_id,
+                            checked: false,
+                            editing: false,
+                        });
+                        next_id += 1;
+                    }
+                    2 if len > 0 => {
+                        items.remove((r >> 8) as usize % len);
+                    }
+                    3 if len > 0 => {
+                        let i = (r >> 8) as usize % len;
+                        items[i].checked ^= true;
+                    }
+                    4 if len > 0 => {
+                        let i = (r >> 8) as usize % len;
+                        items[i].editing ^= true;
+                    }
+                    5 => state.filter.set(((r >> 8) % 3) as u8),
+                    6 => items.retain(|i| !i.checked),
+                    7 if len > 12 => items.clear(),
+                    _ => {}
+                }
+            }
+            rerender(&mut doc);
+            if step % 1000 == 0 {
+                state.items.borrow_mut().clear();
+                rerender(&mut doc);
+                counts.push(node_count(&doc));
+            }
+        }
+        // The first round creates the (retained) template prototype nodes.
+        assert_eq!(counts[1], counts[2]);
+    }
+
+    #[test]
+    fn mounted_data_of_removed_element_reports_error() {
+        #[derive(Default)]
+        struct State {
+            show: Cell<bool>,
+            mounted: RefCell<Option<Rc<MountedData>>>,
+        }
+
+        fn app() -> Element {
+            let state = consume_context::<Rc<State>>();
+            rsx!(if state.show.get() {
+                div {
+                    onmounted: move |e| *state.mounted.borrow_mut() = Some(e.data()),
+                }
+            })
+        }
+
+        let state = Rc::new(State::default());
+        state.show.set(true);
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&state));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+        let mounted = state.mounted.take().unwrap();
+        let focus = |focus: bool| {
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            let fut = std::pin::pin!(mounted.set_focus(focus));
+            matches!(fut.poll(&mut cx), std::task::Poll::Ready(Ok(())))
+        };
+        assert!(focus(true));
+        let focussed = |doc: &DioxusDocument| doc.inner.borrow().get_focussed_node_id();
+        let mounted_id = focussed(&doc).unwrap();
+        state.show.set(false);
+        rerender(&mut doc);
+        assert!(doc.inner.borrow().get_node(mounted_id).is_none());
+        assert_ne!(focussed(&doc), Some(mounted_id));
+
+        // Focussing or blurring the removed element is a no-op.
+        let focussed_after_removal = focussed(&doc);
+        assert!(focus(true));
+        assert!(focus(false));
+        assert_eq!(focussed(&doc), focussed_after_removal);
+
+        fn is_err<T>(fut: impl Future<Output = Result<T, MountedError>>) -> bool {
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            let fut = std::pin::pin!(fut);
+            matches!(fut.poll(&mut cx), std::task::Poll::Ready(Err(_)))
+        }
+        assert!(is_err(mounted.get_scroll_offset()));
+        assert!(is_err(mounted.get_scroll_size()));
+        assert!(is_err(mounted.get_client_rect()));
+        assert!(is_err(mounted.scroll_to(ScrollBehavior::Instant)));
+        assert!(is_err(
+            mounted.scroll(Default::default(), ScrollBehavior::Instant)
+        ));
     }
 }

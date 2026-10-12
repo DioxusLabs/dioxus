@@ -338,12 +338,13 @@ impl RealDom for BlitzBackend<'_> {
 
     fn replace(&mut self, target: NodeId, replacements: &[NodeId]) {
         trace!("replace target:{target} replacements:{replacements:?}");
-        self.docm.replace_node_with(target, replacements);
+        self.docm.insert_nodes_before(target, replacements);
+        self.docm.remove_and_drop_node(target);
     }
 
     fn remove(&mut self, node: NodeId) {
         trace!("remove node:{node}");
-        self.docm.remove_node(node);
+        self.docm.remove_and_drop_node(node);
     }
 
     fn set_attribute(
