@@ -692,8 +692,24 @@ mod tests {
         let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
         doc.initial_build();
         let mounted = state.mounted.take().unwrap();
+        let focus = |focus: bool| {
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            let fut = std::pin::pin!(mounted.set_focus(focus));
+            matches!(fut.poll(&mut cx), std::task::Poll::Ready(Ok(())))
+        };
+        assert!(focus(true));
+        let focussed = |doc: &DioxusDocument| doc.inner.borrow().get_focussed_node_id();
+        let mounted_id = focussed(&doc).unwrap();
         state.show.set(false);
         rerender(&mut doc);
+        assert!(doc.inner.borrow().get_node(mounted_id).is_none());
+        assert_ne!(focussed(&doc), Some(mounted_id));
+
+        // Focussing or blurring the removed element is a no-op.
+        let focussed_after_removal = focussed(&doc);
+        assert!(focus(true));
+        assert!(focus(false));
+        assert_eq!(focussed(&doc), focussed_after_removal);
 
         fn is_err<T>(fut: impl Future<Output = Result<T, MountedError>>) -> bool {
             let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
