@@ -1,4 +1,7 @@
-use blitz_dom::{BaseDocument, Node};
+use blitz_dom::{
+    BaseDocument, Node, ScrollBehavior as BlitzScrollBehavior,
+    ScrollLogicalPosition as BlitzScrollLogicalPosition,
+};
 use blitz_traits::events::{
     BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, BlitzScrollEvent, BlitzWheelDelta,
     BlitzWheelEvent, MouseEventButton,
@@ -9,8 +12,8 @@ use dioxus_html::{
     HasMouseData, HasPointerData, HasScrollData, HasTouchData, HasTouchPointData, HasWheelData,
     HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MountedError,
     MountedResult, MouseData, PlatformEventData, PointerData, RenderedElementBacking, ResizeData,
-    ScrollBehavior, ScrollData, ScrollToOptions, SelectionData, ToggleData, TouchData, TouchPoint,
-    TransitionData, VisibleData, WheelData,
+    ScrollBehavior, ScrollData, ScrollLogicalPosition, ScrollToOptions, SelectionData, ToggleData,
+    TouchData, TouchPoint, TransitionData, VisibleData, WheelData,
     geometry::{
         ClientPoint, ElementPoint, PagePoint, PixelsRect, PixelsSize, PixelsVector2D, ScreenPoint,
         WheelDelta,
@@ -222,19 +225,65 @@ impl RenderedElementBacking for NodeHandle {
         Box::pin(async move { Ok(pixels_rect) })
     }
 
+    /// Scroll the element into view (the backing for both `MountedData::scroll_to` and
+    /// `MountedData::scroll_to_with_options`).
     fn scroll_to(
         &self,
-        _options: ScrollToOptions,
+        options: ScrollToOptions,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
+        let node_id = self.node_id;
+        let mut doc = self.doc_mut();
+        if doc.get_node(node_id).is_none() {
+            drop(doc);
+            return self.node_not_exist_err();
+        }
+
+        let behavior = match options.behavior {
+            ScrollBehavior::Smooth => BlitzScrollBehavior::Smooth,
+            ScrollBehavior::Instant => BlitzScrollBehavior::Instant,
+        };
+        let vertical = match options.vertical {
+            ScrollLogicalPosition::Start => BlitzScrollLogicalPosition::Start,
+            ScrollLogicalPosition::Center => BlitzScrollLogicalPosition::Center,
+            ScrollLogicalPosition::End => BlitzScrollLogicalPosition::End,
+            ScrollLogicalPosition::Nearest => BlitzScrollLogicalPosition::Nearest,
+        };
+        let horizontal = match options.horizontal {
+            ScrollLogicalPosition::Start => BlitzScrollLogicalPosition::Start,
+            ScrollLogicalPosition::Center => BlitzScrollLogicalPosition::Center,
+            ScrollLogicalPosition::End => BlitzScrollLogicalPosition::End,
+            ScrollLogicalPosition::Nearest => BlitzScrollLogicalPosition::Nearest,
+        };
+        doc.scroll_into_view(node_id, behavior, vertical, horizontal);
+
+        Box::pin(async { Ok(()) })
     }
 
+    /// Scroll the element's own content to the given offset (the backing for
+    /// `MountedData::scroll`). The offset is clamped to the element's scrollable range.
     fn scroll(
         &self,
-        _coordinates: PixelsVector2D,
-        _behavior: ScrollBehavior,
+        coordinates: PixelsVector2D,
+        behavior: ScrollBehavior,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
+        let node_id = self.node_id;
+        let mut doc = self.doc_mut();
+        if doc.get_node(node_id).is_none() {
+            drop(doc);
+            return self.node_not_exist_err();
+        }
+
+        doc.scroll_to(
+            node_id,
+            coordinates.x,
+            coordinates.y,
+            match behavior {
+                ScrollBehavior::Smooth => BlitzScrollBehavior::Smooth,
+                ScrollBehavior::Instant => BlitzScrollBehavior::Instant,
+            },
+        );
+
+        Box::pin(async { Ok(()) })
     }
 
     fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {

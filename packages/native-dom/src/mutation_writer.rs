@@ -1,6 +1,6 @@
 //! Integration between Dioxus and Blitz
 use crate::{NodeId, qual_name, trace, write_once_attr::WriteOnceAttr};
-use blitz_dom::{BaseDocument, Document as _, DocumentMutator, PlainDocument, Widget};
+use blitz_dom::{BaseDocument, Document, DocumentMutator, Widget};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{AttributeValue, ElementId, WriteMutations};
 use std::str::FromStr as _;
@@ -416,7 +416,7 @@ impl BlitzBackend<'_> {
                 AttributeValue::Any(value) => {
                     if let Some(value) = value
                         .as_any()
-                        .downcast_ref::<WriteOnceAttr<Box<PlainDocument>>>()
+                        .downcast_ref::<WriteOnceAttr<Box<dyn Document>>>()
                         && let Some(mut sub_document) = value.take()
                     {
                         sub_document
@@ -432,7 +432,7 @@ impl BlitzBackend<'_> {
         // Set/unset custom widget for <object data>
         if local_name == "data" {
             let element_name = self.docm.element_name(node_id).unwrap();
-            if element_name.local.as_ref() == "object" {
+            if element_name.local.as_str() == "object" {
                 match value {
                     AttributeValue::Any(value) => {
                         if let Some(value) = value
