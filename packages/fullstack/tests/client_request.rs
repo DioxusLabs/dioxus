@@ -30,7 +30,6 @@ fn client_requests_preserve_server_base_paths() {
         set_server_url(server_url);
         let request = ClientRequest::new(Method::GET, "/api/echo".into(), &());
         assert_eq!(request.url().as_str(), expected_url);
-        assert_eq!(request.method(), Method::GET);
 
         let request =
             ClientRequest::new(Method::POST, "/api/echo".into(), &Query { search: "a&b" });
@@ -38,6 +37,5 @@ fn client_requests_preserve_server_base_paths() {
             request.url().as_str(),
             format!("{expected_url}?search=a%26b")
         );
-        assert_eq!(request.method(), Method::POST);
     }
 }

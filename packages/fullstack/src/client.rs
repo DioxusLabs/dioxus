@@ -32,7 +32,7 @@ impl ClientRequest {
 
     // Shrink monomorphization bloat by moving this to its own function
     fn fetch_inner(method: http::Method, path: String, query: String) -> ClientRequest {
-        // On wasm, this doesn't matter since we always use relative URLs when making requests anyways
+        // Browsers send only the path and query, so a relative server URL gets a placeholder origin.
         let server_url = get_server_url();
         let (server_url, origin) = if server_url.is_empty() || server_url.starts_with('/') {
             (
