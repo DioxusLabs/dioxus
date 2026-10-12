@@ -776,20 +776,22 @@ impl BuildRequest {
         } else {
             "Apple Development"
         };
-        // Keep the label: "Apple Distribution: Name (TEAM)" and "Developer ID Application: Name (TEAM)"
-        // share the same suffix, so codesign rejects the bare name as ambiguous.
-        let pattern = format!(r#""({label}: [^"]+)""#);
 
-        let app_dev_name = regex::Regex::new(&pattern)
-            .unwrap()
-            .captures(&identities)
-            .and_then(|caps| caps.get(1))
-            .map(|m| m.as_str())
+        Self::find_signing_identity(&identities, label)
+            .map(str::to_string)
             .with_context(|| {
                 format!("Failed to find {label} in `security find-identity -v -p codesigning`")
-            })?;
+            })
+    }
 
-        Ok(app_dev_name.to_string())
+    /// SHA-1 of the first `label` identity, which codesign matches to exactly one certificate.
+    fn find_signing_identity<'a>(identities: &'a str, label: &str) -> Option<&'a str> {
+        let pattern = format!(r#"(?m)^\s*\d+\) ([0-9A-F]{{40}}) "{label}: [^"]+""#);
+        regex::Regex::new(&pattern)
+            .unwrap()
+            .captures(identities)
+            .and_then(|caps| caps.get(1))
+            .map(|m| m.as_str())
     }
 
     /// Enrich auto-provisioned entitlements XML with config from Dioxus.toml.
@@ -2381,5 +2383,24 @@ mod tests {
         assert_eq!(pick(profiles(), false), Some(PathBuf::from("dev")));
         let dev_only = vec![("dev".into(), profile("TEAM.com.example.app", &["device"]))];
         assert_eq!(pick(dev_only, true), None);
+    }
+
+    #[test]
+    fn signing_identity_is_the_hash_of_the_labelled_certificate() {
+        let identities = r#"  1) 1111111111111111111111111111111111111111 "Developer ID Application: Acme (TEAM1)"
+  2) 2222222222222222222222222222222222222222 "Apple Distribution: Acme (TEAM1)"
+  3) 3333333333333333333333333333333333333333 "Apple Development: Jane Doe (TEAM2)"
+     3 valid identities found
+"#;
+        let find = |label| BuildRequest::find_signing_identity(identities, label);
+        assert_eq!(
+            find("Apple Distribution"),
+            Some("2222222222222222222222222222222222222222")
+        );
+        assert_eq!(
+            find("Apple Development"),
+            Some("3333333333333333333333333333333333333333")
+        );
+        assert_eq!(find("Mac Developer"), None);
     }
 }
