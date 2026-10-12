@@ -118,7 +118,7 @@ impl BuildRequest {
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
-            debug: self.debug_symbols,
+            debug: self.config.web.wasm_opt.debug || self.debug_symbols,
             ..self.config.web.wasm_opt.clone()
         };
 
