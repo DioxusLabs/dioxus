@@ -4,9 +4,16 @@ plugins {
     id("com.android.library") version "9.4.0"
 }
 
+// dx bundles this module into its generated Android project; compile against the same
+// SDK as the app (`compile_sdk` plus the newest installed platform minor and build-tools).
+evaluationDependsOn(":app")
+val app = project(":app").extensions.getByType<com.android.build.api.dsl.ApplicationExtension>()
+
 android {
     namespace = "com.dioxus.geolocation"
-    compileSdk = 34
+    compileSdk = app.compileSdk
+    compileSdkMinor = app.compileSdkMinor
+    buildToolsVersion = app.buildToolsVersion
 
     defaultConfig {
         minSdk = 24

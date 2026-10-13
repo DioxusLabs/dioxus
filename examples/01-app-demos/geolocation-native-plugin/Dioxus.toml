@@ -21,6 +21,7 @@ module_name = "GeolocationPlugin"
 [android]
 min_sdk = 24
 target_sdk = 34
+compile_sdk = 37
 features = ["android.hardware.location.gps"]
 
 [permissions]
