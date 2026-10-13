@@ -1,4 +1,4 @@
-/// Expose the `Java_dev_dioxus_main_WryActivity_create` function to the JNI layer.
+/// Expose the `Java_dev_dioxus_main_Rust_*` functions to the JNI layer.
 /// We hardcode these to have a single trampoline for host Java code to call into.
 ///
 /// This saves us from having to plumb the top-level package name all the way down into
@@ -15,7 +15,46 @@ pub extern "C" fn start_app() {
     use dioxus_core::{Element, VirtualDom};
     use std::any::Any;
 
-    tao::android_binding!(dev_dioxus, main, WryActivity, wry::android_setup, root, tao);
+    // tao 0.37 puts the application in `ndk_context`, where tao 0.34 put the activity. Crates that
+    // read it here take it for the activity (manganis' `with_activity`, for example, builds
+    // activity-bound objects with it: dialogs, permission prompts, the back dispatcher), so the first
+    // activity replaces the application there before wry's setup and before `main` runs. It's kept
+    // for the life of the process, as tao 0.34 did.
+    //
+    // A second activity in the process is the first one re-created for a configuration change its
+    // manifest doesn't list (a dark mode switch, a font scale change, ...), or a second instance
+    // opened by an intent. tao 0.37 keeps the window, but wry makes no web view for the new activity
+    // and the page stays blank. tao 0.34 aborted there (`ndk_context` was initialized twice), so this
+    // ends the process too, cleanly: the user reopens the app in a new process.
+    unsafe fn android_setup(
+        package: &str,
+        env: jni::JNIEnv<'_>,
+        looper: &ndk::looper::ThreadLooper,
+        activity: jni::objects::GlobalRef,
+    ) {
+        static FIRST_ACTIVITY: std::sync::OnceLock<jni::objects::GlobalRef> =
+            std::sync::OnceLock::new();
+        if FIRST_ACTIVITY.set(activity.clone()).is_ok() {
+            if let (Ok(vm), Some(first)) = (env.get_java_vm(), FIRST_ACTIVITY.get()) {
+                unsafe {
+                    ndk_context::release_android_context();
+                    ndk_context::initialize_android_context(
+                        vm.get_java_vm_pointer().cast(),
+                        first.as_obj().as_raw().cast(),
+                    );
+                }
+            }
+        } else {
+            // `_exit`, not `exit`: `exit` on this (Java) thread runs the runtime's shutdown, which
+            // aborts with the other threads still running.
+            unsafe { libc::_exit(0) }
+        }
+        unsafe { wry::android_setup(package, env, looper, activity) }
+    }
+
+    // wry's Kotlin declares tao's lifecycle calls on its `Rust` object
+    // (`Java_dev_dioxus_main_Rust_onCreate`, ...).
+    tao::android_binding!(dev_dioxus, main, Rust, android_setup, root, tao);
     wry::android_binding!(dev_dioxus, main, wry);
 
     #[cfg(target_os = "android")]

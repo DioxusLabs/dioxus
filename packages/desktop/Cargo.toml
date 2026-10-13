@@ -27,7 +27,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { workspace = true, default-features = false, features = ["os-webview", "protocol", "drag-drop"] }
+wry = { workspace = true, default-features = false, features = ["os-webview"] }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
   "sync",
@@ -46,7 +46,6 @@ dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
 percent-encoding = { workspace = true }
 async-trait = { workspace = true }
-tao = { workspace = true, features = ["rwh_05"] }
 dioxus-history = { workspace = true }
 base64 = { workspace = true }
 libc = "0.2.174"
@@ -59,7 +58,7 @@ webbrowser = { workspace = true }
 signal-hook = "0.3.18"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-wry = { workspace = true, features = ["os-webview", "protocol", "drag-drop", "linux-body"] }
+wry = { workspace = true, features = ["os-webview", "linux-body"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.7.0"
@@ -80,10 +79,15 @@ jni = "0.21.1"
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
+# tao 0.37 drains its user events on every turn of its Android loop (tauri-apps/tao#1304); 0.34 can
+# lose a wake and stop polling the VirtualDom. tao 0.36 renamed its Android JNI entry points, which
+# wry's Kotlin calls by the new names from wry 0.56 on.
+tao = { version = "0.37.1", features = ["rwh_05"] }
 
-# use native tls on other platforms
+# use native tls and the workspace tao on other platforms
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tungstenite = { workspace = true, features = ["native-tls"] }
+tao = { workspace = true, features = ["rwh_05"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26.1"
@@ -96,9 +100,11 @@ lazy-js-bundle = { workspace = true }
 [features]
 default = ["tokio_runtime", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
-fullscreen = ["wry/fullscreen"]
+# wry 0.57 always enables what its `fullscreen` and `transparent` features did; these are kept so that
+# apps enabling them still build.
+fullscreen = []
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
-transparent = ["wry/transparent"]
+transparent = []
 gnu = []
 
 [package.metadata.docs.rs]
