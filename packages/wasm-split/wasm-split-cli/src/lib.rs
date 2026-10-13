@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use itertools::Itertools;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     hash::Hash,
@@ -48,6 +48,49 @@ pub struct Splitter<'a> {
     main_graph: HashSet<Node>,
     call_graph: HashMap<Node, HashSet<Node>>,
     parent_graph: HashMap<Node, HashSet<Node>>,
+}
+
+/// What one split module or shared chunk defines, imports and deletes (in the source module's
+/// ids), and the function bodies it is parsed with.
+struct SplitParts {
+    unique_symbols: HashSet<Node>,
+    symbols_to_import: HashSet<Node>,
+    symbols_to_delete: HashSet<Node>,
+    relies_on_chunks: HashSet<usize>,
+    bodies: HashSet<usize>,
+}
+
+/// Memory one split module's parse and emission takes, per byte of the bindgened module it is
+/// parsed from: about 4 measured on a 170 MB module, with the bodies it does not keep left out,
+/// plus some headroom.
+const COPY_BYTES_PER_INPUT_BYTE: u64 = 8;
+
+/// Bytes this process can still allocate: what its cgroup's memory limit leaves, or the system's
+/// available memory, whichever is less. `None` when neither can be read.
+fn available_memory() -> Option<u64> {
+    let read = |path: &str| std::fs::read_to_string(path).ok();
+    let cgroup = (|| {
+        let max = read("/sys/fs/cgroup/memory.max")?
+            .trim()
+            .parse::<u64>()
+            .ok()?;
+        let current = read("/sys/fs/cgroup/memory.current")?
+            .trim()
+            .parse::<u64>()
+            .ok()?;
+        Some(max.saturating_sub(current))
+    })();
+    let system = read("/proc/meminfo").and_then(|meminfo| {
+        let line = meminfo
+            .lines()
+            .find(|line| line.starts_with("MemAvailable:"))?;
+        let kib = line.split_whitespace().nth(1)?.parse::<u64>().ok()?;
+        Some(kib * 1024)
+    });
+    match (cgroup, system) {
+        (Some(cgroup), Some(system)) => Some(cgroup.min(system)),
+        (one, other) => one.or(other),
+    }
 }
 
 /// The results of splitting the wasm module with some additional metadata for later use.
@@ -119,25 +162,51 @@ impl<'a> Splitter<'a> {
     /// that will only be removed by the memory-packing step of wasm-opt.
     ///
     /// This returns the list of chunks, an import map, and some javascript to link everything together.
-    pub fn emit(self) -> Result<OutputModules> {
+    pub fn emit(mut self) -> Result<OutputModules> {
         tracing::info!("Emitting split modules.");
 
-        let chunks = (0..self.chunks.len())
-            .into_par_iter()
-            .map(|idx| self.emit_split_chunk(idx))
-            .collect::<Result<Vec<SplitModule>>>()?;
+        // What each split module holds is settled while the whole program is parsed. The main
+        // module is emitted next and takes that parse with it, so the split modules are emitted
+        // without it in memory.
+        let chunk_parts = (0..self.chunks.len())
+            .map(|idx| self.split_chunk_parts(idx))
+            .collect::<Vec<_>>();
+        let module_parts = (0..self.split_points.len())
+            .map(|idx| self.split_module_parts(idx))
+            .collect::<Vec<_>>();
 
-        let modules = (0..self.split_points.len())
-            .into_par_iter()
-            .map(|idx| self.emit_split_module(idx))
-            .collect::<Result<Vec<SplitModule>>>()?;
-
-        // Emit the main module, consuming self since we're going to
         let main = self.emit_main_module()?;
 
+        // Each module being emitted holds a parse of its own; run only as many at once as there
+        // is memory for.
+        let copy_bytes = (self.bindgened.len() as u64).saturating_mul(COPY_BYTES_PER_INPUT_BYTE);
+        let cores = std::thread::available_parallelism().map_or(1, usize::from);
+        let threads = available_memory()
+            .map_or(cores, |free| {
+                usize::try_from(free / copy_bytes.max(1)).unwrap_or(cores)
+            })
+            .clamp(1, cores);
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .context("Failed to start the split module thread pool")?;
+        let (chunks, modules) = pool.install(|| {
+            let chunks = chunk_parts
+                .into_par_iter()
+                .enumerate()
+                .map(|(idx, parts)| self.emit_split_chunk(idx, parts))
+                .collect::<Result<Vec<SplitModule>>>();
+            let modules = module_parts
+                .into_par_iter()
+                .enumerate()
+                .map(|(idx, parts)| self.emit_split_module(idx, parts))
+                .collect::<Result<Vec<SplitModule>>>();
+            (chunks, modules)
+        });
+
         Ok(OutputModules {
-            modules,
-            chunks,
+            modules: modules?,
+            chunks: chunks?,
             main,
         })
     }
@@ -154,7 +223,7 @@ impl<'a> Splitter<'a> {
     ///
     /// Emitting the main module is conceptually pretty simple. Emitting the split modules is more
     /// complex.
-    fn emit_main_module(mut self) -> Result<SplitModule> {
+    fn emit_main_module(&mut self) -> Result<SplitModule> {
         tracing::info!("Emitting main bundle split module");
 
         // Perform some analysis of the module before we start messing with it
@@ -191,9 +260,9 @@ impl<'a> Splitter<'a> {
         })
     }
 
-    /// Write the contents of the split modules to the output
-    fn emit_split_module(&self, split_idx: usize) -> Result<SplitModule> {
-        let split = self.split_points[split_idx].clone();
+    /// What split module `split_idx` defines, imports and deletes, and the function bodies it keeps.
+    fn split_module_parts(&self, split_idx: usize) -> SplitParts {
+        let split = &self.split_points[split_idx];
 
         // These are the symbols that will only exist in this module and not in the main module.
         let mut unique_symbols = split
@@ -232,6 +301,32 @@ impl<'a> Splitter<'a> {
             }
         }
 
+        let roots = unique_symbols
+            .iter()
+            .copied()
+            .chain([Node::Function(split.export_func)]);
+        let stops = self.replaced_or_deleted(&symbols_to_import, &symbols_to_delete);
+        let bodies = self.kept_bodies(roots, &stops);
+        SplitParts {
+            unique_symbols,
+            symbols_to_import,
+            symbols_to_delete,
+            relies_on_chunks,
+            bodies,
+        }
+    }
+
+    /// Write the contents of the split modules to the output
+    fn emit_split_module(&self, split_idx: usize, parts: SplitParts) -> Result<SplitModule> {
+        let split = self.split_points[split_idx].clone();
+        let SplitParts {
+            unique_symbols,
+            symbols_to_import,
+            symbols_to_delete,
+            relies_on_chunks,
+            bodies,
+        } = parts;
+
         tracing::info!(
             "Emitting module {}/{} {}: {:?}",
             split_idx,
@@ -240,7 +335,8 @@ impl<'a> Splitter<'a> {
             relies_on_chunks
         );
 
-        let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(self.bindgened)?;
+        let (mut out, ids_to_fns, _fns_to_ids) =
+            parse_module_with_ids(&keep_function_bodies(self.bindgened, &bodies)?)?;
 
         // Remap the graph to our module's IDs
         let shared_funcs = self
@@ -293,10 +389,8 @@ impl<'a> Splitter<'a> {
         })
     }
 
-    /// Write a split chunk - this is a chunk with no special functions, just exports + initializers
-    fn emit_split_chunk(&self, idx: usize) -> Result<SplitModule> {
-        tracing::info!("emitting chunk {}", idx);
-
+    /// What shared chunk `idx` imports and deletes, and the function bodies it keeps.
+    fn split_chunk_parts(&self, idx: usize) -> SplitParts {
         let unique_symbols = &self.chunks[idx];
 
         // The functions we'll need to import
@@ -312,8 +406,31 @@ impl<'a> Splitter<'a> {
             .cloned()
             .collect();
 
+        let stops = self.replaced_or_deleted(&symbols_to_import, &symbols_to_delete);
+        let bodies = self.kept_bodies(unique_symbols.iter().copied(), &stops);
+        SplitParts {
+            unique_symbols: unique_symbols.clone(),
+            symbols_to_import,
+            symbols_to_delete,
+            relies_on_chunks: HashSet::new(),
+            bodies,
+        }
+    }
+
+    /// Write a split chunk - this is a chunk with no special functions, just exports + initializers
+    fn emit_split_chunk(&self, idx: usize, parts: SplitParts) -> Result<SplitModule> {
+        tracing::info!("emitting chunk {}", idx);
+        let SplitParts {
+            unique_symbols,
+            symbols_to_import,
+            symbols_to_delete,
+            bodies,
+            ..
+        } = parts;
+
         // Make sure to remap any ids from the main module to this module
-        let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(self.bindgened)?;
+        let (mut out, ids_to_fns, _fns_to_ids) =
+            parse_module_with_ids(&keep_function_bodies(self.bindgened, &bodies)?)?;
 
         // Remap the graph to our module's IDs
         let shared_funcs = self
@@ -322,7 +439,7 @@ impl<'a> Splitter<'a> {
             .map(|f| self.remap_id(&ids_to_fns, f))
             .collect::<Vec<_>>();
 
-        let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
+        let unique_symbols = self.remap_ids(&unique_symbols, &ids_to_fns);
         let symbols_to_import = self.remap_ids(&symbols_to_import, &ids_to_fns);
         let symbols_to_delete = self.remap_ids(&symbols_to_delete, &ids_to_fns);
 
@@ -362,6 +479,66 @@ impl<'a> Splitter<'a> {
             relies_on_chunks: Default::default(),
             hash_id: None,
         })
+    }
+
+    /// The functions a split module deletes, or replaces with a call through the table: their
+    /// code never reaches it.
+    fn replaced_or_deleted(
+        &self,
+        symbols_to_import: &HashSet<Node>,
+        symbols_to_delete: &HashSet<Node>,
+    ) -> HashSet<Node> {
+        symbols_to_import
+            .iter()
+            .filter(|node| self.shared_symbols.contains(node))
+            .chain(symbols_to_delete)
+            .copied()
+            .collect()
+    }
+
+    /// The functions (by index) whose bodies a split module rooted at `roots` keeps; it is parsed
+    /// with every other body replaced by `unreachable`. Parsing the whole program once per split
+    /// module held a full copy of it in memory for each module being emitted, only to delete
+    /// nearly all of it again.
+    ///
+    /// A body is kept when the module's code reaches it, through calls or taken addresses, from
+    /// `roots` without passing a function in `stops`. That is what the gc pass at the end keeps,
+    /// so the result is the same as parsing every body.
+    fn kept_bodies(
+        &self,
+        roots: impl IntoIterator<Item = Node>,
+        stops: &HashSet<Node>,
+    ) -> HashSet<usize> {
+        struct Refs<'a> {
+            found: &'a mut Vec<FunctionId>,
+        }
+        impl<'a> Visitor<'a> for Refs<'a> {
+            fn visit_function_id(&mut self, function: &FunctionId) {
+                self.found.push(*function);
+            }
+        }
+        let mut queue: Vec<FunctionId> = roots
+            .into_iter()
+            .filter(|node| !stops.contains(node))
+            .filter_map(|node| match node {
+                Node::Function(id) => Some(id),
+                Node::DataSymbol(_) => None,
+            })
+            .collect();
+        let mut seen: HashSet<FunctionId> = queue.iter().copied().collect();
+        while let Some(id) = queue.pop() {
+            let FunctionKind::Local(local) = &self.source_module.funcs.get(id).kind else {
+                continue;
+            };
+            let mut found = Vec::new();
+            dfs_in_order(&mut Refs { found: &mut found }, local, local.entry_block());
+            for child in found {
+                if !stops.contains(&Node::Function(child)) && seen.insert(child) {
+                    queue.push(child);
+                }
+            }
+        }
+        seen.iter().map(|id| self.fns_to_ids[id]).collect()
     }
 
     /// Convert functions coming in from outside the module to indirect calls to the ifunc table created in the main module
@@ -1154,6 +1331,113 @@ impl<'a> Splitter<'a> {
     }
 }
 
+/// Where a module's code section and its function bodies are.
+struct CodeSection {
+    /// The section's id byte.
+    start: usize,
+    /// Its contents, after the size.
+    contents: usize,
+    end: usize,
+    /// Each defined function's body, after its size.
+    bodies: Vec<Range<usize>>,
+}
+
+fn read_leb(bytes: &[u8], at: &mut usize) -> Result<usize> {
+    let mut value = 0usize;
+    for shift in (0..35).step_by(7) {
+        let byte = *bytes.get(*at).context("truncated module")?;
+        *at += 1;
+        value |= usize::from(byte & 0x7f) << shift;
+        if byte & 0x80 == 0 {
+            return Ok(value);
+        }
+    }
+    anyhow::bail!("malformed LEB128 at byte {at}")
+}
+
+fn push_leb(out: &mut Vec<u8>, mut value: usize) {
+    loop {
+        let byte = (value & 0x7f) as u8;
+        value >>= 7;
+        if value == 0 {
+            out.push(byte);
+            return;
+        }
+        out.push(byte | 0x80);
+    }
+}
+
+fn code_section(bytes: &[u8]) -> Result<Option<CodeSection>> {
+    // Sections follow the 8-byte header: an id byte, a LEB128 size, the contents. The code
+    // section's id is 10.
+    let mut at = 8;
+    while at < bytes.len() {
+        let start = at;
+        let id = bytes[at];
+        at += 1;
+        let size = read_leb(bytes, &mut at)?;
+        let contents = at;
+        let end = at + size;
+        if id != 10 {
+            at = end;
+            continue;
+        }
+        let count = read_leb(bytes, &mut at)?;
+        let mut bodies = Vec::with_capacity(count);
+        for _ in 0..count {
+            let len = read_leb(bytes, &mut at)?;
+            bodies.push(at..at + len);
+            at += len;
+        }
+        anyhow::ensure!(at == end, "code section size disagrees with its bodies");
+        return Ok(Some(CodeSection {
+            start,
+            contents,
+            end,
+            bodies,
+        }));
+    }
+    Ok(None)
+}
+
+/// `bytes` with the body of every defined function whose index is not in `keep` replaced by
+/// `unreachable`. Function indices, types and every other section stay as they are.
+fn keep_function_bodies(bytes: &[u8], keep: &HashSet<usize>) -> Result<Vec<u8>> {
+    // Body size 3: no locals, `unreachable`, `end`.
+    const STUB: [u8; 4] = [3, 0x00, 0x00, 0x0b];
+
+    let Some(code) = code_section(bytes)? else {
+        return Ok(bytes.to_vec());
+    };
+    let mut imported = 0usize;
+    for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+        if let Payload::ImportSection(reader) = payload? {
+            for import in reader.into_imports() {
+                if matches!(import?.ty, wasmparser::TypeRef::Func(_)) {
+                    imported += 1;
+                }
+            }
+        }
+    }
+    let mut contents = Vec::with_capacity(code.end - code.contents);
+    push_leb(&mut contents, code.bodies.len());
+    for (index, body) in (imported..).zip(&code.bodies) {
+        if keep.contains(&index) {
+            push_leb(&mut contents, body.len());
+            contents.extend_from_slice(&bytes[body.clone()]);
+        } else {
+            contents.extend_from_slice(&STUB);
+        }
+    }
+    let mut out = Vec::with_capacity(bytes.len());
+    out.extend_from_slice(&bytes[..code.start]);
+    out.push(10);
+    push_leb(&mut out, contents.len());
+    out.extend_from_slice(&contents);
+    out.extend_from_slice(&bytes[code.end..]);
+    Ok(out)
+}
+
 /// Parse a module and return the mapping of index to FunctionID.
 /// We'll use this mapping to remap ModuleIDs
 fn parse_module_with_ids(
@@ -1187,7 +1471,11 @@ fn parse_module_with_ids(
 }
 
 struct ModuleWithRelocations<'a> {
+    /// The module's functions, tables and names; function bodies are `unreachable` (see `new`).
     module: Module,
+    /// Each local function's code, as relocation offsets count it: from the code section's
+    /// contents, including the body's size.
+    code_ranges: Vec<(FunctionId, Range<usize>)>,
     symbols: Vec<SymbolInfo<'a>>,
     names_to_funcs: HashMap<String, FunctionId>,
     call_graph: HashMap<Node, HashSet<Node>>,
@@ -1199,8 +1487,30 @@ struct ModuleWithRelocations<'a> {
 
 impl<'a> ModuleWithRelocations<'a> {
     fn new(bytes: &'a [u8]) -> Result<Self> {
-        let module = Module::from_buffer(bytes)?;
+        // The call graph comes from relocations, not from the code itself, so the module is
+        // parsed without its function bodies: parsing them takes gigabytes for a large module and
+        // none of it is read.
+        let module = Module::from_buffer(&keep_function_bodies(bytes, &HashSet::new())?)?;
         let raw_data = parse_bytes_to_data_segment(bytes)?;
+
+        // walrus adds a parsed module's functions in index order, imports first. A relocation's
+        // offset counts from the code section's contents, and a function's code from its size,
+        // written as LEB128 in as few bytes as the size needs (walrus's `original_range`).
+        let code = code_section(bytes)?.context("module has no code section")?;
+        let funcs: Vec<FunctionId> = module.funcs.iter().map(|f| f.id()).collect();
+        let imported = funcs.len() - code.bodies.len();
+        let code_ranges = code
+            .bodies
+            .iter()
+            .zip(&funcs[imported..])
+            .map(|(body, id)| {
+                let size_len = (usize::BITS - body.len().leading_zeros())
+                    .div_ceil(7)
+                    .max(1);
+                let start = body.start - code.contents - size_len as usize;
+                (*id, start..body.end - code.contents)
+            })
+            .collect::<Vec<_>>();
         let names_to_funcs = module
             .funcs
             .iter()
@@ -1209,6 +1519,7 @@ impl<'a> ModuleWithRelocations<'a> {
 
         let mut module = Self {
             module,
+            code_ranges,
             data_symbols: raw_data.data_symbols,
             data_section_range: raw_data.data_range,
             symbols: raw_data.symbols,
@@ -1234,11 +1545,8 @@ impl<'a> ModuleWithRelocations<'a> {
         let codes_relocations = self.collect_relocations_from_section("reloc.CODE")?;
         let mut relocations = codes_relocations.iter().peekable();
 
-        for (func_id, local) in self.module.funcs.iter_local() {
-            let range = local
-                .original_range
-                .clone()
-                .context("local function has no range")?;
+        for (func_id, range) in &self.code_ranges {
+            let (func_id, range) = (*func_id, range.clone());
 
             // Walk with relocation
             while let Some(entry) =
