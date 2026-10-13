@@ -39,6 +39,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    time::SystemTime,
 };
 use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
@@ -128,6 +129,10 @@ struct ProvisioningProfile {
     application_identifier_prefix: Vec<String>,
     #[serde(rename = "ProvisionedDevices", default)]
     provisioned_devices: Vec<String>,
+    #[serde(rename = "CreationDate")]
+    creation_date: plist::Date,
+    #[serde(rename = "ExpirationDate")]
+    expiration_date: plist::Date,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -165,14 +170,16 @@ fn profile_matches_bundle_id(app_identifier: &str, bundle_id: &str) -> bool {
     false
 }
 
-/// Picks the profile for `bundle_id`: an exact app ID beats a wildcard, then more provisioned
-/// devices win. With `appstore`, profiles tied to devices are skipped.
+/// Picks the unexpired profile for `bundle_id`: an exact app ID beats a wildcard, then more
+/// provisioned devices win, then the newer profile. With `appstore`, profiles tied to devices
+/// are skipped.
 fn pick_provisioning_profile(
     profiles: impl IntoIterator<Item = (PathBuf, ProvisioningProfile)>,
     bundle_id: &str,
     appstore: bool,
 ) -> Option<(PathBuf, ProvisioningProfile)> {
-    let mut best_match: Option<(PathBuf, ProvisioningProfile, bool, usize)> = None;
+    let now = SystemTime::now();
+    let mut best_match: Option<(PathBuf, ProvisioningProfile, bool, (usize, SystemTime))> = None;
 
     for (path, profile) in profiles {
         let app_id = &profile.entitlements.application_identifier;
@@ -194,31 +201,37 @@ fn pick_provisioning_profile(
             continue;
         }
 
+        if SystemTime::from(profile.expiration_date) <= now {
+            tracing::debug!("Skipping profile {} (expired)", path.display());
+            continue;
+        }
+
         let is_exact = !app_id.ends_with(".*") && !app_id.ends_with("*");
         let num_devices = profile.provisioned_devices.len();
+        let rank = (num_devices, SystemTime::from(profile.creation_date));
 
         tracing::debug!(
             "Found matching profile {} (app ID: {app_id}, exact: {is_exact}, devices: {num_devices})",
             path.display()
         );
 
-        // Prefer: exact match > more provisioned devices (newer profiles have more devices)
+        // Prefer: exact match > more provisioned devices > newer profile
         let dominated = match &best_match {
-            Some((_, _, prev_exact, prev_devices)) => {
+            Some((_, _, prev_exact, prev_rank)) => {
                 if *prev_exact && !is_exact {
                     true // existing exact match beats wildcard
                 } else if is_exact && !*prev_exact {
                     false // new exact match beats existing wildcard
                 } else {
-                    // same specificity — prefer more provisioned devices
-                    num_devices <= *prev_devices
+                    // same specificity — prefer more provisioned devices, then the newer profile
+                    rank <= *prev_rank
                 }
             }
             None => false,
         };
 
         if !dominated {
-            best_match = Some((path, profile, is_exact, num_devices));
+            best_match = Some((path, profile, is_exact, rank));
         }
     }
 
@@ -2362,6 +2375,8 @@ mod tests {
             },
             application_identifier_prefix: vec!["TEAM".to_string()],
             provisioned_devices: devices.iter().map(|d| d.to_string()).collect(),
+            creation_date: std::time::UNIX_EPOCH.into(),
+            expiration_date: (SystemTime::now() + std::time::Duration::from_secs(86_400)).into(),
         }
     }
 
@@ -2382,6 +2397,34 @@ mod tests {
         assert_eq!(pick(profiles(), false), Some(PathBuf::from("dev")));
         let dev_only = vec![("dev".into(), profile("TEAM.com.example.app", &["device"]))];
         assert_eq!(pick(dev_only, true), None);
+    }
+
+    #[test]
+    fn appstore_picks_the_newest_unexpired_profile() {
+        const DAY: std::time::Duration = std::time::Duration::from_secs(86_400);
+        let now = SystemTime::now();
+        let store = |created: SystemTime, expires: SystemTime| ProvisioningProfile {
+            creation_date: created.into(),
+            expiration_date: expires.into(),
+            ..profile("TEAM.com.example.app", &[])
+        };
+        let pick = |profiles: Vec<(PathBuf, ProvisioningProfile)>| {
+            pick_provisioning_profile(profiles, "com.example.app", true).map(|(path, _)| path)
+        };
+
+        let regenerated = || {
+            vec![
+                ("old".into(), store(now - 200 * DAY, now + 165 * DAY)),
+                ("new".into(), store(now - DAY, now + 364 * DAY)),
+            ]
+        };
+        assert_eq!(pick(regenerated()), Some(PathBuf::from("new")));
+        assert_eq!(
+            pick(regenerated().into_iter().rev().collect()),
+            Some(PathBuf::from("new"))
+        );
+        let expired = vec![("expired".into(), store(now - 400 * DAY, now - DAY))];
+        assert_eq!(pick(expired), None);
     }
 
     #[test]
