@@ -678,18 +678,16 @@ impl PendingWebview {
     }
 }
 
-/// A custom protocol handler, declared `Send` and `Sync` for wry 0.56 and later, which require it
-/// (tauri-apps/wry#1715). wry 0.53 required neither: it stored the handlers in statics it declared
-/// `Send` and `Sync` itself (`UnsafeRequestHandler` on Android) and called them from the same threads
-/// as now: the main thread, and on Android the WebView's request threads. There it held one mutex
-/// (`REQUEST_HANDLER`) for the whole call, so the handlers never ran two at a time. wry 0.56 releases
-/// it before the call, and two requests at once then borrow the asset handlers' `RefCell` together:
-/// a panic inside a JNI call, which aborts the app. So `get` takes such a lock again on Android, for
-/// the call (not for the wait for the response, which wry 0.53 also held it for). Called through
-/// `get`, so that a closure captures the whole wrapper rather than its field.
+/// A custom protocol handler declared `Send` and `Sync`, which wry requires of every handler.
+/// wry calls the handlers on the main thread, and on Android on the WebView's request threads,
+/// where two requests at once would borrow the asset handlers' `RefCell` together and panic inside
+/// a JNI call. `get` therefore holds a process-wide lock on Android while a handler runs, and none
+/// elsewhere. Handlers are called through `get` so that a closure captures the whole wrapper
+/// rather than its field.
 struct ThreadSafeHandler<F>(F);
 
-// SAFETY: the same declaration wry 0.53 made for the same calls, one at a time on Android (see above).
+// SAFETY: off Android, wry calls the handlers only on the main thread, where their `Rc`s live. On
+// Android `get` runs them one at a time.
 unsafe impl<F> Send for ThreadSafeHandler<F> {}
 // SAFETY: as for `Send`.
 unsafe impl<F> Sync for ThreadSafeHandler<F> {}

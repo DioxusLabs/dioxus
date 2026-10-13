@@ -15,17 +15,16 @@ pub extern "C" fn start_app() {
     use dioxus_core::{Element, VirtualDom};
     use std::any::Any;
 
-    // tao 0.37 puts the application in `ndk_context`, where tao 0.34 put the activity. Crates that
-    // read it here take it for the activity (manganis' `with_activity`, for example, builds
-    // activity-bound objects with it: dialogs, permission prompts, the back dispatcher), so the first
-    // activity replaces the application there before wry's setup and before `main` runs. It's kept
-    // for the life of the process, as tao 0.34 did.
+    // tao puts the application in `ndk_context`, and crates that read it here take it for the
+    // activity (manganis' `with_activity` builds dialogs, permission prompts and the back
+    // dispatcher with it). The first activity therefore replaces the application there, before
+    // wry's setup and before `main` runs, and stays there for the life of the process.
     //
     // A second activity in the process is the first one re-created for a configuration change its
     // manifest doesn't list (a dark mode switch, a font scale change, ...), or a second instance
-    // opened by an intent. tao 0.37 keeps the window, but wry makes no web view for the new activity
-    // and the page stays blank. tao 0.34 aborted there (`ndk_context` was initialized twice), so this
-    // ends the process too, cleanly: the user reopens the app in a new process.
+    // opened by an intent. tao keeps the window, but wry makes no web view for the new activity
+    // and the page stays blank. This ends the process instead, and the user reopens the app in a
+    // new process.
     unsafe fn android_setup(
         package: &str,
         env: jni::JNIEnv<'_>,

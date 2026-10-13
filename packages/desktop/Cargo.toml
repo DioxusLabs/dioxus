@@ -79,9 +79,8 @@ jni = "0.21.1"
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
-# tao 0.37 drains its user events on every turn of its Android loop (tauri-apps/tao#1304); 0.34 can
-# lose a wake and stop polling the VirtualDom. tao 0.36 renamed its Android JNI entry points, which
-# wry's Kotlin calls by the new names from wry 0.56 on.
+# Android needs tao 0.37, which drains its user events on every turn of its loop
+# (tauri-apps/tao#1304), and whose JNI entry point names match what wry's Kotlin calls.
 tao = { version = "0.37.1", features = ["rwh_05"] }
 
 # use native tls and the workspace tao on other platforms
@@ -100,8 +99,7 @@ lazy-js-bundle = { workspace = true }
 [features]
 default = ["tokio_runtime", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
-# wry 0.57 always enables what its `fullscreen` and `transparent` features did; these are kept so that
-# apps enabling them still build.
+# Empty, since wry always provides fullscreen and transparency. Apps may still enable them.
 fullscreen = []
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
 transparent = []
