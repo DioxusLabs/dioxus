@@ -544,7 +544,7 @@ impl BuildRequest {
 
             Self::copy_ios_privacy_info(&crate_dir, &target_exe)?;
 
-            Self::sync_widget_info_plists(&target_exe, &ios_dt, &self.crate_version())?;
+            Self::sync_widget_info_plists(&target_exe, &ios_dt)?;
 
             if let Some(profile_path) = &provisioning_profile_path {
                 let dest = target_exe.join("embedded.mobileprovision");
@@ -598,15 +598,13 @@ impl BuildRequest {
     }
 
     /// Gives each `.appex` the platform, version and `DT*` keys of the main bundle.
-    fn sync_widget_info_plists(
-        app_root: &Path,
-        ios_dt: &IosDtMetadata,
-        version: &str,
-    ) -> Result<()> {
+    fn sync_widget_info_plists(app_root: &Path, ios_dt: &IosDtMetadata) -> Result<()> {
         let plugins_dir = app_root.join("PlugIns");
         if !plugins_dir.exists() {
             return Ok(());
         }
+        let app_plist = plist::Value::from_file(app_root.join("Info.plist"))
+            .context("Failed to read the app's Info.plist")?;
 
         for entry in std::fs::read_dir(&plugins_dir)?.flatten() {
             let appex_path = entry.path();
@@ -640,15 +638,12 @@ impl BuildRequest {
                 plist::Value::Array(vec![plist::Value::String("arm64".to_string())]),
             );
 
-            // Version parity with main bundle (App Store requirement)
-            dict.insert(
-                "CFBundleVersion".to_string(),
-                plist::Value::String(version.to_string()),
-            );
-            dict.insert(
-                "CFBundleShortVersionString".to_string(),
-                plist::Value::String(version.to_string()),
-            );
+            // Version parity with the app, whose `[ios.plist]` may override the crate version.
+            for key in ["CFBundleVersion", "CFBundleShortVersionString"] {
+                if let Some(version) = app_plist.as_dictionary().and_then(|app| app.get(key)) {
+                    dict.insert(key.to_string(), version.clone());
+                }
+            }
 
             // Skip keys whose probe found nothing.
             let dt_entries: [(&str, &str); 9] = [
@@ -2333,6 +2328,10 @@ mod tests {
     #[test]
     fn widget_plist_takes_app_version_and_skips_empty_metadata() {
         let app = tempfile::tempdir().unwrap();
+        let mut app_dict = plist::Dictionary::new();
+        app_dict.insert("CFBundleVersion".to_string(), "7".into());
+        app_dict.insert("CFBundleShortVersionString".to_string(), "1.2.3".into());
+        plist::to_file_xml(app.path().join("Info.plist"), &app_dict).unwrap();
         let appex = app.path().join("PlugIns").join("widget.appex");
         std::fs::create_dir_all(&appex).unwrap();
         let mut dict = plist::Dictionary::new();
@@ -2343,12 +2342,12 @@ mod tests {
             dt_sdk_name: "iphoneos18.2".to_string(),
             ..Default::default()
         };
-        BuildRequest::sync_widget_info_plists(app.path(), &ios_dt, "1.2.3").unwrap();
+        BuildRequest::sync_widget_info_plists(app.path(), &ios_dt).unwrap();
 
         let value = plist::Value::from_file(appex.join("Info.plist")).unwrap();
         let dict = value.as_dictionary().unwrap();
         let get = |key| dict.get(key).and_then(plist::Value::as_string);
-        assert_eq!(get("CFBundleVersion"), Some("1.2.3"));
+        assert_eq!(get("CFBundleVersion"), Some("7"));
         assert_eq!(get("CFBundleShortVersionString"), Some("1.2.3"));
         assert_eq!(get("DTSDKName"), Some("iphoneos18.2"));
         assert_eq!(get("DTXcode"), None);
