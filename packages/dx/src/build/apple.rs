@@ -238,6 +238,24 @@ fn pick_provisioning_profile(
     best_match.map(|(path, profile, _, _)| (path, profile))
 }
 
+/// A profile `pick_provisioning_profile` would take if it had not expired, so the error can say to
+/// renew it instead of to change the bundle ID.
+fn expired_provisioning_profile<'a>(
+    profiles: &'a [(PathBuf, ProvisioningProfile)],
+    bundle_id: &str,
+    appstore: bool,
+) -> Option<&'a Path> {
+    let now = SystemTime::now();
+    profiles
+        .iter()
+        .find(|(_, profile)| {
+            profile_matches_bundle_id(&profile.entitlements.application_identifier, bundle_id)
+                && (!appstore || profile.provisioned_devices.is_empty())
+                && SystemTime::from(profile.expiration_date) <= now
+        })
+        .map(|(path, _)| path.as_path())
+}
+
 impl BuildRequest {
     /// Currently does nothing, but eventually we need to check that the mobile tooling is installed.
     ///
@@ -1098,7 +1116,11 @@ We checked the folders:
                     tracing::debug!("Skipping profile {}: {e}", path.display());
                     None
                 }
-            });
+            })
+            .collect::<Vec<_>>();
+
+        let expired =
+            expired_provisioning_profile(&profiles, bundle_id, appstore).map(Path::to_path_buf);
 
         let (profile_path, mbfile) = match pick_provisioning_profile(profiles, bundle_id, appstore)
         {
@@ -1111,6 +1133,17 @@ We checked the folders:
                 (path, profile)
             }
             None => {
+                if let Some(path) = expired {
+                    bail!(
+                        "The provisioning profile for \"{bundle_id}\" has expired: {}\n\
+                         \n\
+                         Renew it in your Apple Developer account, or open the project in Xcode \
+                         and let it download a new one.\n\
+                         \n\
+                         {CODESIGN_ERROR}",
+                        path.display()
+                    );
+                }
                 bail!(
                     "No provisioning profile found matching bundle identifier \"{bundle_id}\".\n\
                      \n\
@@ -2425,6 +2458,28 @@ mod tests {
         );
         let expired = vec![("expired".into(), store(now - 400 * DAY, now - DAY))];
         assert_eq!(pick(expired), None);
+    }
+
+    #[test]
+    fn an_expired_profile_is_reported_instead_of_a_missing_one() {
+        let yesterday = SystemTime::now() - std::time::Duration::from_secs(86_400);
+        let expired = |devices: &[&str]| ProvisioningProfile {
+            expiration_date: yesterday.into(),
+            ..profile("TEAM.com.example.app", devices)
+        };
+        let store = vec![("store".into(), expired(&[]))];
+        let dev = vec![("dev".into(), expired(&["device"]))];
+        let id = "com.example.app";
+
+        assert_eq!(
+            expired_provisioning_profile(&store, id, true),
+            Some(Path::new("store"))
+        );
+        assert_eq!(
+            expired_provisioning_profile(&dev, id, false),
+            Some(Path::new("dev"))
+        );
+        assert_eq!(expired_provisioning_profile(&dev, id, true), None);
     }
 
     #[test]
