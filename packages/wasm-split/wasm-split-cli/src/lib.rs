@@ -8,14 +8,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 use walrus::{
-    ConstExpr, DataKind, ElementItems, ElementKind, ExportId, ExportItem, FunctionBuilder,
-    FunctionId, FunctionKind, GlobalKind, ImportId, ImportKind, Module, ModuleConfig, RefType,
-    TableId, TypeId,
+    ConstExpr, ElementItems, ElementKind, ExportId, ExportItem, FunctionBuilder, FunctionId,
+    FunctionKind, GlobalKind, ImportId, ImportKind, Module, ModuleConfig, RefType, TableId, TypeId,
     ir::{self, Visitor, dfs_in_order},
 };
 use wasmparser::{
     BinaryReader, Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry,
-    SymbolInfo,
+    RelocationType, SymbolInfo,
 };
 
 pub const MAKE_LOAD_JS: &str = include_str!("./__wasm_split.js");
@@ -44,7 +43,6 @@ pub struct Splitter<'a> {
     shared_symbols: BTreeSet<Node>,
     split_points: Vec<SplitPoint>,
     chunks: Vec<HashSet<Node>>,
-    data_symbols: BTreeMap<usize, DataSymbol>,
     main_graph: HashSet<Node>,
     call_graph: HashMap<Node, HashSet<Node>>,
     parent_graph: HashMap<Node, HashSet<Node>>,
@@ -86,16 +84,11 @@ impl<'a> Splitter<'a> {
 
         let split_points = accumulate_split_points(&module);
 
-        // Note that we can't trust the normal symbols - just the data symbols - and we can't use the data offset
-        // since that's not reliable after bindgening
-        let raw_data = parse_bytes_to_data_segment(bindgened)?;
-
         let mut module = Self {
             source_module: module,
             original,
             bindgened,
             split_points,
-            data_symbols: raw_data.data_symbols,
             _ids_to_fns: ids,
             fns_to_ids,
             main_graph: Default::default(),
@@ -158,7 +151,8 @@ impl<'a> Splitter<'a> {
         tracing::info!("Emitting main bundle split module");
 
         // Perform some analysis of the module before we start messing with it
-        let unused_symbols = self.unused_main_symbols();
+        let mut unused_symbols = self.unused_main_symbols();
+        self.keep_referenced(&mut unused_symbols);
 
         // Use the original module that contains all the right ids
         let mut out = std::mem::take(&mut self.source_module);
@@ -259,7 +253,7 @@ impl<'a> Splitter<'a> {
         self.prune_split_module(&mut out);
 
         // Clear away the data segments
-        self.clear_data_segments(&mut out, &unique_symbols);
+        self.clear_data_segments(&mut out);
 
         // Clear out the element segments and then add in the initializers for the shared imports
         self.create_ifunc_initializers(&mut out, &unique_symbols);
@@ -329,7 +323,7 @@ impl<'a> Splitter<'a> {
         self.prune_split_module(&mut out);
 
         // Clear away the data segments
-        self.clear_data_segments(&mut out, &unique_symbols);
+        self.clear_data_segments(&mut out);
 
         // Clear out the element segments and then add in the initializers for the shared imports
         self.create_ifunc_initializers(&mut out, &unique_symbols);
@@ -500,27 +494,11 @@ impl<'a> Splitter<'a> {
                     out.funcs.delete(id);
                 }
 
-                // Otherwise, zero out the data segment, which should lead to elimination by wasm-opt
-                Node::DataSymbol(id) => {
-                    let symbol = self
-                        .data_symbols
-                        .get(&id)
-                        .context("Failed to find data symbol")?;
-
-                    // VERY IMPORTANT
-                    //
-                    // apparently wasm-bindgen makes data segments that aren't the main one
-                    // even *touching* those will break the vtable / binding layer
-                    // We can only interact with the first data segment - the rest need to stay available
-                    // for the `.js` to interact with.
-                    if symbol.which_data_segment == 0 {
-                        let data_id = out.data.iter().nth(symbol.which_data_segment).unwrap().id();
-                        let data = out.data.get_mut(data_id);
-                        for i in symbol.segment_offset..symbol.segment_offset + symbol.symbol_size {
-                            data.value[i] = 0;
-                        }
-                    }
-                }
+                // Data stays in the main module. The call graph's edges from code to data come
+                // through name matching between the original and the bindgened module, so a data
+                // symbol attributed to a split module can still be read by main. Zeroing it here
+                // made main silently compute with cleared statics.
+                Node::DataSymbol(_) => {}
             }
         }
 
@@ -736,47 +714,13 @@ impl<'a> Splitter<'a> {
         b.finish(vec![], &mut out.funcs)
     }
 
-    fn clear_data_segments(&self, out: &mut Module, unique_symbols: &HashSet<Node>) {
-        // Preserve the data symbols for this module and then clear them away
+    /// Split modules carry no data: the main module keeps all of it (see `prune_main_symbols`),
+    /// and re-initializing a static when a split module loads would reset whatever the running
+    /// program had written to it.
+    fn clear_data_segments(&self, out: &mut Module) {
         let data_ids: Vec<_> = out.data.iter().map(|t| t.id()).collect();
-        for (idx, data_id) in data_ids.into_iter().enumerate() {
-            let data = out.data.get_mut(data_id);
-
-            // Take the data out of the vec - zeroing it out unless we patch it in manually
-            let contents = data.value.split_off(0);
-
-            // Zero out the non-primary data segments
-            if idx != 0 {
-                continue;
-            }
-
-            let DataKind::Active { memory, offset } = &data.kind else {
-                continue;
-            };
-            let memory = *memory;
-
-            let ConstExpr::Value(ir::Value::I32(data_offset)) = *offset else {
-                continue;
-            };
-
-            // And then assign chunks of the data to new data entries that will override the individual slots
-            for unique in unique_symbols {
-                if let Node::DataSymbol(id) = unique {
-                    if let Some(symbol) = self.data_symbols.get(id) {
-                        if symbol.which_data_segment == idx {
-                            let range =
-                                symbol.segment_offset..symbol.segment_offset + symbol.symbol_size;
-                            let offset = ConstExpr::Value(ir::Value::I32(
-                                data_offset + symbol.segment_offset as i32,
-                            ));
-                            out.data.add(
-                                DataKind::Active { memory, offset },
-                                contents[range].to_vec(),
-                            );
-                        }
-                    }
-                }
-            }
+        for data_id in data_ids {
+            out.data.get_mut(data_id).value.clear();
         }
     }
 
@@ -946,15 +890,27 @@ impl<'a> Splitter<'a> {
 
         for (new_name, new_func) in new_names.iter() {
             if let Some(old_func) = old_names.get(new_name) {
-                old_to_new.insert(*old_func, new_func);
+                old_to_new.insert(*old_func, *new_func);
             } else {
                 new_call_graph.insert(Node::Function(*new_func), HashSet::new());
             }
         }
 
+        // A function whose address is taken sits in the function table, and wasm-bindgen keeps
+        // the table's layout (data holds table indices). The slot pairs the two modules' functions
+        // exactly, while names do not: an `#[inline]` function gets one copy per codegen unit, all
+        // under the same name, and pairing by name can put a copy with a different signature (or
+        // different callees) in a table slot.
+        let new_slots = table_slots(&self.source_module);
+        for (slot, old_func) in table_slots(&original.module) {
+            if let Some(new_func) = new_slots.get(&slot) {
+                old_to_new.insert(old_func, *new_func);
+            }
+        }
+
         let get_old = |old: &Node| -> Option<Node> {
             match old {
-                Node::Function(id) => old_to_new.get(id).map(|new_id| Node::Function(**new_id)),
+                Node::Function(id) => old_to_new.get(id).map(|new_id| Node::Function(*new_id)),
                 Node::DataSymbol(id) => Some(Node::DataSymbol(*id)),
             }
         };
@@ -1036,6 +992,9 @@ impl<'a> Splitter<'a> {
             if !old_names.contains_key(name) {
                 main_fn_entry.insert(Node::Function(*new));
             }
+        }
+        for (node, children) in new_call_graph {
+            self.call_graph.entry(node).or_default().extend(children);
         }
 
         // Walk the functions and try to disconnect any holes manually
@@ -1189,7 +1148,7 @@ fn parse_module_with_ids(
 struct ModuleWithRelocations<'a> {
     module: Module,
     symbols: Vec<SymbolInfo<'a>>,
-    names_to_funcs: HashMap<String, FunctionId>,
+    funcs_by_index: Vec<FunctionId>,
     call_graph: HashMap<Node, HashSet<Node>>,
     parents: HashMap<Node, HashSet<Node>>,
     relocation_map: HashMap<Node, Vec<RelocationEntry>>,
@@ -1201,18 +1160,15 @@ impl<'a> ModuleWithRelocations<'a> {
     fn new(bytes: &'a [u8]) -> Result<Self> {
         let module = Module::from_buffer(bytes)?;
         let raw_data = parse_bytes_to_data_segment(bytes)?;
-        let names_to_funcs = module
-            .funcs
-            .iter()
-            .flat_map(|f| Some((f.name.clone()?, f.id())))
-            .collect();
+        // walrus adds a parsed module's functions in index order, imports first
+        let funcs_by_index = module.funcs.iter().map(|f| f.id()).collect();
 
         let mut module = Self {
             module,
             data_symbols: raw_data.data_symbols,
             data_section_range: raw_data.data_range,
             symbols: raw_data.symbols,
-            names_to_funcs,
+            funcs_by_index,
             call_graph: Default::default(),
             relocation_map: Default::default(),
             parents: Default::default(),
@@ -1248,7 +1204,7 @@ impl<'a> ModuleWithRelocations<'a> {
                 assert!(reloc_range.start >= range.start);
                 assert!(reloc_range.end <= range.end);
 
-                if let Some(target) = self.get_symbol_dep_node(entry.index as usize)? {
+                if let Some(target) = self.relocation_target(entry)? {
                     let us = Node::Function(func_id);
                     self.call_graph.entry(us).or_default().insert(target);
                     self.relocation_map.entry(us).or_default().push(*entry);
@@ -1282,7 +1238,7 @@ impl<'a> ModuleWithRelocations<'a> {
                 assert!(reloc_range.start >= range.start);
                 assert!(reloc_range.end <= range.end);
 
-                if let Some(target) = self.get_symbol_dep_node(entry.index as usize)? {
+                if let Some(target) = self.relocation_target(entry)? {
                     let dep = Node::DataSymbol(symbol.index);
                     self.call_graph.entry(dep).or_default().insert(target);
                     self.relocation_map.entry(dep).or_default().push(*entry);
@@ -1318,6 +1274,16 @@ impl<'a> ModuleWithRelocations<'a> {
         Ok(relocations)
     }
 
+    /// The node a relocation refers to. A type-index relocation (the signature of a
+    /// `call_indirect`) carries a type index, not a symbol index; reading it as a symbol links the
+    /// caller to whatever happens to be at that symbol index.
+    fn relocation_target(&self, entry: &RelocationEntry) -> Result<Option<Node>> {
+        if entry.ty == RelocationType::TypeIndexLeb {
+            return Ok(None);
+        }
+        self.get_symbol_dep_node(entry.index as usize)
+    }
+
     /// Get the symbol's corresponding entry in the call graph
     ///
     /// This might panic if the source module isn't built properly. Make sure to enable LTO and `--emit-relocs`
@@ -1325,26 +1291,15 @@ impl<'a> ModuleWithRelocations<'a> {
     fn get_symbol_dep_node(&self, index: usize) -> Result<Option<Node>> {
         let res = match self.symbols[index] {
             SymbolInfo::Data { .. } => Some(Node::DataSymbol(index)),
-            SymbolInfo::Func { name, .. } => Some(Node::Function({
-                let name = name.context(
-                    "Function symbol has no name - did you forget to enable debug symbols",
-                )?;
-
-                let func_id = self.names_to_funcs.get(name);
-
-                // wbindgen will synthesize some functions that don't exist in the original module (eg describe functions)
-                // Previously this was a hard error, but now we just ignore it. It used to mean that the user
-                let Some(res) = func_id else {
-                    if !name.contains("__wbindgen_") {
-                        tracing::error!(
-                            "Could not find function symbol {name:?} in module - was this built with LTO, --emit-relocs, and debug symbols? Ignoring."
-                        );
-                    }
-                    return Ok(None);
-                };
-
-                *res
-            })),
+            // The symbol names its function by index. Looking it up by name instead picks an
+            // arbitrary one of the functions sharing that name (copies of a generic or `#[inline]`
+            // function), which wires unrelated code together.
+            SymbolInfo::Func { index, .. } => {
+                let func = self.funcs_by_index.get(index as usize).copied();
+                Some(Node::Function(func.with_context(|| {
+                    format!("Function symbol refers to function {index}, which does not exist")
+                })?))
+            }
 
             _ => None,
         };
@@ -1471,9 +1426,6 @@ struct RawDataSection<'a> {
 struct DataSymbol {
     index: usize,
     range: Range<usize>,
-    segment_offset: usize,
-    symbol_size: usize,
-    which_data_segment: usize,
 }
 
 /// Manually parse the data section from a wasm module
@@ -1530,16 +1482,7 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
             data_segment.range.end - data_segment.data.len() + (symbol.offset as usize);
         let range = offset..(offset + symbol.size as usize);
 
-        data_symbols.insert(
-            index,
-            DataSymbol {
-                index,
-                range,
-                segment_offset: symbol.offset as usize,
-                symbol_size: symbol.size as usize,
-                which_data_segment: symbol.index as usize,
-            },
-        );
+        data_symbols.insert(index, DataSymbol { index, range });
     }
 
     Ok(RawDataSection {
@@ -1547,4 +1490,100 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
         symbols,
         data_symbols,
     })
+}
+
+impl Splitter<'_> {
+    /// Keep in the main module every function that code staying there still calls or takes the
+    /// address of. The relocation call graph can miss an edge (wasm-bindgen rewrites and renames
+    /// functions); deleting a function that main still references leaves a hole main calls into,
+    /// while keeping one only costs its bytes.
+    fn keep_referenced(&self, unused: &mut HashSet<Node>) {
+        struct Refs<'a> {
+            found: &'a mut Vec<FunctionId>,
+        }
+        impl<'a> Visitor<'a> for Refs<'a> {
+            fn visit_function_id(&mut self, function: &FunctionId) {
+                self.found.push(*function);
+            }
+        }
+
+        let module = &self.source_module;
+        let split_exports: HashSet<FunctionId> = self
+            .split_points
+            .iter()
+            .map(|split| split.export_func)
+            .collect();
+
+        // Walk from everything main keeps, through both the code's own references and the call
+        // graph: a function kept only by this walk can still reach vtables (data symbols) whose
+        // methods are called through the table, and those must stay too.
+        let mut queue: Vec<Node> = module
+            .funcs
+            .iter()
+            .map(|f| Node::Function(f.id()))
+            .filter(|node| !unused.contains(node))
+            .filter(|node| !matches!(node, Node::Function(id) if split_exports.contains(id)))
+            .collect();
+        let mut seen: HashSet<Node> = queue.iter().copied().collect();
+        let mut kept = 0usize;
+        while let Some(node) = queue.pop() {
+            let mut next: Vec<Node> = self
+                .call_graph
+                .get(&node)
+                .into_iter()
+                .flatten()
+                .copied()
+                .collect();
+            if let Node::Function(id) = node {
+                if let FunctionKind::Local(local) = &module.funcs.get(id).kind {
+                    let mut found = Vec::new();
+                    dfs_in_order(&mut Refs { found: &mut found }, local, local.entry_block());
+                    next.extend(found.into_iter().map(Node::Function));
+                }
+            }
+            for child in next {
+                if seen.insert(child) {
+                    if unused.remove(&child) && matches!(child, Node::Function(_)) {
+                        kept += 1;
+                    }
+                    queue.push(child);
+                }
+            }
+        }
+
+        if kept > 0 {
+            tracing::warn!(
+                "Kept {kept} functions in the main module that are still referenced from it but were not in its call graph"
+            );
+        }
+    }
+}
+
+/// The function in each slot of the module's active element segments.
+fn table_slots(module: &Module) -> HashMap<i32, FunctionId> {
+    let mut slots = HashMap::new();
+    for element in module.elements.iter() {
+        let ElementKind::Active {
+            offset: ConstExpr::Value(ir::Value::I32(offset)),
+            ..
+        } = element.kind
+        else {
+            continue;
+        };
+        match &element.items {
+            ElementItems::Functions(items) => {
+                for (index, id) in items.iter().enumerate() {
+                    slots.insert(offset + index as i32, *id);
+                }
+            }
+            ElementItems::Expressions(_, items) => {
+                for (index, item) in items.iter().enumerate() {
+                    if let ConstExpr::RefFunc(id) = item {
+                        slots.insert(offset + index as i32, *id);
+                    }
+                }
+            }
+        }
+    }
+    slots
 }
