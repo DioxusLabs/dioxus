@@ -5,6 +5,9 @@ use tracing::{
 
 pub use tracing;
 
+#[cfg(target_arch = "wasm32")]
+mod console;
+
 /// Attempt to initialize the subscriber if it doesn't already exist, with default settings.
 ///
 /// See [`crate::init`] for more info.
@@ -87,9 +90,11 @@ pub fn init(level: Level) -> Result<(), SetGlobalDefaultError> {
 
         let layer_config = tracing_wasm::WASMLayerConfigBuilder::new()
             .set_max_level(level)
+            .set_console_config(tracing_wasm::ConsoleConfig::NoReporting)
             .build();
-        let layer = tracing_wasm::WASMLayer::new(layer_config);
-        let reg = Registry::default().with(layer);
+        let reg = Registry::default()
+            .with(tracing_wasm::WASMLayer::new(layer_config))
+            .with(console::ConsoleLayer::new(level));
 
         set_global_default(reg)
     }
