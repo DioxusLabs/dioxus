@@ -54,9 +54,8 @@ subtle = { version = "2.6", features = ["const-generics"] }
 bytes = { workspace = true }
 webbrowser = { workspace = true }
 
-# The iOS 27 SDK refuses apps without the UIScene life cycle, which tao supports from 0.37 on. The
-# other platforms stay on the workspace version: tao 0.36 renamed the Android JNI entry points that
-# wry 0.53's `WryActivity` calls.
+# iOS needs tao 0.37 for the UIScene life cycle, which the iOS 27 SDK requires. The other platforms
+# use the workspace tao, whose Android JNI entry points match what wry's `WryActivity` calls.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
 tao = { workspace = true, features = ["rwh_05"] }
 
