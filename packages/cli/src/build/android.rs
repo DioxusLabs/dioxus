@@ -486,7 +486,7 @@ impl BuildRequest {
                 self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
 
                 // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
-                self.strip_gradle_plugin_versions(&module_dir)?;
+                Self::strip_gradle_plugin_versions(&module_dir)?;
 
                 // Add to settings.gradle
                 self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
@@ -942,7 +942,10 @@ impl BuildRequest {
     /// on the classpath. This function removes version specifications like:
     /// - `version "8.4.2"` or `version "1.9.24"`
     /// - Entire version calls from plugin declarations
-    pub(crate) fn strip_gradle_plugin_versions(&self, module_dir: &Path) -> Result<()> {
+    ///
+    /// It also drops AGP 8 declarations that AGP 9 rejects: the Kotlin Android plugin,
+    /// `kotlinOptions`, and library `targetSdk`.
+    pub(crate) fn strip_gradle_plugin_versions(module_dir: &Path) -> Result<()> {
         use std::fs;
 
         let build_gradle = module_dir.join("build.gradle.kts");
@@ -958,10 +961,18 @@ impl BuildRequest {
         let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#).expect("Invalid regex");
         let cleaned = version_pattern.replace_all(&contents, "");
 
+        // AGP 9 compiles Kotlin itself and has no library `targetSdk`, so drop the Kotlin
+        // Android plugin, its `kotlinOptions` block and `targetSdk` from AGP 8 modules.
+        let agp8_pattern = regex::Regex::new(
+            r#"(?m)^[ \t]*(?:kotlin\("android"\)|id\("org\.jetbrains\.kotlin\.android"\)|id\("kotlin-android"\)|targetSdk\s*=.*|kotlinOptions\s*\{[^}]*\})[ \t]*(?:\r?\n|$)"#,
+        )
+        .expect("Invalid regex");
+        let cleaned = agp8_pattern.replace_all(&cleaned, "");
+
         if cleaned != contents {
             fs::write(&build_gradle, cleaned.as_ref())?;
             tracing::debug!(
-                "Stripped version specifiers from {}",
+                "Stripped version specifiers and AGP 8 settings from {}",
                 build_gradle.display()
             );
         }
@@ -1438,7 +1449,7 @@ impl AndroidTools {
 
 #[cfg(test)]
 mod tests {
-    use super::AndroidTools;
+    use super::{AndroidTools, BuildRequest};
 
     #[test]
     fn compile_sdk_minor_picks_highest_installed_stable_minor() {
@@ -1484,4 +1495,56 @@ mod tests {
         }
         assert_eq!(tools.build_tools_version().as_deref(), Some("36.1.0"));
     }
+
+    #[test]
+    fn strip_gradle_plugin_versions_removes_agp8_library_syntax() {
+        let module = tempfile::tempdir().unwrap();
+        let build_gradle = module.path().join("build.gradle.kts");
+        std::fs::write(
+            &build_gradle,
+            r#"plugins {
+    id("com.android.library") version "8.4.2"
+    kotlin("android") version "1.9.24"
+    id("org.jetbrains.kotlin.android") version "1.9.24"
+    id("kotlin-android") version "1.9.24"
+}
+
+android {
+    namespace = "example.library"
+    compileSdk = 35
+    targetSdk = 35
+}
+
+kotlinOptions {
+    jvmTarget = "17"
+}
+
+dependencies {
+    implementation("example:dependency:1.0")
+}
+"#,
+        )
+        .unwrap();
+
+        BuildRequest::strip_gradle_plugin_versions(module.path()).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(build_gradle).unwrap(),
+            r#"plugins {
+    id("com.android.library")
+}
+
+android {
+    namespace = "example.library"
+    compileSdk = 35
+}
+
+
+dependencies {
+    implementation("example:dependency:1.0")
+}
+"#,
+        );
+    }
+
 }
