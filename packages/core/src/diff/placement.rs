@@ -211,7 +211,7 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
                         slot.index(),
                         children.len(),
                     );
-                    self.resolve_fragment_child_site(children, &child_mounts, child_index, mount)
+                    self.resolve_fragment_child_site(&child_mounts, child_index, mount)
                         .or_else(|| Some(self.resolve_slot(parent_mount, slot)))
                 }
                 (MountedParentKind::ComponentRoot, DynamicNode::Component(_)) => {
@@ -224,33 +224,36 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
 
     fn resolve_fragment_child_site(
         &self,
-        children: &[VNode],
         child_mounts: &[MountId],
         position: usize,
         mount: MountId,
     ) -> Option<InsertionSite> {
+        // Read each sibling through its mount's view, not the parent's old child vnodes:
+        // siblings already diffed hold the new view.
         let following = || {
-            children
+            child_mounts
                 .iter()
-                .zip(child_mounts)
+                .copied()
                 .skip(position + 1)
-                .filter(|(_, m)| **m != mount)
-                .find_map(|(child, &m)| {
-                    child
+                .filter(|&m| m != mount)
+                .find_map(|m| {
+                    self.dom
+                        .current_mounted_view(m)?
                         .find_first_element(m, self.dom)
                         .map(InsertionSite::before)
                 })
         };
 
         let previous = || {
-            children
+            child_mounts
                 .iter()
-                .zip(child_mounts)
+                .copied()
                 .take(position)
                 .rev()
-                .filter(|(_, m)| **m != mount)
-                .find_map(|(child, &m)| {
-                    child
+                .filter(|&m| m != mount)
+                .find_map(|m| {
+                    self.dom
+                        .current_mounted_view(m)?
                         .find_last_element(m, self.dom)
                         .map(InsertionSite::after)
                 })
