@@ -686,8 +686,10 @@ impl PendingWebview {
 /// rather than its field.
 struct ThreadSafeHandler<F>(F);
 
-// SAFETY: off Android, wry calls the handlers only on the main thread, where their `Rc`s live. On
-// Android `get` runs them one at a time.
+// SAFETY: off Android, wry calls the handlers only on the main thread, where their `Rc`s live.
+// On Android this is not sound. wry calls the handlers on the WebView's request threads, while
+// the event loop thread uses the same `Rc`s. The lock in `get` only stops two handlers from
+// running at the same time.
 unsafe impl<F> Send for ThreadSafeHandler<F> {}
 // SAFETY: as for `Send`.
 unsafe impl<F> Sync for ThreadSafeHandler<F> {}

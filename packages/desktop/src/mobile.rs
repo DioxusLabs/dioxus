@@ -20,11 +20,12 @@ pub extern "C" fn start_app() {
     // dispatcher with it). The first activity therefore replaces the application there, before
     // wry's setup and before `main` runs, and stays there for the life of the process.
     //
-    // A second activity in the process is the first one re-created for a configuration change its
-    // manifest doesn't list (a dark mode switch, a font scale change, ...), or a second instance
-    // opened by an intent. tao keeps the window, but wry makes no web view for the new activity
-    // and the page stays blank. This ends the process instead, and the user reopens the app in a
-    // new process.
+    // A second activity in the process is either the first one re-created after a configuration
+    // change its manifest doesn't list (a dark mode switch, a font scale change, ...), or a second
+    // instance opened by an intent. After a configuration change wry creates a new web view, but
+    // the navigation handler in `webview.rs` lets the index page load only once, so the new web
+    // view stays blank. A second instance gets no web view at all. This ends the process instead,
+    // and the user reopens the app in a new process.
     unsafe fn android_setup(
         package: &str,
         env: jni::JNIEnv<'_>,
