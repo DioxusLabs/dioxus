@@ -30,8 +30,8 @@ export function start_capture() {
         methods.forEach((method, i) => console[method] = originals[i]);
         performance.mark = mark;
         performance.measure = measure;
-        for (const name of captured.marks) performance.clearMarks(name);
-        for (const entry of captured.measures) performance.clearMeasures(entry.name);
+        const names = new Set([...captured.marks, ...captured.measures.map(entry => entry.name)]);
+        captured.retained = performance.getEntries().filter(entry => names.has(entry.name)).length;
         restore = undefined;
         return JSON.stringify(captured);
     };
@@ -49,7 +49,9 @@ extern "C" {
 fn capture(level: Level, f: impl FnOnce()) -> Value {
     start_capture();
     tracing::subscriber::with_default(Registry::default().with(WasmLayer::new(level)), f);
-    serde_json::from_str(&stop_capture()).unwrap()
+    let captured: Value = serde_json::from_str(&stop_capture()).unwrap();
+    assert_eq!(captured["retained"], 0);
+    captured
 }
 
 #[wasm_bindgen_test]

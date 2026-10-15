@@ -23,6 +23,10 @@ extern "C" {
     fn mark(name: &str);
     #[wasm_bindgen(catch, js_namespace = performance)]
     fn measure(name: &str, start: &str) -> Result<(), JsValue>;
+    #[wasm_bindgen(js_namespace = performance, js_name = clearMarks)]
+    fn clear_marks(name: &str);
+    #[wasm_bindgen(js_namespace = performance, js_name = clearMeasures)]
+    fn clear_measures(name: &str);
     #[wasm_bindgen(js_namespace = console, js_name = debug)]
     fn console_debug(msg: &str);
     #[wasm_bindgen(js_namespace = console, js_name = info)]
@@ -35,6 +39,8 @@ extern "C" {
 
 /// Writes events to level-matched console methods and records spans and events in Performance timings.
 /// Event fields are formatted once and shared between both outputs.
+/// Timing entries are cleared once recorded: profiler recordings and `PerformanceObserver`s see them,
+/// but they are not retained for `performance.getEntries()`.
 pub(crate) struct WasmLayer {
     max_level: Level,
     last_event_id: AtomicUsize,
@@ -99,6 +105,8 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WasmLayer {
             meta.module_path().unwrap_or("...")
         );
         _ = measure(&line, &mark_name);
+        clear_marks(&mark_name);
+        clear_measures(&line);
     }
 
     fn on_enter(&self, id: &Id, _ctx: Context<'_, S>) {
@@ -116,7 +124,10 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WasmLayer {
             if let Some(recorder) = span.extensions().get::<Recorder>() {
                 _ = write!(name, "{recorder}");
             }
-            _ = measure(&name, &span_mark_name(id));
+            let mark_name = span_mark_name(id);
+            _ = measure(&name, &mark_name);
+            clear_marks(&mark_name);
+            clear_measures(&name);
         }
     }
 }
