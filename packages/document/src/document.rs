@@ -71,6 +71,10 @@ pub trait Document: 'static {
     }
 
     /// Create a new element in the head
+    ///
+    /// The timing differs by target. On desktop and mobile, [`eval`](crate::eval) waits for head
+    /// insertions that were queued before the eval, and for inserted scripts and stylesheets to
+    /// load or fail.
     fn create_head_element(
         &self,
         name: &str,

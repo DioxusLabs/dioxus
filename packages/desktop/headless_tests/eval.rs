@@ -12,8 +12,21 @@ pub fn main() {
 
 static EVALS_RECEIVED: GlobalSignal<usize> = Signal::global(|| 0);
 static EVALS_RETURNED: GlobalSignal<usize> = Signal::global(|| 0);
+static HEAD_SCRIPTS_READY: GlobalSignal<bool> = Signal::global(|| false);
 
 fn app() -> Element {
+    // A head script must run before an eval from the same render
+    use_future(|| async {
+        let ready = document::eval(
+            r#"return !!window.__inline_head_ready && !!window.__external_head_ready;"#,
+        )
+        .join::<bool>()
+        .await
+        .unwrap();
+        assert!(ready, "document::eval ran before the head scripts");
+        HEAD_SCRIPTS_READY.with_mut(|x| *x = true);
+    });
+
     // Double 100 values in the value
     use_future(|| async {
         let mut eval = document::eval(
@@ -56,10 +69,18 @@ fn app() -> Element {
     use_memo(|| {
         println!("expected 100 evals received found {}", EVALS_RECEIVED());
         println!("expected 2 eval returned found {}", EVALS_RETURNED());
-        if EVALS_RECEIVED() == 100 && EVALS_RETURNED() == 2 {
+        if EVALS_RECEIVED() == 100 && EVALS_RETURNED() == 2 && HEAD_SCRIPTS_READY() {
             window().close();
         }
     });
 
-    VNode::empty()
+    rsx! {
+        document::Script { "window.__inline_head_ready = true;" }
+        document::Script { src: "data:text/javascript;base64,d2luZG93Ll9fZXh0ZXJuYWxfaGVhZF9yZWFkeT10cnVlOw==" }
+        // Links that never load must not block later evals.
+        document::Link { rel: "stylesheet" }
+        document::Link { rel: "stylesheet", href: "data:text/css,", disabled: true }
+        // A script that fails to load must resolve the gate too.
+        document::Script { src: "dioxus://index.html/__missing_head_script.js" }
+    }
 }

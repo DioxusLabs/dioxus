@@ -88,6 +88,10 @@ impl ScriptProps {
 /// Any updates to the props after the first render will not be reflected in the head.
 ///
 /// </div>
+///
+/// The element is inserted into the head at runtime on desktop and mobile. [`eval`](crate::eval)
+/// calls that run after this component renders wait for the script to load before they execute.
+/// See [`eval`](crate::eval) for the semantics of each target.
 #[component]
 pub fn Script(props: ScriptProps) -> Element {
     use_update_warning(&props, "Script {}");
