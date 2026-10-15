@@ -37,7 +37,7 @@ macro_rules! scripted_getter {
                 .expect("Webview should be alive if the element is being queried");
             let fut = self
                 .query
-                .new_query::<Option<$output_type>>(&script, webview)
+                .new_query::<Option<$output_type>>(&script, "", webview)
                 .resolve();
             Box::pin(async move {
                 match fut.await {
@@ -90,7 +90,7 @@ impl RenderedElementBacking for DesktopElement {
             .webview
             .upgrade()
             .expect("Webview should be alive if the element is being queried");
-        let fut = self.query.new_query::<bool>(&script, webview).resolve();
+        let fut = self.query.new_query::<bool>(&script, "", webview).resolve();
         Box::pin(async move {
             match fut.await {
                 Ok(true) => Ok(()),
@@ -120,7 +120,7 @@ impl RenderedElementBacking for DesktopElement {
             .webview
             .upgrade()
             .expect("Webview should be alive if the element is being queried");
-        let fut = self.query.new_query::<bool>(&script, webview).resolve();
+        let fut = self.query.new_query::<bool>(&script, "", webview).resolve();
         Box::pin(async move {
             match fut.await {
                 Ok(true) => Ok(()),
@@ -146,7 +146,7 @@ impl RenderedElementBacking for DesktopElement {
             .webview
             .upgrade()
             .expect("Webview should be alive if the element is being queried");
-        let fut = self.query.new_query::<bool>(&script, webview).resolve();
+        let fut = self.query.new_query::<bool>(&script, "", webview).resolve();
 
         Box::pin(async move {
             match fut.await {

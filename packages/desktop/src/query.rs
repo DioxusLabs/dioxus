@@ -45,6 +45,7 @@ impl QueryEngine {
     pub fn new_query<V: DeserializeOwned>(
         &self,
         script: &str,
+        prelude: &str,
         context: DesktopContext,
     ) -> Query<V> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -77,7 +78,10 @@ impl QueryEngine {
                 }};
                 try {{
                     const AsyncFunction = async function () {{}}.constructor;
-                    let promise = (new AsyncFunction("dioxus", {script:?}))(dioxus);
+                    let promise = (async () => {{
+                        {prelude}
+                        return await (new AsyncFunction("dioxus", {script:?}))(dioxus);
+                    }})();
                     promise
                         .then((result)=>{{
                             dioxus.close();
