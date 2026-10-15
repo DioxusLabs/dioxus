@@ -391,7 +391,13 @@ impl WebviewInstance {
                 // However, users can customize this to allow/disallow domains/routes/patterns.
                 navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
             })
-            .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
+            .with_asynchronous_custom_protocol(String::from("dioxus"), {
+                let handler = ThreadSafeHandler(request_handler);
+                move |id, request, responder| {
+                    let (_one_at_a_time, handler) = handler.get();
+                    handler(id, request, responder)
+                }
+            });
 
         // Enable https scheme on android, needed for secure context API, like the geolocation API
         #[cfg(target_os = "android")]
@@ -420,9 +426,11 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
+            let handler = ThreadSafeHandler(handler);
             webview = webview.with_custom_protocol(name, move |a, b| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
+                let (_one_at_a_time, handler) = handler.get();
                 handler(a, b)
             });
         }
@@ -431,9 +439,11 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
+            let handler = ThreadSafeHandler(handler);
             webview = webview.with_asynchronous_custom_protocol(name, move |a, b, c| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
+                let (_one_at_a_time, handler) = handler.get();
                 handler(a, b, c)
             });
         }
@@ -665,5 +675,37 @@ impl PendingWebview {
         _ = self.sender.send(cx);
 
         window
+    }
+}
+
+/// A custom protocol handler declared `Send` and `Sync`, which wry requires of every handler.
+/// wry calls the handlers on the main thread, and on Android on the WebView's request threads,
+/// where two requests at once would borrow the asset handlers' `RefCell` together and panic inside
+/// a JNI call. `get` therefore holds a process-wide lock on Android while a handler runs, and none
+/// elsewhere. Handlers are called through `get` so that a closure captures the whole wrapper
+/// rather than its field.
+struct ThreadSafeHandler<F>(F);
+
+// SAFETY: off Android, wry calls the handlers only on the main thread, where their `Rc`s live.
+// On Android this is not sound. wry calls the handlers on the WebView's request threads, while
+// the event loop thread uses the same `Rc`s. The lock in `get` only stops two handlers from
+// running at the same time.
+unsafe impl<F> Send for ThreadSafeHandler<F> {}
+// SAFETY: as for `Send`.
+unsafe impl<F> Sync for ThreadSafeHandler<F> {}
+
+impl<F> ThreadSafeHandler<F> {
+    /// The handler, with the guard that keeps the others waiting while it runs (Android).
+    fn get(&self) -> (impl Sized, &F) {
+        #[cfg(target_os = "android")]
+        let guard = {
+            static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+            ONE_AT_A_TIME
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        #[cfg(not(target_os = "android"))]
+        let guard = ();
+        (guard, &self.0)
     }
 }

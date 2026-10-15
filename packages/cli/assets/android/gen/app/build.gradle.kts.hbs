@@ -71,6 +71,8 @@ dependencies {
     implementation("androidx.webkit:webkit:1.13.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.13.0")
+    // wry's `WryActivity` uses `ProcessLifecycleOwner`
+    implementation("androidx.lifecycle:lifecycle-process:2.11.0")
     {{#each gradle_dependencies}}
     implementation("{{ this }}")
     {{/each}}
