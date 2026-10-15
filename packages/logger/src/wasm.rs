@@ -1,7 +1,7 @@
 // Adapted from tracing-wasm 0.2.1 (https://github.com/storyai/tracing-wasm).
 // Copyright (c) 2020 Story.ai. Used under the MIT license in ../LICENSE-tracing-wasm.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fmt::{self, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{
@@ -42,6 +42,8 @@ thread_local! {
     /// Ids of the spans entered on this thread, with one entry per enter so that
     /// each level of a recursively entered span gets its own mark.
     static ENTERED: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    // Taken out while calling JS so synchronous re-entry uses a separate buffer.
+    static SPAN_BUFFER: Cell<String> = const { Cell::new(String::new()) };
 }
 
 /// Writes events to level-matched console methods and records spans and events in Performance timings.
@@ -123,7 +125,11 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WasmLayer {
             entered.push(id);
             depth
         });
-        mark(&span_mark_name(id, depth));
+        let mut buffer = SPAN_BUFFER.take();
+        buffer.clear();
+        _ = write!(buffer, "t{id:x}.{depth}");
+        mark(&buffer);
+        SPAN_BUFFER.set(buffer);
     }
 
     fn on_exit(&self, id: &Id, ctx: Context<'_, S>) {
@@ -135,25 +141,27 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WasmLayer {
             entered.iter().filter(|span| **span == span_id).count()
         });
         if let Some(span) = ctx.span(id) {
+            let mut buffer = SPAN_BUFFER.take();
+            buffer.clear();
+            _ = write!(buffer, "t{span_id:x}.{depth}");
+            let mark_name_len = buffer.len();
             let meta = span.metadata();
-            let mut name = format!(
+            _ = write!(
+                buffer,
                 "\"{}\" {}",
                 meta.name(),
                 meta.module_path().unwrap_or("...")
             );
             if let Some(recorder) = span.extensions().get::<Recorder>() {
-                _ = write!(name, "{recorder}");
+                _ = write!(buffer, "{recorder}");
             }
-            let mark_name = span_mark_name(span_id, depth);
-            _ = measure(&name, &mark_name);
-            clear_marks(&mark_name);
-            clear_measures(&name);
+            let (mark_name, name) = buffer.split_at(mark_name_len);
+            _ = measure(name, mark_name);
+            clear_marks(mark_name);
+            clear_measures(name);
+            SPAN_BUFFER.set(buffer);
         }
     }
-}
-
-fn span_mark_name(id: u64, depth: usize) -> String {
-    format!("t{id:x}.{depth}")
 }
 
 #[derive(Default)]

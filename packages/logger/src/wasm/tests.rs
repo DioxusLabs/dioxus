@@ -40,10 +40,20 @@ export function start_capture() {
 export function stop_capture() {
     return restore();
 }
+
+export function reenter_on_performance(method, callback) {
+    const original = performance[method];
+    performance[method] = function(...args) {
+        performance[method] = original;
+        callback();
+        return original.apply(performance, args);
+    };
+}
 "#)]
 extern "C" {
     fn start_capture();
     fn stop_capture() -> String;
+    fn reenter_on_performance(method: &str, callback: &JsValue);
 }
 
 fn capture(level: Level, f: impl FnOnce()) -> Value {
@@ -207,4 +217,58 @@ fn measures_each_level_of_a_recursively_entered_span() {
     assert_eq!(measures[0]["start"], marks[1]);
     assert_eq!(measures[1]["start"], marks[0]);
     assert!(measures[1]["duration"].as_f64().unwrap() >= measures[0]["duration"].as_f64().unwrap());
+}
+
+#[wasm_bindgen_test]
+fn reuses_span_buffer_for_marks_and_labels() {
+    let buffer = String::with_capacity(1024);
+    let pointer = buffer.as_ptr();
+    let capacity = buffer.capacity();
+    SPAN_BUFFER.set(buffer);
+    let captured = capture(Level::INFO, || {
+        let long = tracing::info_span!("再利用", user = "世界");
+        let short = tracing::info_span!("short");
+        for span in [&long, &short, &long] {
+            span.in_scope(|| {});
+            let buffer = SPAN_BUFFER.take();
+            assert_eq!(buffer.as_ptr(), pointer);
+            assert_eq!(buffer.capacity(), capacity);
+            SPAN_BUFFER.set(buffer);
+        }
+    });
+    let measures = captured["measures"].as_array().unwrap();
+    assert_eq!(measures.len(), 3);
+    assert_eq!(
+        measures[0]["name"],
+        format!("\"再利用\" {} user=\"世界\"", module_path!())
+    );
+    assert_eq!(measures[1]["name"], format!("\"short\" {}", module_path!()));
+    assert_eq!(measures[2]["name"], measures[0]["name"]);
+}
+
+#[wasm_bindgen_test]
+fn preserves_span_buffer_during_synchronous_js_reentry() {
+    for method in ["mark", "measure", "clearMarks", "clearMeasures"] {
+        let captured = capture(Level::INFO, || {
+            let outer = tracing::info_span!("outer", user = "世界");
+            let inner = tracing::info_span!("inner");
+            let callback = Closure::<dyn FnMut()>::new(move || inner.in_scope(|| {}));
+            reenter_on_performance(method, callback.as_ref());
+            outer.in_scope(|| {});
+        });
+        let marks = captured["marks"].as_array().unwrap();
+        let measures = captured["measures"].as_array().unwrap();
+        assert_eq!(marks.len(), 2);
+        assert_eq!(measures.len(), 2);
+        assert_ne!(marks[0], marks[1]);
+        for entry in measures {
+            assert!(marks.contains(&entry["start"]));
+        }
+        for name in [
+            format!("\"outer\" {} user=\"世界\"", module_path!()),
+            format!("\"inner\" {}", module_path!()),
+        ] {
+            assert!(measures.iter().any(|entry| entry["name"] == name));
+        }
+    }
 }
