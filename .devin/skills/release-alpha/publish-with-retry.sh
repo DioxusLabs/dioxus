@@ -1,6 +1,7 @@
 #!/bin/bash
 # Re-runs `cargo workspaces publish` until every crate is published, waiting out crates.io 429 rate limits.
 # Already-published crates are skipped by cargo-workspaces on each run. Stops on success or any other error.
+# Each run's output is shown as it happens and also saved to "<log prefix><run>.log".
 #
 # Usage: publish-with-retry.sh <repo dir> [log prefix]
 set -u
@@ -11,8 +12,8 @@ cd "$repo" || exit 1
 for run in $(seq 1 60); do
   log="${prefix}${run}.log"
   echo "=== run ${run} starting at $(date -u '+%H:%M:%S UTC')"
-  cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-individual-tags > "$log" 2>&1
-  status=$?
+  cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-individual-tags 2>&1 | tee "$log"
+  status=${PIPESTATUS[0]}
   published=$(grep -c '^info published' "$log")
   if grep -q '429 Too Many Requests' "$log"; then
     retry=$(grep -o 'try again after [A-Za-z]*, [0-9]* [A-Za-z]* [0-9]* [0-9:]* GMT' "$log" | head -1 | sed 's/try again after //')

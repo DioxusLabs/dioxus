@@ -95,7 +95,7 @@ cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-indivi
 ```
 
 - **Rate limits:** crates.io allows a burst of about 30 to 34 updates to existing crates, then about 1 per minute. When it returns `429 Too Many Requests ... try again after <date> GMT`, `cargo-workspaces` stops.
-- **Retrying:** re-run with `publish-with-retry.sh` in this skill's directory. Each re-run skips crates that are already published, waits until the time crates.io gave, and stops on any non-rate-limit error. Run it in the background and report progress as `published N/total`.
+- **Retrying:** re-run with `publish-with-retry.sh` in this skill's directory. Each re-run skips crates that are already published, waits until the time crates.io gave, and stops on any non-rate-limit error. It shows each run's output as it happens and also saves it to `<log prefix><run>.log`. Run it in the background and report progress as `published N/total`.
 - **Timing:** for about 56 crates, expect about 30 minutes in total.
 - **Check the result:** query `https://crates.io/api/v1/crates/<name>/NEW` for every publishable crate. Take the list from `cargo metadata --no-deps` (packages where `publish` is null or non-empty).
 
