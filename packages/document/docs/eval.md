@@ -89,6 +89,19 @@ fn app() -> Element {
 }
 ```
 
+## Head elements and eval ordering
+
+Head elements are not part of the virtual dom. Each target inserts them at a different point, so the visibility of those elements from `eval` differs:
+
+| Target          | Head element semantics                                                                                                                                                     |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web, SSR        | Head elements are rendered into the first HTML byte. Non-async scripts run before the app boots, so evals already see a settled head.                                     |
+| Web, client-only | Head elements are inserted after render. Externally loaded scripts are async ([#3757](https://github.com/DioxusLabs/dioxus/issues/3757)).                                 |
+| Desktop, mobile | Head elements are inserted into the page at runtime. `eval` waits for head insertions that were queued before it, and for inserted scripts and stylesheets to load or fail. |
+| Native          | Head elements are created directly by the renderer. `eval` is unsupported.                                                                                                 |
+
+On desktop and mobile, an eval waits for scripts and stylesheets that were inserted into the head before it. A resource that never loads also holds back later evals, so prefer inline scripts when the code must be available immediately.
+
 ## Interacting with the DOM with Eval
 
 You can also use the `eval` function to execute JavaScript code that reads or modifies the DOM. If you want to interact with the mounted DOM, you need to use `eval` inside the [`use_effect`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) hook which runs after the component has been mounted.
