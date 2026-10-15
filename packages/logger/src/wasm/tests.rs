@@ -192,3 +192,19 @@ fn retains_span_fields_updates_nesting_and_reentry() {
         assert!(entry["duration"].as_f64().unwrap() >= 0.0);
     }
 }
+
+#[wasm_bindgen_test]
+fn measures_each_level_of_a_recursively_entered_span() {
+    let captured = capture(Level::INFO, || {
+        let span = tracing::info_span!("recursive");
+        span.in_scope(|| span.in_scope(|| {}));
+    });
+    let marks = captured["marks"].as_array().unwrap();
+    let measures = captured["measures"].as_array().unwrap();
+    assert_eq!(marks.len(), 2);
+    assert_eq!(measures.len(), 2);
+    assert_ne!(marks[0], marks[1]);
+    assert_eq!(measures[0]["start"], marks[1]);
+    assert_eq!(measures[1]["start"], marks[0]);
+    assert!(measures[1]["duration"].as_f64().unwrap() >= measures[0]["duration"].as_f64().unwrap());
+}

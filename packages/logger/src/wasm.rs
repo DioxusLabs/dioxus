@@ -1,6 +1,7 @@
 // Adapted from tracing-wasm 0.2.1 (https://github.com/storyai/tracing-wasm).
 // Copyright (c) 2020 Story.ai. Used under the MIT license in ../LICENSE-tracing-wasm.
 
+use std::cell::RefCell;
 use std::fmt::{self, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{
@@ -35,6 +36,12 @@ extern "C" {
     fn console_warn(msg: &str);
     #[wasm_bindgen(js_namespace = console, js_name = error)]
     fn console_error(msg: &str);
+}
+
+thread_local! {
+    /// Ids of the spans entered on this thread, with one entry per enter so that
+    /// each level of a recursively entered span gets its own mark.
+    static ENTERED: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Writes events to level-matched console methods and records spans and events in Performance timings.
@@ -110,10 +117,23 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WasmLayer {
     }
 
     fn on_enter(&self, id: &Id, _ctx: Context<'_, S>) {
-        mark(&span_mark_name(id));
+        let id = id.into_u64();
+        let depth = ENTERED.with_borrow_mut(|entered| {
+            let depth = entered.iter().filter(|span| **span == id).count();
+            entered.push(id);
+            depth
+        });
+        mark(&span_mark_name(id, depth));
     }
 
     fn on_exit(&self, id: &Id, ctx: Context<'_, S>) {
+        let span_id = id.into_u64();
+        let depth = ENTERED.with_borrow_mut(|entered| {
+            if let Some(index) = entered.iter().rposition(|span| *span == span_id) {
+                entered.remove(index);
+            }
+            entered.iter().filter(|span| **span == span_id).count()
+        });
         if let Some(span) = ctx.span(id) {
             let meta = span.metadata();
             let mut name = format!(
@@ -124,7 +144,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WasmLayer {
             if let Some(recorder) = span.extensions().get::<Recorder>() {
                 _ = write!(name, "{recorder}");
             }
-            let mark_name = span_mark_name(id);
+            let mark_name = span_mark_name(span_id, depth);
             _ = measure(&name, &mark_name);
             clear_marks(&mark_name);
             clear_measures(&name);
@@ -132,8 +152,8 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WasmLayer {
     }
 }
 
-fn span_mark_name(id: &Id) -> String {
-    format!("t{:x}", id.into_u64())
+fn span_mark_name(id: u64, depth: usize) -> String {
+    format!("t{id:x}.{depth}")
 }
 
 #[derive(Default)]
