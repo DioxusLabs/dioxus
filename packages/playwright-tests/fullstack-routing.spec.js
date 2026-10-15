@@ -94,3 +94,18 @@ test("click home link from blog", async ({ page }) => {
   const text = await page.textContent("body");
   expect(text).toContain("Home");
 });
+
+// Navigating after a server future resolves should hydrate without errors and then redirect
+test("redirect after suspense", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+
+  await page.goto("http://localhost:8888/redirect-after-suspense");
+
+  await page.waitForURL("http://localhost:8888/blog/2/");
+  await expect(page.locator("body")).toContainText("id: 2");
+  expect(errors).toEqual([]);
+});
