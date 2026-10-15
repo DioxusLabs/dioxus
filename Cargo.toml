@@ -995,6 +995,12 @@ path = "examples/08-apis/eval.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "eval_head_ordering"
+required-features = ["desktop"]
+path = "examples/08-apis/eval_head_ordering.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "shortcut"
 required-features = ["desktop"]
 path = "examples/08-apis/shortcut.rs"
