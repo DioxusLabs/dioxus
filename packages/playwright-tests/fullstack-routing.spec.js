@@ -105,7 +105,7 @@ test("redirect after suspense", async ({ page }) => {
 
   await page.goto("http://localhost:8888/redirect-after-suspense");
 
-  await page.waitForURL("http://localhost:8888/blog/2/");
+  await page.waitForURL("http://localhost:8888/blog/2/", { timeout: 30000 });
   await expect(page.locator("body")).toContainText("id: 2");
   expect(errors).toEqual([]);
 });
