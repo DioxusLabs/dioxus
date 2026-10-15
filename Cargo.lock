@@ -3883,10 +3883,11 @@ version = "0.8.0-alpha.1"
 dependencies = [
  "dioxus",
  "dioxus-cli-config",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
- "tracing-wasm",
  "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
