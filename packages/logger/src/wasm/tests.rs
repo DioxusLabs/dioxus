@@ -135,11 +135,13 @@ fn formats_explicit_messages_and_message_less_events() {
         tracing::info!(count = 3, message = "explicit", empty = "");
         tracing::info!(r#type = "example", ratio = 1.5);
         tracing::info!(message = %"display", percent = "100%c");
+        tracing::info!("literal %c %s %d %o %O %f %%");
     });
     for (i, suffix) in [
         " explicit count=3 empty=\"\"",
         " type=\"example\" ratio=1.5",
         " display percent=\"100%c\"",
+        " literal %c %s %d %o %O %f %%",
     ]
     .into_iter()
     .enumerate()
