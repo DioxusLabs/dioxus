@@ -122,7 +122,6 @@ wasm-bindgen-test = { workspace = true }
 dioxus-ssr = { workspace = true, default-features = false }
 gloo-dialogs = { workspace = true }
 dioxus-web = { path = ".", features = ["hydrate"] }
-tracing-wasm = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

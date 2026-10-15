@@ -21,10 +21,14 @@ tracing-subscriber = { workspace = true, features = ["registry", "std", "env-fil
 default = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tracing-wasm = { workspace = true }
+wasm-bindgen = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+serde_json = { workspace = true }
+wasm-bindgen-test = { workspace = true }
