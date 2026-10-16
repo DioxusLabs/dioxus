@@ -2,7 +2,7 @@
 use crate::NodeId;
 use crate::events::{
     BlitzKeyboardData, NativeConverter, NativeFocusData, NativeFormData, NativePointerData,
-    NativeScrollData, NativeTouchData, NativeWheelData, NodeHandle,
+    NativeScrollData, NativeTouchData, NativeWheelData, NodeHandle, PendingFocus, apply_focus,
 };
 use crate::mutation_writer::DioxusState;
 use crate::qual_name;
@@ -68,6 +68,7 @@ pub struct DioxusDocument {
     pub inner: Rc<RefCell<BaseDocument>>,
     pub vdom: VirtualDom,
     pub vdom_state: DioxusState,
+    pending_focus: PendingFocus,
 
     #[allow(unused)]
     pub(crate) html_element_id: NodeId,
@@ -134,6 +135,7 @@ impl DioxusDocument {
         Self {
             vdom,
             vdom_state,
+            pending_focus: PendingFocus::default(),
             inner: Rc::new(RefCell::new(doc)),
             html_element_id,
             head_element_id,
@@ -180,7 +182,22 @@ impl DioxusDocument {
         }
     }
 
+    /// Applies focus changes which were requested while the document was borrowed.
+    fn apply_pending_focus(&mut self) {
+        let pending = mem::take(&mut *self.pending_focus.borrow_mut());
+        if pending.is_empty() {
+            return;
+        }
+        let mut doc = self.inner.borrow_mut();
+        for (node_id, focus) in pending {
+            if doc.get_node(node_id).is_some() {
+                apply_focus(&mut doc, node_id, focus);
+            }
+        }
+    }
+
     pub(crate) fn flush_queued_mounted_events(&mut self) {
+        self.apply_pending_focus();
         let mut queued_mounted_events = mem::take(&mut self.vdom_state.queued_mounted_events);
         for element_id in queued_mounted_events.drain(..) {
             let node_id = self.vdom_state.element_to_node_id(element_id);
@@ -189,6 +206,7 @@ impl DioxusDocument {
                 let event = Event::new(
                     Rc::new(PlatformEventData::new(Box::new(NodeHandle {
                         doc: Rc::clone(&self.inner),
+                        pending_focus: Rc::clone(&self.pending_focus),
                         node_id,
                     }))) as Rc<dyn Any>,
                     false,

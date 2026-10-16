@@ -142,10 +142,28 @@ impl HtmlEventConverter for NativeConverter {
     }
 }
 
+/// Focus changes requested through [`NodeHandle::set_focus`] while the document was borrowed.
+///
+/// These are applied by [`crate::DioxusDocument`] once the borrow is released.
+pub(crate) type PendingFocus = Rc<RefCell<Vec<(NodeId, bool)>>>;
+
 #[derive(Clone)]
 pub struct NodeHandle {
     pub(crate) doc: Rc<RefCell<BaseDocument>>,
+    pub(crate) pending_focus: PendingFocus,
     pub(crate) node_id: NodeId,
+}
+
+/// Sets or clears the focus of `node_id` in `doc`.
+pub(crate) fn apply_focus(doc: &mut BaseDocument, node_id: NodeId, focus: bool) {
+    if focus {
+        // TODO: queue focus events somehow
+        doc.set_focus_to(node_id);
+    } else if doc.get_focussed_node_id() == Some(node_id) {
+        // Q: Should this only clear focus if the node is focussed?
+        // TODO: queue blur events somehow
+        doc.clear_focus();
+    }
 }
 
 impl NodeHandle {
@@ -297,14 +315,11 @@ impl RenderedElementBacking for NodeHandle {
     }
 
     fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        let mut doc = self.doc_mut();
-        if focus {
-            // TODO: queue focus events somehow
-            doc.set_focus_to(self.node_id);
-        } else if doc.get_focussed_node_id() == Some(self.node_id) {
-            // Q: Should this only clear focus if the node is focussed?
-            // TODO: queue blur events somehow
-            doc.clear_focus();
+        // The document is mutably borrowed while the VirtualDom runs tasks, which is when this is
+        // typically called, so defer the change if it cannot be applied right now.
+        match self.doc.try_borrow_mut() {
+            Ok(mut doc) => apply_focus(&mut doc, self.node_id, focus),
+            Err(_) => self.pending_focus.borrow_mut().push((self.node_id, focus)),
         }
 
         Box::pin(async { Ok(()) })
