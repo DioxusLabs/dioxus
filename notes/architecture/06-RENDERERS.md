@@ -97,6 +97,9 @@ Implements WriteMutations for wry-based rendering:
 - Delegates to `WryQueue` managing mutation batch
 - WebSocket server on random port for mutation transmission
 - Binary protocol via Sledgehammer interpreter
+- Each served page is numbered. It reports `initialize` with its number and opens the socket when the host answers, and the host ignores a page a newer one is replacing
+- A later `initialize` from the same webview is a reloaded page, such as the one Android loads into a recreated activity. The queue moves to a fresh socket id and the window is redrawn with `VirtualDom::remount_render_target`, keeping component state
+- On macOS and iOS a terminated web content process leaves the page blank, since wry's navigation delegate claims the termination and WebKit skips its own reload. The host loads the index again, following WebKit's crash-loop policy, and the new page is redrawn the same way
 
 ### IPC (Interprocess Communication)
 ```
