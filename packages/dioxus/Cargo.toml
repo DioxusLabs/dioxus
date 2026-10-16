@@ -12,7 +12,7 @@ rust-version = "1.85.0"
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-config-macros = { workspace = true }
+dioxus-config-macros = { workspace = true, optional = true }
 dioxus-html = { workspace = true, optional = true }
 dioxus-document = { workspace = true, optional = true }
 dioxus-history = { workspace = true, optional = true }
@@ -63,7 +63,8 @@ lib = [
 # The minimal set of features required to use dioxus renderers for minimal binary size
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals", "dep:dioxus-stores"]
-macro = ["dep:dioxus-core-macro"]
+macro = ["dep:dioxus-core-macro", "config-macros"]
+config-macros = ["dep:dioxus-config-macros"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
@@ -74,12 +75,13 @@ logger = ["dep:dioxus-logger"]
 cli-config = ["dep:dioxus-cli-config"]
 warnings = ["dep:warnings"]
 wasm-split = [
+  "config-macros",
   "dep:wasm-splitter",
   "dioxus-config-macros/wasm-split",
 ] # note: to turn on the router splitter, you need to manually enable wasm-split on the router
 
 launch = ["dep:dioxus-config-macro"]
-router = ["dep:dioxus-router"]
+router = ["dep:dioxus-router", "config-macros"]
 
 # Platforms
 fullstack = [
