@@ -488,7 +488,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
 form_urlencoded = { workspace = true }
-async-std = "1.13.1"
+futures-timer = { version = "3.0.4", features = ["wasm-bindgen"] }
 web-time = "1.1.0"
 anyhow = { workspace = true }
 thiserror = { workspace = true }
