@@ -1,5 +1,7 @@
 //! Integration between Dioxus and Blitz
-use crate::{NodeId, qual_name, trace, write_once_attr::WriteOnceAttr};
+use crate::{
+    NodeId, mutation_buffer::MutationBuffer, qual_name, trace, write_once_attr::WriteOnceAttr,
+};
 use blitz_dom::{BaseDocument, Document, DocumentMutator, Widget};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{BorrowedAttributeValue, ElementId, WriteMutations};
@@ -241,6 +243,8 @@ pub struct DioxusState {
     pub(crate) event_handler_counts: [u32; 64],
     /// Mounted events queued as elements are mounted
     pub(crate) queued_mounted_events: Vec<ElementId>,
+    /// Mutations written by the VirtualDom which have not yet been applied to the document
+    pub(crate) buffered_mutations: MutationBuffer,
 }
 
 impl DioxusState {
@@ -250,6 +254,7 @@ impl DioxusState {
             stack: StackState::new(root_id),
             event_handler_counts: [0; 64],
             queued_mounted_events: Vec::new(),
+            buffered_mutations: MutationBuffer::default(),
         }
     }
 
@@ -263,22 +268,24 @@ impl DioxusState {
         self.stack.element_to_node(element_id)
     }
 
-    /// Build a writer that applies dioxus mutations to `doc`, driving the blitz
-    /// backend from the local stack machine.
-    pub(crate) fn writer<'a>(&'a mut self, doc: &'a mut BaseDocument) -> MutationWriter<'a> {
+    /// Apply the buffered dioxus mutations to `doc`, driving the blitz backend
+    /// from the local stack machine.
+    pub(crate) fn apply_buffered_mutations(&mut self, doc: &mut BaseDocument) {
         let Self {
             stack,
             event_handler_counts,
             queued_mounted_events,
+            buffered_mutations,
         } = self;
-        StackWriter::new(
+        let mut writer: MutationWriter<'_> = StackWriter::new(
             stack,
             BlitzBackend {
                 docm: doc.mutate(),
                 event_handler_counts,
                 queued_mounted_events,
             },
-        )
+        );
+        buffered_mutations.replay(&mut writer);
     }
 }
 
