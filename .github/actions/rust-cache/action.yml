@@ -21,7 +21,7 @@ runs:
         # warpbuild's bundled `@actions/glob` matches no paths on Windows (Swatinem/rust-cache#355
         # fixed only the GitHub provider), so Windows caches go to GitHub's cache service instead.
         cache-provider: ${{ runner.os == 'Windows' && 'github' || 'warpbuild' }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        save-if: ${{ github.ref == 'refs/heads/main' || runner.os == 'Windows' }}
     - uses: ./.github/actions/prune-cargo-target
       with:
         target-dir: ${{ inputs.workspaces }}/target
