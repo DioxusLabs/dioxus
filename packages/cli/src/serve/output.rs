@@ -654,7 +654,8 @@ impl Output {
                 }))
                 .unfilled_style(Style::default().fg(Color::DarkGray))
                 .label(label.gray())
-                .line_set(symbols::line::THICK)
+                .filled_symbol(symbols::line::THICK.horizontal)
+                .unfilled_symbol(symbols::line::THICK.horizontal)
                 .ratio(if !failed { value } else { 1.0 }),
             gauge_row,
         );
@@ -749,7 +750,7 @@ impl Output {
             None => "no server address".dark_gray(),
         };
 
-        frame.render_widget_ref(
+        frame.render_widget(
             Paragraph::new(Line::from(vec!["Address:  ".gray(), address])),
             serve_address,
         );
