@@ -558,6 +558,18 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     pub fn __point_to(&mut self, other: &Self) {
         self.callback.point_to(other.callback).unwrap();
     }
+
+    /// This should only be used by the `rsx!` macro.
+    ///
+    /// A new handle to the same function, owned by the current owner, so it
+    /// lives as long as that owner instead of the owner of `self`.
+    pub fn __reference_in_current_owner(&self) -> Self {
+        let owner = crate::innerlude::current_owner::<generational_box::UnsyncStorage>();
+        Self {
+            callback: owner.insert_reference(self.callback).unwrap(),
+            origin: self.origin,
+        }
+    }
 }
 
 impl<Args: 'static, Ret: 'static> std::ops::Deref for Callback<Args, Ret> {

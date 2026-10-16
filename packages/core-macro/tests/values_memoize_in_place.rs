@@ -251,14 +251,48 @@ async fn optional_event_handler_diff() {
             }
         };
 
-        // Diffing from None to Some should be different and copy the callback
+        // Diffing from None to Some should be different and copy the callback,
+        // which still runs once the props it came from are dropped
         let mut props = none_props();
         assert!(!props.memoize(&some_props()));
-        assert!(props.inner.callback.is_some());
+        let callback = props.inner.callback.expect("the callback was copied");
+        callback.call(());
 
         // Diffing from Some to None should be different and remove the callback
         let mut props = some_props();
         assert!(!props.memoize(&none_props()));
         assert!(props.inner.callback.is_none());
     });
+}
+
+// An optional event handler that a rerender adds to a mounted component is
+// moved into the component's props. It has to stay alive after the props it
+// came from are dropped, or the next diff panics on the dropped handler.
+#[test]
+fn optional_event_handler_added_on_rerender_survives() {
+    #[component]
+    fn MaybeClickable(onclick: Option<EventHandler>) -> Element {
+        rsx! {
+            button { onclick: move |_| if let Some(onclick) = onclick { onclick(()) } }
+        }
+    }
+
+    fn app() -> Element {
+        if generation() < 3 {
+            needs_update();
+        }
+        // The same component in the same place, without a handler on the
+        // first render and with one after.
+        if generation() == 0 {
+            rsx! { MaybeClickable {} }
+        } else {
+            rsx! { MaybeClickable { onclick: move |_| {} } }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild_in_place();
+    for _ in 0..3 {
+        dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    }
 }
