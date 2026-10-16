@@ -33,6 +33,63 @@ Dioxus-LiveView exports some primitives to wire up an app into an existing backe
 - An adapter for transforming various socket types into the `LiveViewSocket` type
 - The glue to load the interpreter into your app
 
+## File uploads
+
+LiveView uploads the contents when the file is first read with `read_bytes()`, `read_string()`, or `byte_stream()`; accessing its metadata does not start an upload.
+
+```rust
+use dioxus_html::{FormData, FormValue};
+
+#[derive(serde::Deserialize)]
+struct Fields {
+    description: String,
+}
+
+async fn submit(form: &FormData) -> Result<(), dioxus_core::CapturedError> {
+    let fields: Fields = form.deserialize_values()?;
+    if let Some(FormValue::File(Some(file))) = form.get_first("upload") {
+        let contents = file.read_bytes().await?;
+        println!("{}: {} bytes for {}", file.name(), contents.len(), fields.description);
+    }
+    Ok(())
+}
+```
+
+`FormData::deserialize_values()` can deserialize file metadata as
+`SerializedFileData` or `Option<SerializedFileData>`. Retrieve the `FileData` handle
+separately with `get_first()`, `get()`, or `files()` when you need to read its contents.
+
+The default LiveView router configures uploads automatically. If you build a custom
+Axum router, enable the `axum` feature and mount `axum_file_upload` at the WebSocket
+path followed by `/upload/{token}`. Use the same `LiveViewPool` for the WebSocket and
+upload handlers:
+
+```rust
+# #[cfg(feature = "axum")]
+# {
+use dioxus_liveview::LiveViewPool;
+
+let view = LiveViewPool::new();
+let router: axum::Router = axum::Router::new().route(
+    "/ws/upload/{token}",
+    dioxus_liveview::axum_file_upload(view.clone()),
+);
+# }
+```
+
+Uploads default to 1 GiB and 1024 files per connection with a five-minute upload
+timeout. Configure different limits before cloning the pool:
+
+```rust
+use dioxus_liveview::LiveViewPool;
+use std::time::Duration;
+
+let view = LiveViewPool::new()
+    .with_upload_storage_limit(256 * 1024 * 1024)
+    .with_upload_file_limit(100)
+    .with_upload_timeout(Duration::from_secs(60));
+```
+
 ## Contributing
 
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).

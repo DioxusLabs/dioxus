@@ -3535,6 +3535,7 @@ dependencies = [
  "slab",
  "subtle",
  "tao",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -3854,6 +3855,7 @@ name = "dioxus-liveview"
 version = "0.8.0-alpha.2"
 dependencies = [
  "axum 0.8.9",
+ "bytes",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
@@ -3869,12 +3871,15 @@ dependencies = [
  "serde",
  "serde_json",
  "slab",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
  "tokio-util",
  "tower 0.5.3",
+ "tower-http",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -4021,7 +4026,9 @@ dependencies = [
  "axum 0.8.9",
  "dioxus",
  "dioxus-liveview",
+ "futures-util",
  "tokio",
+ "tower-http",
 ]
 
 [[package]]

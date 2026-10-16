@@ -22,6 +22,9 @@ tokio-stream = { workspace = true, features = ["net"] }
 tokio-util = { workspace = true, features = ["rt"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+bytes = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-document = { workspace = true }
 dioxus-history = { workspace = true }
@@ -36,9 +39,10 @@ generational-box = { workspace = true }
 axum = { workspace = true, optional = true, default-features = true, features = ["ws"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full", "test-util"] }
 axum = { workspace = true, features = ["ws"] }
 tower = { workspace = true }
+tower-http = { workspace = true, features = ["cors"] }
 dioxus = { workspace = true }
 
 [features]

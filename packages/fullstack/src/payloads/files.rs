@@ -206,8 +206,6 @@ impl<S> FromRequest<S> for FileStream {
         _: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
         async move {
-            tracing::info!("Extracting FileUpload from request: {:?}", req);
-
             let disposition = req.headers().get("Content-Disposition");
             let filename = match disposition.map(|s| s.to_str()) {
                 Some(Ok(dis)) => {
