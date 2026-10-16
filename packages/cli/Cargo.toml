@@ -87,6 +87,9 @@ cargo-generate = "=0.25.0"
 # cargo-generate pulls in liquid -> kstring. kstring 2.0.3 raised its
 # rust-version to 1.96, above the toolchain the workspace builds with.
 kstring = "=2.0.2"
+# cargo-generate also pulls in cargo-util-schemas. 0.14.2 raised its rust-version
+# to 1.96, above the toolchain the workspace builds with.
+cargo-util-schemas = "=0.14.1"
 toml_edit = "0.25.11"
 
 # formatting
