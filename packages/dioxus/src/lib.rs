@@ -190,7 +190,7 @@ pub mod prelude {
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(inline)]
-    pub use dioxus_html::{Code, Key, Location, Modifiers};
+    pub use dioxus_html::{Code, Key, Location, Modifiers, NamedKey};
 
     // Element associated-const traits (`html::div`, `html::main`, …) come from the single
     // generated `prelude` module, not from flattening every per-element module into scope.

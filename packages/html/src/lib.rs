@@ -106,7 +106,7 @@ pub use crate::point_interaction::*;
 pub use attribute_groups::*;
 pub use elements::*;
 pub use events::*;
-pub use keyboard_types::{self, Code, Key, Location, Modifiers};
+pub use keyboard_types::{self, Code, Key, Location, Modifiers, NamedKey};
 
 pub mod traits {
     pub use crate::events::*;

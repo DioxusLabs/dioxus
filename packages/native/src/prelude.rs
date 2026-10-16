@@ -11,7 +11,7 @@ pub use dioxus_core_macro::{Props, component, rsx};
 // The element-vocabulary root: `html::div`, `html::main`, etc. resolve as associated
 // consts on this type.
 pub use dioxus_html::{self, html};
-pub use dioxus_html::{Code, Key, Location, Modifiers};
+pub use dioxus_html::{Code, Key, Location, Modifiers, NamedKey};
 pub use dioxus_html::{
     GlobalAttributesExtension, SvgAttributesExtension, elements::prelude::*, events::*,
     extensions::*, keyboard_types, traits::*,

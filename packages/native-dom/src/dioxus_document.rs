@@ -7,8 +7,8 @@ use crate::events::{
 use crate::mutation_writer::DioxusState;
 use crate::qual_name;
 use blitz_dom::{
-    Attribute, BaseDocument, DEFAULT_CSS, DocGuard, DocGuardMut, Document, DocumentConfig,
-    EventDriver, EventHandler, Node,
+    Attribute, BaseDocument, DocGuard, DocGuardMut, Document, DocumentConfig, EventDriver,
+    EventHandler, Node,
 };
 use blitz_traits::events::{DomEvent, DomEventData, EventState, UiEvent};
 use dioxus_core::{ElementId, Event, VirtualDom};
@@ -91,9 +91,6 @@ impl DioxusDocument {
                 .unwrap_or_else(|| String::from("dioxus://index.html")),
         );
         let mut doc = BaseDocument::new(config);
-
-        // Include default stylesheet
-        doc.add_user_agent_stylesheet(DEFAULT_CSS);
 
         // Create some minimal HTML to render the app into.
         // HTML is equivalent to:
