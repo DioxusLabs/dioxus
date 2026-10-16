@@ -291,7 +291,7 @@ uuid = "1.17.0"
 convert_case = "0.8.0"
 tungstenite = { version = "0.29.0" }
 tokio-tungstenite = { version = "0.29.0", default-features = false }
-gloo-timers = "0.3.0"
+gloo-timers = "0.4.0"
 internment = { version = "0.8.6" }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
 env_logger = "0.11.8"
@@ -488,7 +488,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
 form_urlencoded = { workspace = true }
-async-std = "1.13.1"
+futures-timer = { version = "3.0.4", features = ["wasm-bindgen"] }
 web-time = "1.1.0"
 anyhow = { workspace = true }
 thiserror = { workspace = true }

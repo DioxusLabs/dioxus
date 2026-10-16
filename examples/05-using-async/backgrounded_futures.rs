@@ -7,8 +7,8 @@
 //!
 //! This example is more of a demonstration of the behavior than a practical use case, but it's still interesting to see.
 
-use async_std::task::sleep;
 use dioxus::prelude::*;
+use futures_timer::Delay;
 
 fn main() {
     dioxus::launch(app);
@@ -49,7 +49,7 @@ fn Child(count: WriteSignal<i32>) -> Element {
 
     use_future(move || async move {
         loop {
-            sleep(std::time::Duration::from_millis(100)).await;
+            Delay::new(std::time::Duration::from_millis(100)).await;
             println!("Child")
         }
     });
