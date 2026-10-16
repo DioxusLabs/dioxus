@@ -76,7 +76,7 @@ dunce = { workspace = true }
 dirs = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls-no-provider", "json", "blocking"] }
 tower = { workspace = true }
-git2 = { version = "0.21.0" }
+git2 = { version = "0.21.0", features = ["https"] }
 
 # path lookup
 which = { version = "8.0.0" }
@@ -178,6 +178,11 @@ clap_complete = { version = "4.5.65", features = ["unstable-dynamic"] }
 
 [target.'cfg(target_env = "musl")'.dependencies]
 git2 = { version = "0.21.0", features = ["vendored-libgit2"] }
+
+# libgit2 uses Secure Transport for HTTPS on macOS, but `https` still links openssl-sys there.
+# Vendoring it keeps release binaries from depending on a Homebrew OpenSSL dylib.
+[target.'cfg(target_os = "macos")'.dependencies]
+git2 = { version = "0.21.0", features = ["vendored-openssl"] }
 
 [features]
 default = []

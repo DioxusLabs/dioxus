@@ -365,7 +365,7 @@ impl RemoteComponentRegistry {
 
             // Make sure the parent directory exists
             tokio::fs::create_dir_all(&repo_dir).await?;
-            tokio::task::spawn_blocking({
+            let cloned = tokio::task::spawn_blocking({
                 let git = git.clone();
                 let repo_dir = repo_dir.clone();
                 move || {
@@ -382,7 +382,13 @@ impl RemoteComponentRegistry {
                     anyhow::Ok(())
                 }
             })
-            .await??;
+            .await?;
+
+            // Don't leave a partial clone behind, or later runs would skip cloning and use it
+            if let Err(err) = cloned {
+                _ = tokio::fs::remove_dir_all(&repo_dir).await;
+                return Err(err);
+            }
         }
 
         Ok(repo_dir)
@@ -424,19 +430,30 @@ impl RemoteComponentRegistry {
     }
 
     /// If a git url is provided use that (plus optional rev)
-    /// Otherwise use the built-in registry
+    /// Otherwise use the built-in registry, on the branch matching this CLI's minor version
     fn resolve_or_default(&self) -> (String, Option<String>) {
         if let Some(git) = &self.git {
             (git.clone(), self.rev.clone())
         } else {
-            ("https://github.com/dioxuslabs/components".into(), None)
+            let rev = self.rev.clone().unwrap_or_else(|| {
+                concat!(
+                    env!("CARGO_PKG_VERSION_MAJOR"),
+                    ".",
+                    env!("CARGO_PKG_VERSION_MINOR")
+                )
+                .to_string()
+            });
+            ("https://github.com/dioxuslabs/components".into(), Some(rev))
         }
     }
 
     /// Checkout the given rev in the given repo
     fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
+        // A fresh clone only has a local branch for the remote's HEAD, so fall back to the
+        // remote-tracking branch for other branch names.
         let (object, reference) = repo
             .revparse_ext(rev)
+            .or_else(|_| repo.revparse_ext(&format!("origin/{rev}")))
             .with_context(|| format!("Failed to find revision '{}' in '{}'", rev, git))?;
         repo.checkout_tree(&object, None)?;
 
@@ -841,4 +858,62 @@ async fn copy_global_assets(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn commit_file(repo: &Repository, branch: &str, contents: &str) {
+        let workdir = repo.workdir().unwrap();
+        std::fs::write(workdir.join("component.txt"), contents).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("component.txt")).unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let signature = git2::Signature::now("test", "test@example.com").unwrap();
+        let parent = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
+        let parents: Vec<_> = parent.iter().collect();
+        let commit = repo
+            .commit(None, &signature, &signature, contents, &tree, &parents)
+            .unwrap();
+        repo.branch(branch, &repo.find_commit(commit).unwrap(), true)
+            .unwrap();
+        repo.set_head(&format!("refs/heads/{branch}")).unwrap();
+    }
+
+    #[test]
+    fn default_registry_uses_the_branch_for_this_cli_version() {
+        let (git, rev) = RemoteComponentRegistry::default().resolve_or_default();
+        assert_eq!(git, "https://github.com/dioxuslabs/components");
+        let version = env!("CARGO_PKG_VERSION");
+        let major_minor = version.splitn(3, '.').take(2).collect::<Vec<_>>().join(".");
+        assert_eq!(rev.as_deref(), Some(major_minor.as_str()));
+    }
+
+    #[test]
+    fn default_registry_respects_an_explicit_rev() {
+        let registry = RemoteComponentRegistry {
+            git: None,
+            rev: Some("main".to_string()),
+        };
+        assert_eq!(registry.resolve_or_default().1.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn checkout_rev_finds_a_remote_branch_in_a_fresh_clone() {
+        let dir = tempfile::tempdir().unwrap();
+        let origin = Repository::init(dir.path().join("origin")).unwrap();
+        commit_file(&origin, "main", "main");
+        commit_file(&origin, "0.8", "0.8");
+        origin.set_head("refs/heads/main").unwrap();
+
+        let origin_url = dir.path().join("origin").display().to_string();
+        let clone = Repository::clone(&origin_url, dir.path().join("clone")).unwrap();
+        assert!(clone.find_branch("0.8", git2::BranchType::Local).is_err());
+
+        RemoteComponentRegistry::checkout_rev(&clone, &origin_url, "0.8").unwrap();
+        let contents = std::fs::read_to_string(dir.path().join("clone/component.txt")).unwrap();
+        assert_eq!(contents, "0.8");
+    }
 }
