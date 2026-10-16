@@ -371,21 +371,20 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
-            // SAFETY: only moved into the protocol handler passed to wry below
-            let handler = unsafe {
-                ProtocolHandler::new(move |request, responder: RequestAsyncResponder| {
-                    protocol::desktop_handler(
-                        request,
-                        asset_handlers.clone(),
-                        responder,
-                        &edits,
-                        custom_head.clone(),
-                        custom_index.clone(),
-                        &root_name,
-                        headless,
-                    )
-                })
+            let handler = move |request, responder: RequestAsyncResponder| {
+                protocol::desktop_handler(
+                    request,
+                    asset_handlers.clone(),
+                    responder,
+                    &edits,
+                    custom_head.clone(),
+                    custom_index.clone(),
+                    &root_name,
+                    headless,
+                )
             };
+            // SAFETY: only moved into the protocol handler passed to wry below
+            let handler = unsafe { ProtocolHandler::new(handler) };
 
             move |_id: WebViewId, request, responder: RequestAsyncResponder| {
                 #[cfg(feature = "tokio_runtime")]
