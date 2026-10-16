@@ -1,6 +1,6 @@
 //! Buffering of Dioxus mutations so that they can be applied after the VirtualDom has run
-use dioxus_core::{AttributeValue, ElementId, WriteMutations};
-use std::mem;
+use dioxus_core::{AnyValue, BorrowedAttributeValue, ElementId, WriteMutations};
+use std::rc::Rc;
 
 /// A span of [`MutationBuffer::strings`]
 #[derive(Clone, Copy, Debug)]
@@ -11,8 +11,11 @@ struct StrSpan {
 
 enum BufferedAttributeValue {
     Text(StrSpan),
-    /// Any other kind of value. These are cheap to clone.
-    Other(AttributeValue),
+    Float(f64),
+    Int(i64),
+    Bool(bool),
+    Any(Rc<dyn AnyValue>),
+    None,
 }
 
 enum BufferedMutation {
@@ -50,8 +53,6 @@ pub(crate) struct MutationBuffer {
     mutations: Vec<BufferedMutation>,
     /// The concatenated string arguments of `mutations`
     strings: String,
-    /// Reused to pass text attribute values to the writer as an `AttributeValue`
-    text_value: String,
 }
 
 impl std::fmt::Debug for MutationBuffer {
@@ -94,19 +95,19 @@ impl MutationBuffer {
                 BufferedMutation::InsertAfter(m) => to.insert_after(m),
                 BufferedMutation::InsertBefore(m) => to.insert_before(m),
                 BufferedMutation::SetAttribute { name, ns, value } => {
-                    let value = match value {
+                    let value = match &value {
                         BufferedAttributeValue::Text(value) => {
-                            let mut text = mem::take(&mut self.text_value);
-                            text.clear();
-                            text.push_str(str(value));
-                            AttributeValue::Text(text)
+                            BorrowedAttributeValue::Text(str(*value))
                         }
-                        BufferedAttributeValue::Other(value) => value,
+                        BufferedAttributeValue::Float(value) => {
+                            BorrowedAttributeValue::Float(*value)
+                        }
+                        BufferedAttributeValue::Int(value) => BorrowedAttributeValue::Int(*value),
+                        BufferedAttributeValue::Bool(value) => BorrowedAttributeValue::Bool(*value),
+                        BufferedAttributeValue::Any(value) => BorrowedAttributeValue::Any(value),
+                        BufferedAttributeValue::None => BorrowedAttributeValue::None,
                     };
-                    to.set_attribute(str(name), ns.map(str), &value);
-                    if let AttributeValue::Text(text) = value {
-                        self.text_value = text;
-                    }
+                    to.set_attribute(str(name), ns.map(str), value);
                 }
                 BufferedMutation::SetText(value) => to.set_text(str(value)),
                 BufferedMutation::AddEventListener(name) => to.add_event_listener(str(name)),
@@ -168,12 +169,18 @@ impl WriteMutations for MutationBuffer {
         self.mutations.push(BufferedMutation::InsertBefore(m));
     }
 
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: BorrowedAttributeValue<'_>) {
         let name = self.push_str(name);
         let ns = ns.map(|ns| self.push_str(ns));
         let value = match value {
-            AttributeValue::Text(value) => BufferedAttributeValue::Text(self.push_str(value)),
-            other => BufferedAttributeValue::Other(other.clone()),
+            BorrowedAttributeValue::Text(value) => {
+                BufferedAttributeValue::Text(self.push_str(value))
+            }
+            BorrowedAttributeValue::Float(value) => BufferedAttributeValue::Float(value),
+            BorrowedAttributeValue::Int(value) => BufferedAttributeValue::Int(value),
+            BorrowedAttributeValue::Bool(value) => BufferedAttributeValue::Bool(value),
+            BorrowedAttributeValue::Any(value) => BufferedAttributeValue::Any(Rc::clone(value)),
+            BorrowedAttributeValue::None => BufferedAttributeValue::None,
         };
         self.mutations
             .push(BufferedMutation::SetAttribute { name, ns, value });
