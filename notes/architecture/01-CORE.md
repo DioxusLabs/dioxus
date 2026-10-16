@@ -190,6 +190,9 @@ Composite key: `(height: u32, id: ScopeId)` in `BTreeSet` ensures parent scopes 
 - `pop_work()` - Get next dirty scope or task
 - `pop_effect()` - Get next pending effect
 
+### Task Passes
+The synchronous drains (`poll_tasks`, `render_immediate`) poll each task at most `TaskPass::MAX_POLLS_PER_TASK` (32) times per pass. Short chains of immediate wakeups still settle within one call; a task that keeps waking itself past the bound is set aside and queued for the next pass, and `wait_for_work()` yields to the executor between passes, so a task that is always ready cannot keep the executor from running.
+
 ## Runtime
 
 Manages async/scope/task coordination:
