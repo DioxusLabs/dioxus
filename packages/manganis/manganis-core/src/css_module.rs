@@ -92,6 +92,8 @@ impl AssetOptionsBuilder<CssModuleAssetOptions> {
         AssetOptions {
             add_hash: self.add_hash,
             variant: AssetVariant::CssModule(self.variant),
+            fetch_priority: self.fetch_priority,
+            preload_order: self.preload_order,
         }
     }
 }

@@ -230,6 +230,8 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
         AssetOptions {
             add_hash: self.add_hash,
             variant: AssetVariant::Image(self.variant),
+            fetch_priority: self.fetch_priority,
+            preload_order: self.preload_order,
         }
     }
 }
