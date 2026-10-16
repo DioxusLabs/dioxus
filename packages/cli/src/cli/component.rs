@@ -404,7 +404,9 @@ impl RemoteComponentRegistry {
         tokio::task::spawn_blocking({
             let path = path.clone();
             move || {
-                let repo = gix::open(path)?;
+                let mut repo = gix::open(path)?;
+                // Ref updates write reflog entries, which need a committer even if git has none configured
+                repo.committer_or_set_generic_fallback()?;
                 // Fetch all remote branches into their remote-tracking refs
                 repo.find_remote("origin")?
                     .connect(gix::remote::Direction::Fetch)?
