@@ -393,7 +393,7 @@ impl BundleContext<'_> {
             }
         }
 
-        let mut family = icns::IconFamily::new();
+        let mut images = Vec::with_capacity(icon_paths.len());
 
         for icon_path in &icon_paths {
             let ext = icon_path
@@ -411,8 +411,10 @@ impl BundleContext<'_> {
                 .decode()
                 .with_context(|| format!("Failed to decode icon image: {}", icon_path.display()))?;
 
-            add_image_to_family(&mut family, &img)?;
+            images.push(img);
         }
+
+        let family = create_icns_family(&images)?;
 
         if family.is_empty() {
             tracing::warn!("No valid icon images found; skipping .icns generation");
@@ -555,10 +557,9 @@ impl BundleContext<'_> {
     }
 }
 
-/// Add all appropriate size variants of an image to the ICNS family.
-fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Result<()> {
-    // The icon sizes (in points) we generate for the .icns file, along with their
-    // densities. macOS expects both 1x and 2x variants.
+/// Build an `ICNS` family from the closest sufficient source for each slot, or the largest fallback.
+fn create_icns_family(images: &[DynamicImage]) -> Result<icns::IconFamily> {
+    // macOS expects both 1x and 2x variants.
     const ICON_SIZES: &[(u32, u32, u32)] = &[
         (16, 16, 1),
         (16, 16, 2),
@@ -574,6 +575,8 @@ fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Res
         (512, 512, 2),
     ];
 
+    let mut family = icns::IconFamily::new();
+
     for &(width, height, density) in ICON_SIZES {
         let pixel_width = width * density;
         let pixel_height = height * density;
@@ -584,9 +587,19 @@ fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Res
                 None => continue,
             };
 
-        if family.has_icon_with_type(icon_type) {
+        // Rank rectangular images by their shorter side, keeping the first source on ties.
+        let Some(img) = images
+            .iter()
+            .filter(|img| img.width() >= pixel_width && img.height() >= pixel_height)
+            .min_by_key(|img| img.width().min(img.height()))
+            .or_else(|| {
+                images
+                    .iter()
+                    .min_by_key(|img| std::cmp::Reverse(img.width().min(img.height())))
+            })
+        else {
             continue;
-        }
+        };
 
         let resized = img.resize_exact(
             pixel_width,
@@ -594,7 +607,7 @@ fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Res
             image::imageops::FilterType::Lanczos3,
         );
 
-        let rgba = resized.to_rgba8();
+        let rgba = resized.into_rgba8();
         let icns_image = icns::Image::from_data(
             icns::PixelFormat::RGBA,
             pixel_width,
@@ -610,7 +623,7 @@ fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Res
             .with_context(|| format!("Failed to add icon type {icon_type:?} to ICNS family"))?;
     }
 
-    Ok(())
+    Ok(family)
 }
 
 /// Write a plist dictionary to a file.
@@ -977,5 +990,106 @@ impl Drop for TempKeychain {
         let _ = StdCommand::new("security")
             .args(["delete-keychain", &self.path.display().to_string()])
             .status();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{Rgba, RgbaImage};
+
+    fn solid_image(width: u32, height: u32, color: [u8; 4]) -> DynamicImage {
+        DynamicImage::ImageRgba8(RgbaImage::from_pixel(width, height, Rgba(color)))
+    }
+
+    fn rgba_icon(family: &icns::IconFamily, pixel_size: u32, density: u32) -> icns::Image {
+        let icon_type =
+            icns::IconType::from_pixel_size_and_density(pixel_size, pixel_size, density).unwrap();
+        family
+            .get_icon_with_type(icon_type)
+            .unwrap()
+            .convert_to(icns::PixelFormat::RGBA)
+    }
+
+    fn assert_slot_color(family: &icns::IconFamily, pixel_size: u32, density: u32, color: [u8; 4]) {
+        let icon = rgba_icon(family, pixel_size, density);
+        assert!(
+            icon.data().chunks_exact(4).all(|pixel| pixel == color),
+            "incorrect source for {pixel_size}x{pixel_size}@{density}x"
+        );
+    }
+
+    #[test]
+    fn icns_selects_closest_sufficient_source_or_largest_fallback() {
+        let red = [255, 0, 0, 255];
+        let green = [0, 255, 0, 255];
+        let blue = [0, 0, 255, 255];
+        let mut images = [
+            solid_image(32, 32, red),
+            solid_image(128, 128, green),
+            solid_image(256, 256, blue),
+        ];
+        for _ in 0..2 {
+            let family = create_icns_family(&images).unwrap();
+            for (size, density, color) in [
+                (16, 1, red),
+                (32, 2, red),
+                (64, 2, green),
+                (256, 1, blue),
+                (1024, 2, blue),
+            ] {
+                assert_slot_color(&family, size, density, color);
+            }
+            images.reverse();
+        }
+    }
+
+    #[test]
+    fn icns_uses_first_configured_source_on_equal_size_ties() {
+        let red = [255, 0, 0, 255];
+        let green = [0, 255, 0, 255];
+        let mut images = [
+            solid_image(32, 32, [0, 0, 255, 255]),
+            solid_image(128, 128, red),
+            solid_image(128, 128, green),
+        ];
+        for color in [red, green] {
+            let family = create_icns_family(&images).unwrap();
+            assert_slot_color(&family, 128, 1, color);
+            assert_slot_color(&family, 1024, 2, color);
+            images.swap(1, 2);
+        }
+    }
+
+    #[test]
+    fn icns_ranks_rectangular_sources_by_the_shorter_side() {
+        let green = [0, 255, 0, 255];
+        for (width, height) in [(512, 32), (32, 512)] {
+            let images = [
+                solid_image(width, height, [255, 0, 0, 255]),
+                solid_image(128, 128, green),
+            ];
+            let family = create_icns_family(&images).unwrap();
+            assert_slot_color(&family, 128, 1, green);
+            assert_slot_color(&family, 1024, 2, green);
+        }
+    }
+
+    #[test]
+    fn icns_preserves_pixels_of_an_exact_resolution_source() {
+        let pixels = RgbaImage::from_fn(1024, 1024, |x, y| {
+            if (x + y) % 2 == 0 {
+                Rgba([255, 0, 0, 128])
+            } else {
+                Rgba([0, 0, 255, 255])
+            }
+        });
+        let images = [
+            solid_image(32, 32, [0, 255, 0, 255]),
+            DynamicImage::ImageRgba8(pixels),
+        ];
+        let family = create_icns_family(&images).unwrap();
+        let icon = rgba_icon(&family, 1024, 2);
+        assert!(icon.data() == images[1].as_rgba8().unwrap().as_raw());
     }
 }
