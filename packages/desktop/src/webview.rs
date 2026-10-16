@@ -227,23 +227,28 @@ impl WebviewEdits {
     }
 }
 
-/// Marks a custom protocol handler as `Send + Sync`, which wry requires since 0.56.
+/// A custom protocol handler marked as `Send + Sync`, which wry requires since 0.56.
 ///
 /// Our handlers hold `Rc`s and are not thread safe. Wry only calls them on the thread that created
 /// the webview, except on Android where they run on WebView worker threads. Wry used to hold a
 /// mutex around those calls and since 0.56 no longer does, so `with` serializes them itself there.
-struct AssertSendSync<F> {
+struct ProtocolHandler<F> {
     handler: F,
     #[cfg(not(target_os = "android"))]
     created_on: std::thread::ThreadId,
 }
 
-// SAFETY: see the type docs. `with` checks the calling thread in debug builds, or locks on Android.
-unsafe impl<F> Send for AssertSendSync<F> {}
-unsafe impl<F> Sync for AssertSendSync<F> {}
+// SAFETY: upheld by the caller of `new`. `with` checks the calling thread, or locks on Android.
+unsafe impl<F> Send for ProtocolHandler<F> {}
+unsafe impl<F> Sync for ProtocolHandler<F> {}
 
-impl<F> AssertSendSync<F> {
-    fn new(handler: F) -> Self {
+impl<F> ProtocolHandler<F> {
+    /// # Safety
+    ///
+    /// `handler` must only be handed to wry as a custom protocol handler, from the thread that
+    /// creates the webview, and never be called or dropped on another thread except through
+    /// `with`.
+    unsafe fn new(handler: F) -> Self {
         Self {
             handler,
             #[cfg(not(target_os = "android"))]
@@ -253,7 +258,7 @@ impl<F> AssertSendSync<F> {
 
     fn with<R>(&self, f: impl FnOnce(&F) -> R) -> R {
         #[cfg(not(target_os = "android"))]
-        debug_assert_eq!(
+        assert_eq!(
             self.created_on,
             std::thread::current().id(),
             "custom protocol handler called off the thread that created the webview"
@@ -366,18 +371,21 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
-            let handler = AssertSendSync::new(move |request, responder: RequestAsyncResponder| {
-                protocol::desktop_handler(
-                    request,
-                    asset_handlers.clone(),
-                    responder,
-                    &edits,
-                    custom_head.clone(),
-                    custom_index.clone(),
-                    &root_name,
-                    headless,
-                )
-            });
+            // SAFETY: only moved into the protocol handler passed to wry below
+            let handler = unsafe {
+                ProtocolHandler::new(move |request, responder: RequestAsyncResponder| {
+                    protocol::desktop_handler(
+                        request,
+                        asset_handlers.clone(),
+                        responder,
+                        &edits,
+                        custom_head.clone(),
+                        custom_index.clone(),
+                        &root_name,
+                        headless,
+                    )
+                })
+            };
 
             move |_id: WebViewId, request, responder: RequestAsyncResponder| {
                 #[cfg(feature = "tokio_runtime")]
@@ -502,7 +510,8 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
-            let handler = AssertSendSync::new(handler);
+            // SAFETY: only moved into the protocol handler passed to wry below
+            let handler = unsafe { ProtocolHandler::new(handler) };
             webview = webview.with_custom_protocol(name, move |a, b| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
@@ -514,7 +523,8 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
-            let handler = AssertSendSync::new(handler);
+            // SAFETY: only moved into the protocol handler passed to wry below
+            let handler = unsafe { ProtocolHandler::new(handler) };
             webview = webview.with_asynchronous_custom_protocol(name, move |a, b, c| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
