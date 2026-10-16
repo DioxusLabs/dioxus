@@ -72,6 +72,7 @@ impl Init {
             define: self.option,
             destination: Some(self.path),
             init: true,
+            no_workspace: true,
             name: self.name,
             silent: self.yes,
             vcs: self.vcs,

@@ -83,11 +83,8 @@ which = { version = "8.0.0" }
 
 # plugin packages
 open = { workspace = true }
-cargo-generate = "=0.23.10"
-# cargo-generate pulls in rhai, whose 1.24.0 release accepts newer incompatible
-# rhai_codegen releases in fresh `cargo install --path .` resolutions.
-rhai_codegen = "=3.1.0"
-# cargo-generate also pulls in liquid -> kstring. kstring 2.0.3 raised its
+cargo-generate = "=0.25.0"
+# cargo-generate pulls in liquid -> kstring. kstring 2.0.3 raised its
 # rust-version to 1.96, above the toolchain the workspace builds with.
 kstring = "=2.0.2"
 toml_edit = "0.25.11"
@@ -114,7 +111,7 @@ tracing-subscriber = { workspace = true, features = [
     "registry",
     "fmt",
 ] }
-console-subscriber = { version = "0.4.1", optional = true }
+console-subscriber = { version = "0.5.0", optional = true }
 schemars = { workspace = true }
 tracing = { workspace = true }
 ansi-to-tui = { workspace = true }
