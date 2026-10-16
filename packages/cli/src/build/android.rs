@@ -59,7 +59,7 @@
 //! Notice that we *could* feasibly build this ourselves :)
 
 use crate::BuildRequest;
-use crate::{BuildContext, Result};
+use crate::{BuildContext, DioxusConfig, Result};
 use anyhow::{Context, bail};
 use itertools::Itertools;
 use manganis_core::AndroidArtifactMetadata;
@@ -71,6 +71,140 @@ use target_lexicon::{
     Aarch64Architecture, Architecture, ArmArchitecture, Triple, X86_32Architecture,
 };
 use tokio::process::Command;
+
+const ANDROID_MANIFEST_TEMPLATE: &str =
+    include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs");
+
+/// Values the Android project templates are rendered with.
+#[derive(Serialize)]
+struct AndroidHandlebarsObjects<'a> {
+    application_id: String,
+    app_name: String,
+    version: String,
+    android_bundle: Option<&'a crate::AndroidSettings>,
+    /// Android SDK version settings
+    min_sdk: u32,
+    target_sdk: u32,
+    compile_sdk: u32,
+    /// Android permission strings (e.g., "android.permission.CAMERA")
+    permissions: Vec<String>,
+    /// Android hardware features (e.g., "android.hardware.location.gps")
+    features: &'a [String],
+    /// Raw manifest XML to inject
+    raw_manifest: &'a str,
+    /// Raw attributes for the `<application>` element
+    raw_application_attrs: &'a str,
+    /// Raw XML inside the `<application>` element
+    raw_application: &'a str,
+    /// URL schemes for deep linking
+    url_schemes: Vec<String>,
+    /// App link hosts for auto-verified deep links
+    app_link_hosts: Vec<String>,
+    /// Pipe-joined foreground service type string (e.g., "location|mediaPlayback")
+    foreground_service_type: String,
+    /// Extra Gradle dependencies from [android] config
+    gradle_dependencies: &'a [String],
+    /// Extra Gradle plugins from [android] config
+    gradle_plugins: &'a [String],
+    /// Application-level manifest attributes from [android.application]
+    uses_cleartext_traffic: Option<bool>,
+    app_theme: Option<&'a str>,
+    supports_rtl: Option<bool>,
+    large_heap: Option<bool>,
+    /// Native library name (without lib prefix and .so extension)
+    lib_name: String,
+}
+
+impl<'a> AndroidHandlebarsObjects<'a> {
+    fn new(
+        config: &'a DioxusConfig,
+        application_id: String,
+        app_name: String,
+        version: String,
+        lib_name: String,
+    ) -> Self {
+        let android = &config.android;
+        let mapper = crate::ManifestMapper::from_config(
+            &config.permissions,
+            &config.deep_links,
+            &config.background,
+            android,
+            &config.ios,
+            &config.macos,
+        );
+
+        Self {
+            application_id,
+            app_name,
+            version,
+            android_bundle: config.bundle.android.as_ref(),
+            min_sdk: android.min_sdk.unwrap_or(24),
+            target_sdk: android.target_sdk.unwrap_or(34),
+            compile_sdk: android.compile_sdk.unwrap_or(34),
+            permissions: mapper
+                .android_permissions
+                .into_iter()
+                .map(|p| p.permission)
+                .collect(),
+            features: &android.features,
+            raw_manifest: android.raw.manifest.as_deref().unwrap_or_default(),
+            raw_application_attrs: android.raw.application_attrs.as_deref().unwrap_or_default(),
+            raw_application: android.raw.application.as_deref().unwrap_or_default(),
+            foreground_service_type: mapper.android_foreground_service_types.join("|"),
+            url_schemes: mapper.android_url_schemes,
+            app_link_hosts: mapper.android_app_link_hosts,
+            gradle_dependencies: &android.gradle_dependencies,
+            gradle_plugins: &android.gradle_plugins,
+            uses_cleartext_traffic: android.application.uses_cleartext_traffic,
+            app_theme: android.application.theme.as_deref(),
+            supports_rtl: android.application.supports_rtl,
+            large_heap: android.application.large_heap,
+            lib_name,
+        }
+    }
+}
+
+/// Copy each resource into the `res` subdirectory named by its parent, refusing to overwrite.
+fn copy_android_resources(crate_dir: &Path, resources: &[PathBuf], res: &Path) -> Result<()> {
+    for resource in resources {
+        let (Some(kind), Some(name)) = (
+            resource.parent().and_then(Path::file_name),
+            resource.file_name(),
+        ) else {
+            bail!(
+                "Android resource `{}` needs a parent directory such as `xml/`",
+                resource.display()
+            );
+        };
+        let dest = res.join(kind).join(name);
+        if dest.exists() {
+            bail!(
+                "Android resource `{}` collides with a generated resource",
+                resource.display()
+            );
+        }
+        std::fs::create_dir_all(res.join(kind))?;
+        std::fs::copy(crate_dir.join(resource), &dest)
+            .with_context(|| format!("Failed to copy Android resource `{}`", resource.display()))?;
+    }
+    Ok(())
+}
+
+/// Write `manifest` as the debug and release manifests Gradle merges over `src/main`, or remove them.
+fn write_build_type_manifests(app_src: &Path, manifest: Option<&str>) -> Result<()> {
+    for build_type in ["debug", "release"] {
+        let path = app_src.join(build_type).join("AndroidManifest.xml");
+        if let Some(xml) = manifest {
+            std::fs::create_dir_all(app_src.join(build_type))?;
+            std::fs::write(&path, xml)?;
+        } else if let Err(err) = std::fs::remove_file(&path)
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(err.into());
+        }
+    }
+    Ok(())
+}
 
 impl BuildRequest {
     /// Assemble the android app dir.
@@ -114,90 +248,13 @@ impl BuildRequest {
 "#
         );
 
-        // handlebars
-        #[derive(Serialize)]
-        struct AndroidHandlebarsObjects {
-            application_id: String,
-            app_name: String,
-            version: String,
-            android_bundle: Option<crate::AndroidSettings>,
-            /// Android SDK version settings
-            min_sdk: u32,
-            target_sdk: u32,
-            compile_sdk: u32,
-            /// Android permission strings (e.g., "android.permission.CAMERA")
-            permissions: Vec<String>,
-            /// Android hardware features (e.g., "android.hardware.location.gps")
-            features: Vec<String>,
-            /// Raw manifest XML to inject
-            raw_manifest: String,
-            /// URL schemes for deep linking
-            url_schemes: Vec<String>,
-            /// App link hosts for auto-verified deep links
-            app_link_hosts: Vec<String>,
-            /// Pipe-joined foreground service type string (e.g., "location|mediaPlayback")
-            foreground_service_type: String,
-            /// Extra Gradle dependencies from [android] config
-            gradle_dependencies: Vec<String>,
-            /// Extra Gradle plugins from [android] config
-            gradle_plugins: Vec<String>,
-            /// Application-level manifest attributes from [android.application]
-            uses_cleartext_traffic: Option<bool>,
-            app_theme: Option<String>,
-            supports_rtl: Option<bool>,
-            large_heap: Option<bool>,
-            /// Native library name (without lib prefix and .so extension)
-            lib_name: String,
-        }
-
-        // Get permission mapper from config
-        let mapper = crate::ManifestMapper::from_config(
-            &self.config.permissions,
-            &self.config.deep_links,
-            &self.config.background,
-            &self.config.android,
-            &self.config.ios,
-            &self.config.macos,
+        let hbs_data = AndroidHandlebarsObjects::new(
+            &self.config,
+            self.bundle_identifier(),
+            self.bundled_app_name(),
+            self.crate_version(),
+            self.android_lib_name(),
         );
-
-        // Collect Android permissions
-        let permissions: Vec<String> = mapper
-            .android_permissions
-            .iter()
-            .map(|p| p.permission.clone())
-            .collect();
-
-        // Collect Android features from config
-        let features = self.config.android.features.clone();
-
-        // Get raw manifest XML
-        let raw_manifest = self.config.android.raw.manifest.clone().unwrap_or_default();
-
-        // Foreground service types as pipe-separated string
-        let foreground_service_type = mapper.android_foreground_service_types.join("|");
-
-        let hbs_data = AndroidHandlebarsObjects {
-            application_id: self.bundle_identifier(),
-            app_name: self.bundled_app_name(),
-            version: self.crate_version(),
-            android_bundle: self.config.bundle.android.clone(),
-            min_sdk: self.config.android.min_sdk.unwrap_or(24),
-            target_sdk: self.config.android.target_sdk.unwrap_or(34),
-            compile_sdk: self.config.android.compile_sdk.unwrap_or(34),
-            permissions,
-            features,
-            raw_manifest,
-            url_schemes: mapper.android_url_schemes,
-            app_link_hosts: mapper.android_app_link_hosts,
-            foreground_service_type,
-            gradle_dependencies: self.config.android.gradle_dependencies.clone(),
-            gradle_plugins: self.config.android.gradle_plugins.clone(),
-            uses_cleartext_traffic: self.config.android.application.uses_cleartext_traffic,
-            app_theme: self.config.android.application.theme.clone(),
-            supports_rtl: self.config.android.application.supports_rtl,
-            large_heap: self.config.android.application.large_heap,
-            lib_name: self.android_lib_name(),
-        };
         let hbs = handlebars::Handlebars::new();
 
         // Top-level gradle config
@@ -264,16 +321,26 @@ impl BuildRequest {
         let manifest_xml = match self.config.application.android_manifest.as_deref() {
             Some(manifest) => std::fs::read_to_string(self.package_manifest_dir().join(manifest))
                 .context("Failed to locate custom AndroidManifest.xml")?,
-            _ => hbs.render_template(
-                include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
-                &hbs_data,
-            )?,
+            _ => hbs.render_template(ANDROID_MANIFEST_TEMPLATE, &hbs_data)?,
         };
 
         write(
             app.join("src").join("main").join("AndroidManifest.xml"),
             manifest_xml,
         )?;
+
+        let merged_manifest = self
+            .config
+            .android
+            .manifest
+            .as_ref()
+            .map(|manifest| {
+                std::fs::read_to_string(self.package_manifest_dir().join(manifest)).with_context(
+                    || format!("Failed to read `[android] manifest` {}", manifest.display()),
+                )
+            })
+            .transpose()?;
+        write_build_type_manifests(&app.join("src"), merged_manifest.as_deref())?;
 
         // Write the main activity manually since tao dropped support for it
         let main_activity = match self.config.application.android_main_activity.as_deref() {
@@ -291,7 +358,13 @@ impl BuildRequest {
         )?;
 
         // Write the res folder, containing stuff like default icons, colors, and menubars.
+        // Cleared first so resources dropped from `[android] resources` do not linger.
         let res = app_main.join("res");
+        if let Err(err) = std::fs::remove_dir_all(&res)
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(err.into());
+        }
         create_dir_all(&res)?;
         create_dir_all(res.join("values"))?;
         write(
@@ -373,6 +446,12 @@ impl BuildRequest {
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp"
             ),
+        )?;
+
+        copy_android_resources(
+            &self.package_manifest_dir(),
+            &self.config.android.resources,
+            &res,
         )?;
 
         Ok(())
@@ -1383,5 +1462,163 @@ impl AndroidTools {
             .inspect_err(|_| tracing::trace!("{name} not set"))
             .ok()
             .map(PathBuf::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render_manifest(dioxus_toml: &str) -> String {
+        let config: DioxusConfig = toml::from_str(dioxus_toml).unwrap();
+        let data = AndroidHandlebarsObjects::new(
+            &config,
+            "com.example.app".to_string(),
+            "App".to_string(),
+            "0.1.0".to_string(),
+            "main".to_string(),
+        );
+        handlebars::Handlebars::new()
+            .render_template(ANDROID_MANIFEST_TEMPLATE, &data)
+            .unwrap()
+    }
+
+    fn application_open_tag(manifest: &str) -> &str {
+        let start = manifest.find("<application").unwrap();
+        let end = start + manifest[start..].find('>').unwrap();
+        &manifest[start..=end]
+    }
+
+    fn write_file(dir: &Path, relative: &str, contents: &str) {
+        let path = dir.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, contents).unwrap();
+    }
+
+    #[test]
+    fn raw_application_attrs_land_on_the_application_element() {
+        let manifest = render_manifest(
+            r#"
+            [android.raw]
+            application_attrs = 'android:allowBackup="false" android:dataExtractionRules="@xml/rules"'
+            "#,
+        );
+        let tag = application_open_tag(&manifest);
+        assert!(tag.contains(r#"android:allowBackup="false""#), "{tag}");
+        assert!(
+            tag.contains(r#"android:dataExtractionRules="@xml/rules""#),
+            "{tag}"
+        );
+    }
+
+    #[test]
+    fn raw_application_lands_inside_the_application_element() {
+        let manifest = render_manifest(
+            r#"
+            [android.raw]
+            application = '<meta-data android:name="probe" android:value="1" />'
+            "#,
+        );
+        let open = manifest.find("<application").unwrap();
+        let close = manifest.find("</application>").unwrap();
+        let probe = manifest
+            .find(r#"<meta-data android:name="probe" android:value="1" />"#)
+            .unwrap();
+        assert!(open < probe && probe < close, "{manifest}");
+    }
+
+    #[test]
+    fn resources_land_in_the_type_directory_named_by_their_parent() {
+        let crate_dir = tempfile::tempdir().unwrap();
+        let res = tempfile::tempdir().unwrap();
+        write_file(crate_dir.path(), "android/xml/rules.xml", "<rules/>");
+        write_file(crate_dir.path(), "i18n/values-it/extra.xml", "<resources/>");
+
+        copy_android_resources(
+            crate_dir.path(),
+            &[
+                PathBuf::from("android/xml/rules.xml"),
+                PathBuf::from("i18n/values-it/extra.xml"),
+            ],
+            res.path(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(res.path().join("xml/rules.xml")).unwrap(),
+            "<rules/>"
+        );
+        assert_eq!(
+            std::fs::read_to_string(res.path().join("values-it/extra.xml")).unwrap(),
+            "<resources/>"
+        );
+    }
+
+    #[test]
+    fn resource_colliding_with_an_existing_file_is_an_error() {
+        let crate_dir = tempfile::tempdir().unwrap();
+        let res = tempfile::tempdir().unwrap();
+        write_file(crate_dir.path(), "values/strings.xml", "mine");
+        write_file(res.path(), "values/strings.xml", "generated");
+
+        let err = copy_android_resources(
+            crate_dir.path(),
+            &[PathBuf::from("values/strings.xml")],
+            res.path(),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("values/strings.xml"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(res.path().join("values/strings.xml")).unwrap(),
+            "generated"
+        );
+    }
+
+    #[test]
+    fn resource_outside_a_type_directory_is_an_error() {
+        let crate_dir = tempfile::tempdir().unwrap();
+        let res = tempfile::tempdir().unwrap();
+        write_file(crate_dir.path(), "rules.xml", "<rules/>");
+
+        let err =
+            copy_android_resources(crate_dir.path(), &[PathBuf::from("rules.xml")], res.path())
+                .unwrap_err();
+
+        assert!(err.to_string().contains("rules.xml"), "{err}");
+        assert_eq!(std::fs::read_dir(res.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn missing_resource_is_an_error() {
+        let crate_dir = tempfile::tempdir().unwrap();
+        let res = tempfile::tempdir().unwrap();
+
+        let err = copy_android_resources(
+            crate_dir.path(),
+            &[PathBuf::from("xml/absent.xml")],
+            res.path(),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("xml/absent.xml"), "{err}");
+    }
+
+    #[test]
+    fn build_type_manifests_follow_the_config() {
+        let app_src = tempfile::tempdir().unwrap();
+        let xml = r#"<manifest xmlns:android="http://schemas.android.com/apk/res/android" />"#;
+
+        write_build_type_manifests(app_src.path(), Some(xml)).unwrap();
+        for build_type in ["debug", "release"] {
+            let path = app_src.path().join(build_type).join("AndroidManifest.xml");
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), xml);
+        }
+
+        write_build_type_manifests(app_src.path(), None).unwrap();
+        for build_type in ["debug", "release"] {
+            let path = app_src.path().join(build_type).join("AndroidManifest.xml");
+            assert!(!path.exists(), "{} survived", path.display());
+        }
     }
 }

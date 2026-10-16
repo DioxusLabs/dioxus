@@ -180,7 +180,7 @@
           ]
         },
         "manifest": {
-          "description": "Path to custom AndroidManifest.xml to merge.",
+          "description": "AndroidManifest.xml, relative to the crate, that Gradle merges into the generated one.",
           "type": [
             "string",
             "null"
@@ -225,11 +225,8 @@
           "$ref": "#/$defs/AndroidRawConfig"
         },
         "resources": {
-          "description": "Additional resources to bundle.\nOverrides `bundle.resources` for Android builds.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "description": "Android resource files, relative to the crate, copied into the `res/` subdirectory named\nby their parent, so `android/xml/rules.xml` becomes `@xml/rules`.",
+          "type": "array",
           "items": {
             "type": "string"
           }
