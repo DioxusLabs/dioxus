@@ -115,7 +115,7 @@ fn TodoHeader(mut todos: WriteSignal<HashMap<u32, TodoItem>>) -> Element {
     let mut todo_id = use_signal(|| 0);
 
     let onkeydown = move |evt: KeyboardEvent| {
-        if evt.key() == Key::Enter && !draft.is_empty() {
+        if evt.key() == Key::Named(NamedKey::Enter) && !draft.is_empty() {
             let id = todo_id();
             let todo = TodoItem {
                 checked: false,
@@ -195,9 +195,8 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {
-                        match evt.key() {
-                            Key::Enter | Key::Escape | Key::Tab => is_editing.set(false),
-                            _ => {}
+                        if matches!(evt.key(), Key::Named(NamedKey::Enter | NamedKey::Escape | NamedKey::Tab)) {
+                            is_editing.set(false);
                         }
                     }
                 }

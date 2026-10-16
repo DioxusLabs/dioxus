@@ -278,28 +278,9 @@ fn extract_zip(data: &[u8], dest: &Path) -> Result<()> {
 
     let cursor = Cursor::new(data);
     let mut archive = zip::ZipArchive::new(cursor).context("Failed to read zip archive")?;
-
-    std::fs::create_dir_all(dest)?;
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let outpath = dest.join(file.mangled_name());
-
-        if file.name().ends_with('/') {
-            std::fs::create_dir_all(&outpath)?;
-        } else {
-            if let Some(parent) = outpath.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut outfile = std::fs::File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
-
-            #[cfg(unix)]
-            if let Some(mode) = file.unix_mode() {
-                std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;
-            }
-        }
-    }
+    archive
+        .extract(dest)
+        .with_context(|| format!("Failed to extract zip archive to {}", dest.display()))?;
 
     Ok(())
 }
