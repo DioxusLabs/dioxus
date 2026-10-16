@@ -265,7 +265,7 @@ hyper-rustls = { version = "0.27.7", default-features = false, features = [
     "logging",
     "ring",
 ] }
-rustls = { version = "0.23.28", default-features = false, features = [
+rustls = { version = "0.23.46", default-features = false, features = [
     "logging",
     "std",
     "tls12",
@@ -362,7 +362,7 @@ objc2-ui-kit = { version = "0.3.2", default-features = false }
 objc2-app-kit = { version = "0.3.2", default-features = false }
 tray-icon = { version = "0.26.1", default-features = false, features = ["libappindicator"] }
 open = "5.3.5"
-webbrowser = "1.2.1"
+webbrowser = "1.2.2"
 
 # web
 gloo-dialogs = "0.2.0"
