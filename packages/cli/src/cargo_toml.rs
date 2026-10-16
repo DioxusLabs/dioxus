@@ -51,7 +51,7 @@ fn extend_manifest_config_toml(manifest: &mut Manifest, path: &Path) {
         return;
     };
 
-    let Ok(config) = config.parse::<toml::Value>() else {
+    let Ok(config) = config.parse::<toml::Table>() else {
         return;
     };
 
@@ -158,4 +158,28 @@ fn merge_profile(target: &mut Profile, new: Profile) {
         target.inherits = new.inherits;
     }
     target.package.extend(new.package);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_toml_profiles_are_merged() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            "[build]\ntarget-dir = \"target\"\n\n[profile.release]\nopt-level = \"s\"\nlto = true\n",
+        )
+        .unwrap();
+
+        let mut manifest =
+            Manifest::from_str("[package]\nname = \"app\"\nversion = \"0.1.0\"\n").unwrap();
+        extend_manifest_config_toml(&mut manifest, &config_path);
+
+        let release = manifest.profile.release.expect("release profile merged");
+        assert_eq!(release.opt_level, Some(toml::Value::String("s".into())));
+        assert!(release.lto.is_some());
+    }
 }

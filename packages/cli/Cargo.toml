@@ -90,7 +90,7 @@ rhai_codegen = "=3.1.0"
 # cargo-generate also pulls in liquid -> kstring. kstring 2.0.3 raised its
 # rust-version to 1.96, above the toolchain the workspace builds with.
 kstring = "=2.0.2"
-toml_edit = "0.22.27"
+toml_edit = "0.25.11"
 
 # formatting
 # syn = { workspace = true }

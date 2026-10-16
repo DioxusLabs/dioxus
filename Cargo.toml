@@ -221,7 +221,7 @@ askama_escape = "0.13.0"
 tracing = "0.1.41"
 tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.20", default-features = false }
-toml = "0.8.23"
+toml = "1.1.2"
 tokio = "1.48"
 tokio-util = { version = "0.7.15" }
 tokio-stream = { version = "0.1.17" }
@@ -240,7 +240,7 @@ html_parser = "0.7.0"
 thiserror = "2.0.18"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
 const_format = "0.2.34"
-cargo_toml = { version = "0.22.3" }
+cargo_toml = { version = "1.0.1" }
 icns = "0.4.0"
 image = "0.25.6"
 zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
