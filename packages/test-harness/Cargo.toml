@@ -1,0 +1,33 @@
+[package]
+name = "dioxus-test-harness"
+edition = "2024"
+version.workspace = true
+publish = true
+authors = ["Jonathan Kelley"]
+description = "A libtest-compatible test harness for Dioxus applications"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com/learn/0.7/"
+keywords = ["dom", "ui", "gui", "react", "test"]
+rust-version = "1.85.0"
+
+[dependencies]
+dioxus-test-harness-macro = { workspace = true }
+inventory = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { workspace = true, features = ["rt", "time"] }
+futures-util = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = ["Window", "Location", "UrlSearchParams", "Request", "RequestInit", "Response", "Headers", "Navigator", "Performance", "console"] }
+js-sys = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+[[test]]
+name = "native"
+harness = false

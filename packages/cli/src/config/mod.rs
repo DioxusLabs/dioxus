@@ -6,6 +6,7 @@ mod inline_config;
 mod manifest;
 mod manifest_mapper;
 mod serve;
+mod test;
 mod web;
 
 pub(crate) use app::*;
@@ -15,4 +16,5 @@ pub(crate) use inline_config::*;
 pub(crate) use manifest::*;
 pub(crate) use manifest_mapper::*;
 pub(crate) use serve::*;
+pub(crate) use test::*;
 pub(crate) use web::*;
