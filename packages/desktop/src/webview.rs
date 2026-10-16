@@ -231,14 +231,16 @@ impl WebviewEdits {
 ///
 /// Our handlers hold `Rc`s and are not thread safe. Wry only calls them on the thread that created
 /// the webview, except on Android where they run on WebView worker threads. Wry used to hold a
-/// mutex around those calls and since 0.56 no longer does, so `with` serializes them itself there.
+/// mutex around those calls and its removal of the handler, and since 0.56 no longer does, so
+/// `with` and `drop` take a lock of our own there.
 struct ProtocolHandler<F> {
-    handler: F,
+    handler: std::mem::ManuallyDrop<F>,
     #[cfg(not(target_os = "android"))]
     created_on: std::thread::ThreadId,
 }
 
-// SAFETY: upheld by the caller of `new`. `with` checks the calling thread, or locks on Android.
+// SAFETY: upheld by the caller of `new`. `with` checks the calling thread, or locks on Android,
+// where `drop` locks too.
 unsafe impl<F> Send for ProtocolHandler<F> {}
 unsafe impl<F> Sync for ProtocolHandler<F> {}
 
@@ -246,11 +248,10 @@ impl<F> ProtocolHandler<F> {
     /// # Safety
     ///
     /// `handler` must only be handed to wry as a custom protocol handler, from the thread that
-    /// creates the webview, and never be called or dropped on another thread except through
-    /// `with`.
+    /// creates the webview, and never be called on another thread except through `with`.
     unsafe fn new(handler: F) -> Self {
         Self {
-            handler,
+            handler: std::mem::ManuallyDrop::new(handler),
             #[cfg(not(target_os = "android"))]
             created_on: std::thread::current().id(),
         }
@@ -264,14 +265,31 @@ impl<F> ProtocolHandler<F> {
             "custom protocol handler called off the thread that created the webview"
         );
 
-        // Not `android_runtime_lock`: handlers take that themselves.
         #[cfg(target_os = "android")]
-        static HANDLER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        #[cfg(target_os = "android")]
-        let _lock = HANDLER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _lock = android_handler_lock();
 
         f(&self.handler)
     }
+}
+
+impl<F> Drop for ProtocolHandler<F> {
+    fn drop(&mut self) {
+        // Wry drops the handler on the activity's thread or a WebView worker thread
+        #[cfg(target_os = "android")]
+        let _lock = android_handler_lock();
+
+        // SAFETY: the handler is not used again
+        unsafe { std::mem::ManuallyDrop::drop(&mut self.handler) }
+    }
+}
+
+/// Serializes calls to and drops of all protocol handlers.
+///
+/// Not `android_runtime_lock`: handlers take that themselves.
+#[cfg(target_os = "android")]
+fn android_handler_lock() -> std::sync::MutexGuard<'static, ()> {
+    static HANDLER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    HANDLER_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 pub(crate) struct WebviewInstance {
