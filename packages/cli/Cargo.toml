@@ -137,7 +137,7 @@ target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
 object = { workspace = true, features = ["all"] }
 tokio-util = { workspace = true, features = ["full"] }
 itertools = { workspace = true }
-throbber-widgets-tui = "0.8.0"
+throbber-widgets-tui = "0.11.1"
 unicode-segmentation = "1.12.0"
 handlebars = "6.3.2"
 walrus = { workspace = true, features = ["parallel"] }
