@@ -202,30 +202,8 @@ impl Workspace {
         tracing::trace!("dx version: {}", dx_semver);
         tracing::trace!("dioxus versions: {:?}", dioxus_versions);
 
-        // if there are no dioxus versions in the workspace, we don't need to check anything
-        // dx is meant to be compatible with non-dioxus projects too.
-        if dioxus_versions.is_empty() {
-            return;
-        }
-
-        let min = dioxus_versions.iter().min().unwrap();
-        let max = dioxus_versions.iter().max().unwrap();
-
-        // If the minimum dioxus version is greater than the current cli version, warn the user
-        if min > &dx_semver
-            || max < &dx_semver
-            || dioxus_versions.iter().any(|f| f.pre != dx_semver.pre)
-        {
-            tracing::error!(
-                r#"🚫dx and dioxus versions are incompatible!
-                  • dx version: {dx_semver}
-                  • dioxus versions: [{}]"#,
-                dioxus_versions
-                    .iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
+        if let Some(warning) = dioxus_version_warning(&dx_semver, &dioxus_versions) {
+            tracing::warn!("{warning}");
         }
     }
 
@@ -665,6 +643,49 @@ impl Workspace {
     }
 }
 
+fn dioxus_version_warning(cli: &Version, libraries: &[Version]) -> Option<String> {
+    // Stable patch releases share a release series. Prereleases must match,
+    // including their patch version, since they can introduce breaking changes.
+    let same_release = |a: &Version, b: &Version| {
+        a.major == b.major
+            && a.minor == b.minor
+            && a.pre == b.pre
+            && (a.pre.is_empty() || a.patch == b.patch)
+    };
+
+    // dx also supports projects without a Dioxus dependency.
+    if libraries.iter().all(|library| same_release(cli, library)) {
+        return None;
+    }
+
+    let versions = libraries
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut warning = format!(
+        "Dioxus CLI version {cli} does not match the workspace's Dioxus versions: [{versions}]."
+    );
+
+    let latest = libraries.iter().max()?;
+    if libraries
+        .iter()
+        .all(|library| same_release(latest, library))
+    {
+        let mut release = latest.clone();
+        release.build = Default::default();
+        warning.push_str(&format!(
+            " For published releases, update to a matching CLI with `dx self-update --version v{release}`."
+        ));
+    } else {
+        warning.push_str(
+            " Align the workspace's Dioxus dependencies to one release series, then install a matching CLI with `dx self-update --version <release-tag>`.",
+        );
+    }
+
+    Some(warning)
+}
+
 impl std::fmt::Debug for Workspace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Workspace")
@@ -674,5 +695,83 @@ impl std::fmt::Debug for Workspace {
             .field("sysroot", &self.sysroot)
             .field("wasm_opt", &self.wasm_opt)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dioxus_version_warning;
+    use krates::semver::Version;
+
+    fn warning(cli: &str, libraries: &[&str]) -> Option<String> {
+        let cli = Version::parse(cli).unwrap();
+        let libraries = libraries
+            .iter()
+            .map(|version| Version::parse(version).unwrap())
+            .collect::<Vec<_>>();
+        dioxus_version_warning(&cli, &libraries)
+    }
+
+    #[test]
+    fn matching_versions_do_not_warn() {
+        for (cli, library) in [
+            ("0.7.0", "0.7.0"),
+            ("0.7.3", "0.7.2"),
+            ("0.7.2", "0.7.3"),
+            ("0.8.0-alpha.1", "0.8.0-alpha.1"),
+            ("0.8.0-alpha.1+cli", "0.8.0-alpha.1+library"),
+            ("0.7.0+cli", "0.7.0+library"),
+        ] {
+            assert!(warning(cli, &[library]).is_none(), "{cli} / {library}");
+        }
+        assert!(warning("0.7.3", &["0.7.0", "0.7.2"]).is_none());
+    }
+
+    #[test]
+    fn mismatched_versions_warn_with_update_guidance() {
+        for (cli, library) in [
+            ("0.6.3", "0.7.0"),
+            ("0.8.0", "0.7.0"),
+            ("1.0.0", "2.0.0"),
+            ("0.8.0-alpha.1", "0.8.0-alpha.2"),
+            ("0.8.0-alpha.1", "0.8.1-alpha.1"),
+            ("0.8.0-alpha.1", "0.8.0-beta.1"),
+            ("0.8.0-alpha.1", "0.8.0"),
+            ("0.8.0", "0.8.0-alpha.1"),
+        ] {
+            let message = warning(cli, &[library]).unwrap();
+            assert!(message.contains(cli));
+            assert!(message.contains(library));
+            assert!(message.contains(&format!("dx self-update --version v{library}")));
+        }
+    }
+
+    #[test]
+    fn no_dioxus_dependency_does_not_warn() {
+        assert!(warning("0.8.0-alpha.1", &[]).is_none());
+    }
+
+    #[test]
+    fn mixed_releases_warn_even_when_the_cli_is_between_them() {
+        for libraries in [
+            ["0.6.0", "0.8.0"],
+            ["0.6.0", "0.7.0"],
+            ["0.7.0", "0.8.0"],
+            ["0.7.0-alpha.1", "0.7.0-alpha.2"],
+        ] {
+            let message = warning("0.7.0", &libraries).unwrap();
+            assert!(message.contains("Align the workspace's Dioxus dependencies"));
+            assert!(message.contains(libraries[0]));
+            assert!(message.contains(libraries[1]));
+            assert!(!message.contains("--version v"));
+        }
+    }
+
+    #[test]
+    fn update_guidance_uses_latest_patch_without_build_metadata() {
+        let message = warning("0.6.3", &["0.7.3+local", "0.7.0"]).unwrap();
+        assert!(message.contains("[0.7.3+local, 0.7.0]"));
+        assert!(message.contains("For published releases"));
+        assert!(message.contains("`dx self-update --version v0.7.3`"));
     }
 }
