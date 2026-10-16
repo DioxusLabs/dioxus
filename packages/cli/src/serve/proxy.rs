@@ -221,7 +221,7 @@ mod test {
             );
 
         // The API backend server
-        let backend_handle_handle = Handle::new();
+        let backend_handle_handle: Handle<std::net::SocketAddr> = Handle::new();
         let backend_handle_handle_ = backend_handle_handle.clone();
         tokio::spawn(async move {
             Server::bind("127.0.0.1:0".parse().unwrap())
@@ -237,7 +237,7 @@ mod test {
 
         // Now set up our actual filesystem server
         let router = super::add_proxy(Router::new(), &config);
-        let server_handle_handle = Handle::new();
+        let server_handle_handle: Handle<std::net::SocketAddr> = Handle::new();
         let server_handle_handle_ = server_handle_handle.clone();
         tokio::spawn(async move {
             Server::bind("127.0.0.1:0".parse().unwrap())
@@ -264,7 +264,9 @@ mod test {
         let server_addr = setup_servers(config).await;
 
         assert_eq!(
-            reqwest::get(format!("http://{server_addr}/api"))
+            crate::http_client::client()
+                .get(format!("http://{server_addr}/api"))
+                .send()
                 .await
                 .unwrap()
                 .text()
@@ -274,7 +276,9 @@ mod test {
         );
 
         assert_eq!(
-            reqwest::get(format!("http://{server_addr}/api/"))
+            crate::http_client::client()
+                .get(format!("http://{server_addr}/api/"))
+                .send()
                 .await
                 .unwrap()
                 .text()
@@ -284,7 +288,9 @@ mod test {
         );
 
         assert_eq!(
-            reqwest::get(format!("http://{server_addr}/api/subpath"))
+            crate::http_client::client()
+                .get(format!("http://{server_addr}/api/subpath"))
+                .send()
                 .await
                 .unwrap()
                 .text()

@@ -257,7 +257,12 @@ impl WasmBindgen {
         let binary_path = self.get_binary_path()?;
 
         // Download then extract wasm-bindgen-cli.
-        let bytes = reqwest::get(url).await?.bytes().await?;
+        let bytes = crate::http_client::client()
+            .get(url)
+            .send()
+            .await?
+            .bytes()
+            .await?;
 
         // Unpack the first tar entry to the final binary location
         Archive::new(GzDecoder::new(bytes.as_ref()))

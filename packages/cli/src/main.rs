@@ -16,6 +16,7 @@ mod dx_build_info;
 mod error;
 mod esbuild;
 mod fastfs;
+mod http_client;
 mod logging;
 mod opt;
 mod platform;
@@ -55,6 +56,8 @@ async fn main() -> ExitCode {
     if let Some(link_args) = link::LinkAction::from_env() {
         return link_args.run_link();
     }
+
+    http_client::install_crypto_provider();
 
     // Run under the tracing collector so we can capture errors/panics.
     let result = TraceController::main(|args, tracer| {

@@ -192,7 +192,12 @@ impl TailwindCli {
         let binary_path = self.get_binary_path()?;
 
         // Download then extract tailwindcss.
-        let bytes = reqwest::get(url).await?.bytes().await?;
+        let bytes = crate::http_client::client()
+            .get(url)
+            .send()
+            .await?
+            .bytes()
+            .await?;
 
         std::fs::create_dir_all(binary_path.parent().unwrap())
             .context("failed to create tailwindcss directory")?;

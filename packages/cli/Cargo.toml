@@ -41,13 +41,14 @@ html_parser = { workspace = true }
 cargo_metadata = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
-tokio-tungstenite = { workspace = true }
+tokio-tungstenite = { workspace = true, features = ["connect"] }
 chrono = { workspace = true }
 anyhow = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 hyper-rustls = { workspace = true }
 rustls = { workspace = true }
+webpki-roots = { workspace = true }
 rayon = { workspace = true }
 futures-channel = { workspace = true }
 krates = { workspace = true }
@@ -73,7 +74,7 @@ dunce = { workspace = true }
 
 # tools download
 dirs = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json"] }
+reqwest = { workspace = true, default-features = false, features = ["rustls-no-provider", "json", "blocking"] }
 tower = { workspace = true }
 git2 = { version = "0.21.0" }
 
@@ -158,9 +159,11 @@ plist = "1.7.4"
 backtrace = "0.3.74"
 ar = "0.9.0"
 pdb = "0.8.0"
-self_update = { version = "0.42.0", default-features = false, features = [
+self_update = { version = "1.3.0", default-features = false, features = [
+    "reqwest",
+    "github",
     "archive-tar",
-    "compression-flate2",
+    "compression-tar-gz",
 ] }
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }

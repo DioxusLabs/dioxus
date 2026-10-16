@@ -255,7 +255,7 @@ pub(crate) async fn check_connectivity() -> Result<()> {
     }
 
     use crate::styles::{GLOW_STYLE, LINK_STYLE};
-    let client = reqwest::Client::new();
+    let client = crate::http_client::client();
     for x in 0..=5 {
         tokio::select! {
             res = client.head("https://github.com/DioxusLabs/").header("User-Agent", "dioxus-cli").send() => {
