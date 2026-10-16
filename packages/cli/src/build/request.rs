@@ -1453,22 +1453,7 @@ impl BuildRequest {
             && matches!(ctx.mode, BuildMode::Base | BuildMode::Fat)
         {
             if let Some(dir) = self.user_public_dir() {
-                for entry in walkdir::WalkDir::new(&dir)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                {
-                    let from = entry.path().to_path_buf();
-                    let relative_path = from.strip_prefix(&dir).unwrap();
-                    let to = format!("../{}", relative_path.display());
-                    manifest.insert_asset(BundledAsset::new(
-                        from.to_string_lossy().as_ref(),
-                        to.as_str(),
-                        manganis_core::AssetOptions::builder()
-                            .with_hash_suffix(false)
-                            .into_asset_options(),
-                    ));
-                }
+                collect_public_assets(&dir, &mut manifest);
             }
         }
 
@@ -3207,5 +3192,164 @@ impl BuildRequest {
         }
 
         deps
+    }
+}
+
+fn collect_public_assets(dir: &Path, manifest: &mut AppManifest) {
+    for entry in walkdir::WalkDir::new(dir).follow_links(true) {
+        let entry = match entry {
+            Ok(entry) if entry.file_type().is_file() => entry,
+            Ok(_) => continue,
+            Err(error) => {
+                if error.depth() == 0
+                    && error
+                        .io_error()
+                        .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+                    && !dir.components().as_path().is_symlink()
+                {
+                    continue;
+                }
+                let path = error.path().unwrap_or(dir);
+                tracing::warn!("Failed to read public asset {} ({error})", path.display());
+                continue;
+            }
+        };
+        let from = entry.path();
+        let relative_path = from.strip_prefix(dir).unwrap();
+        let to = format!("../{}", relative_path.display());
+        manifest.insert_asset(BundledAsset::new(
+            from.to_string_lossy().as_ref(),
+            to.as_str(),
+            manganis_core::AssetOptions::builder()
+                .with_hash_suffix(false)
+                .into_asset_options(),
+        ));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::{collections::BTreeMap, fs, os::unix::fs::symlink};
+
+    fn public_assets(manifest: &AppManifest, dir: &Path) -> BTreeMap<PathBuf, String> {
+        manifest
+            .unique_assets()
+            .map(|asset| {
+                let source = Path::new(asset.absolute_source_path());
+                let relative = source.strip_prefix(dir).unwrap();
+                assert_eq!(asset.bundled_path(), format!("../{}", relative.display()));
+                (relative.to_path_buf(), fs::read_to_string(source).unwrap())
+            })
+            .collect()
+    }
+
+    fn collect_with_warnings(dir: &Path) -> (AppManifest, String) {
+        let temp = tempfile::tempdir().unwrap();
+        let log_path = temp.path().join("warnings.log");
+        let log_file = fs::File::create(&log_path).unwrap();
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::WARN)
+            .with_ansi(false)
+            .without_time()
+            .with_writer(move || log_file.try_clone().unwrap())
+            .finish();
+        let mut manifest = AppManifest::new();
+        tracing::subscriber::with_default(subscriber, || {
+            collect_public_assets(dir, &mut manifest);
+        });
+        (manifest, fs::read_to_string(log_path).unwrap())
+    }
+
+    #[test]
+    fn public_file_symlinks_preserve_each_link_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("public");
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("regular.txt"), "regular").unwrap();
+        fs::write(temp.path().join("shared.txt"), "shared").unwrap();
+        symlink("../shared.txt", dir.join("worker.txt")).unwrap();
+        symlink("../shared.txt", dir.join("alias.txt")).unwrap();
+        symlink("regular.txt", dir.join("internal.txt")).unwrap();
+
+        let mut manifest = AppManifest::new();
+        collect_public_assets(&dir, &mut manifest);
+
+        assert_eq!(
+            public_assets(&manifest, &dir),
+            BTreeMap::from([
+                ("regular.txt".into(), "regular".into()),
+                ("worker.txt".into(), "shared".into()),
+                ("alias.txt".into(), "shared".into()),
+                ("internal.txt".into(), "regular".into()),
+            ])
+        );
+    }
+
+    #[test]
+    fn public_directory_symlinks_preserve_nested_link_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("public");
+        fs::create_dir(&dir).unwrap();
+        fs::create_dir_all(temp.path().join("shared/nested")).unwrap();
+        fs::write(temp.path().join("shared/nested/icon.txt"), "icon").unwrap();
+        symlink("../shared", dir.join("icons")).unwrap();
+
+        let mut manifest = AppManifest::new();
+        collect_public_assets(&dir, &mut manifest);
+
+        assert_eq!(
+            public_assets(&manifest, &dir),
+            BTreeMap::from([("icons/nested/icon.txt".into(), "icon".into())])
+        );
+    }
+
+    #[test]
+    fn public_invalid_symlinks_warn_and_keep_valid_assets() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("public");
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("regular.txt"), "regular").unwrap();
+        symlink("missing.txt", dir.join("dangling.txt")).unwrap();
+        symlink(".", dir.join("cycle")).unwrap();
+
+        let (manifest, warnings) = collect_with_warnings(&dir);
+
+        assert_eq!(
+            public_assets(&manifest, &dir),
+            BTreeMap::from([("regular.txt".into(), "regular".into())])
+        );
+        for path in [dir.join("dangling.txt"), dir.join("cycle")] {
+            assert!(
+                warnings
+                    .lines()
+                    .any(|line| { line.contains("WARN") && line.contains(path.to_str().unwrap()) }),
+                "Missing warning for {} in {warnings}",
+                path.display()
+            );
+        }
+    }
+
+    #[test]
+    fn public_missing_directory_is_silent() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("public");
+
+        let (manifest, warnings) = collect_with_warnings(&dir);
+
+        assert!(manifest.assets.is_empty());
+        assert!(warnings.is_empty(), "{warnings}");
+    }
+
+    #[test]
+    fn public_dangling_root_symlink_warns() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("public");
+        symlink("missing", &dir).unwrap();
+
+        let (manifest, warnings) = collect_with_warnings(&dir.join(""));
+
+        assert!(manifest.assets.is_empty());
+        assert!(warnings.contains(dir.to_str().unwrap()), "{warnings}");
     }
 }
