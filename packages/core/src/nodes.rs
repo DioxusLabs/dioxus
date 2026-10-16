@@ -589,6 +589,43 @@ impl PartialEq for AttributeValue {
     }
 }
 
+/// A borrowed attribute value, as passed to [`WriteMutations::set_attribute`](crate::WriteMutations::set_attribute)
+///
+/// Listeners are never set as attributes, so unlike [`AttributeValue`] this has no listener variant.
+#[derive(Clone, Copy)]
+pub enum BorrowedAttributeValue<'a> {
+    /// Text attribute
+    Text(&'a str),
+
+    /// A float
+    Float(f64),
+
+    /// Signed integer
+    Int(i64),
+
+    /// Boolean
+    Bool(bool),
+
+    /// An arbitrary value that implements PartialEq and is static
+    Any(&'a Rc<dyn AnyValue>),
+
+    /// A "none" value, resulting in the removal of an attribute from the dom
+    None,
+}
+
+impl std::fmt::Debug for BorrowedAttributeValue<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(arg0) => f.debug_tuple("Text").field(arg0).finish(),
+            Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
+            Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
+            Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
+            Self::Any(_) => f.debug_tuple("Any").finish(),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
 #[doc(hidden)]
 pub trait AnyValue: 'static {
     /// Compare this value with another erased value.

@@ -1,5 +1,5 @@
 use crate::dom::WebsysDom;
-use dioxus_core::{AttributeValue, ElementId, WriteMutations};
+use dioxus_core::{BorrowedAttributeValue, ElementId, WriteMutations};
 use dioxus_core_types::event_bubbles;
 #[cfg(feature = "mounted")]
 use wasm_bindgen::JsCast;
@@ -86,28 +86,30 @@ impl WriteMutations for WebsysDom {
         self.interpreter.insert_before_top(m as u16)
     }
 
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: BorrowedAttributeValue<'_>) {
         let ns = ns.unwrap_or_default();
         let owned;
         let text_value = match value {
-            AttributeValue::Text(txt) => txt.as_str(),
-            AttributeValue::Float(f) => {
+            BorrowedAttributeValue::Text(txt) => txt,
+            BorrowedAttributeValue::Float(f) => {
                 owned = f.to_string();
                 owned.as_str()
             }
-            AttributeValue::Int(n) => {
+            BorrowedAttributeValue::Int(n) => {
                 owned = n.to_string();
                 owned.as_str()
             }
-            AttributeValue::Bool(b) => {
-                if *b {
+            BorrowedAttributeValue::Bool(b) => {
+                if b {
                     "true"
                 } else {
                     "false"
                 }
             }
-            AttributeValue::None => return self.interpreter.remove_current_attribute(name, ns),
-            _ => unreachable!(),
+            BorrowedAttributeValue::None => {
+                return self.interpreter.remove_current_attribute(name, ns);
+            }
+            BorrowedAttributeValue::Any(_) => unreachable!(),
         };
 
         self.interpreter.set_current_attribute(name, text_value, ns)
