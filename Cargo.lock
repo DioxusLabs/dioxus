@@ -3515,6 +3515,7 @@ dependencies = [
  "jni 0.21.1",
  "lazy-js-bundle",
  "libc",
+ "manganis",
  "muda",
  "ndk",
  "ndk-context",
