@@ -3,11 +3,7 @@
 
 use dioxus::prelude::*;
 
-fn main() {
-    dioxus::launch(app);
-}
-
-fn app() -> Element {
+pub fn app() -> Element {
     use_hook(dioxus::fullstack::commit_initial_chunk);
 
     rsx! {
