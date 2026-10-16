@@ -43,6 +43,7 @@ mod nodes;
 mod portal;
 mod properties;
 mod reactive_context;
+mod remount;
 mod render_driver;
 mod render_error;
 mod root_wrapper;
