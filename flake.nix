@@ -59,11 +59,6 @@
           fullSrc = pkgs.lib.cleanSource ./.;
           cargoSrc = craneLib.cleanCargoSource fullSrc;
 
-          # dioxus-cli enables git2's `vendored-openssl` on macOS so release binaries don't link a
-          # Homebrew OpenSSL. Nix provides `pkgs.openssl`, so link that instead of building OpenSSL
-          # from source (which needs perl).
-          OPENSSL_NO_VENDOR = "1";
-
           commonArgs = {
             src = fullSrc;
             strictDeps = true;
@@ -71,7 +66,6 @@
             nativeBuildInputs = [
               pkgs.pkg-config
             ];
-            inherit OPENSSL_NO_VENDOR;
           };
 
           cargoArtifacts = craneLib.buildDepsOnly (
@@ -125,7 +119,6 @@
 
           devShells.default = pkgs.mkShell {
             name = "dioxus-dev";
-            inherit OPENSSL_NO_VENDOR;
             buildInputs = rustBuildInputs;
             nativeBuildInputs = [
               # Add shell dependencies here
