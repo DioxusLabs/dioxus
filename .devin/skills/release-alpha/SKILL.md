@@ -1,6 +1,6 @@
 ---
 name: release-alpha
-description: Cut a Dioxus 0.x alpha release (version bump, crates.io publish, tag, GitHub release, CLI binaries, template update, verification)
+description: Cut a Dioxus 0.x alpha release (version bump, crates.io publish, tag, GitHub release, CLI binaries, template update, verification, and optionally the SDK/icons/code/components releases)
 argument-hint: "<new version, e.g. 0.8.0-alpha.3>"
 triggers:
   - user
@@ -13,7 +13,7 @@ allowed-tools:
 
 # Releasing a Dioxus alpha
 
-Use this to cut a prerelease of the whole workspace (for example `0.8.0-alpha.3`). The general checklist is in `notes/RELEASING.md`. This skill is the concrete, tested procedure for an alpha, written down after cutting `0.8.0-alpha.2`.
+Use this to cut a prerelease of the whole workspace (for example `0.8.0-alpha.3`). The general checklist is in `notes/RELEASING.md`. This skill is the concrete, tested procedure for an alpha, written down after cutting `0.8.0-alpha.2`. Step 8 (ecosystem crates) was added after `0.8.0-alpha.3`.
 
 `NEW` is the version being released and `PREV` is the last release tag (e.g. `v0.8.0-alpha.2`). If the user didn't give `NEW`, ask.
 
@@ -136,7 +136,40 @@ The default `dx new` template is `gh:dioxuslabs/dioxus-template`, on the branch 
 4. Test locally the way the template's CI does: for each of Bare-Bones, Jumpstart and Workspace, run `dx new --template . --subtemplate <X> --yes --option default_platform=web --vcs none <dir>` (Workspace doesn't need `default_platform`), then `cargo check --all-features`.
 5. Open a PR against `v0.8`.
 
-## 8. Wrap up
+## 8. Ecosystem crates (optional)
+
+Only do this if the user asks. These repos pin Dioxus exactly (`=NEW`), so each one needs a matching release. Their 0.8 work lives on a `0.8` branch (`v<major>.<minor>` without the `v`); `main` stays on 0.7.
+
+| Repo | Crates published | Version |
+|---|---|---|
+| `DioxusLabs/sdk` | `dioxus-sdk` and the `dioxus-sdk-{time,storage,geolocation,notification,sync,util,window}` subcrates | `NEW` (mirrors Dioxus) |
+| `DioxusLabs/dioxus-icons` | `dioxus-icons` | its next minor with Dioxus's prerelease suffix, e.g. `0.2.0-alpha.3` |
+| `DioxusLabs/dioxus-code` | `dioxus-code-macro`, `dioxus-code`, `dioxus-code-editor` (all one version) | same rule as icons |
+| `DioxusLabs/dioxus-components` | nothing; `dx components add` uses the `0.8` branch from git | n/a |
+
+Prerelease versions mean `cargo add` keeps giving 0.7 users the latest stable release.
+
+1. **Look for upgrade work already in progress.** Run `gh pr list --repo <repo> --state open` on each repo. If a contributor has an upgrade branch open, build the release PR on top of their commits rather than starting fresh. Add `Co-authored-by: <name> <email>` (from `git log`) to every commit you make in that repo. Keep their PRs open until yours merge, then close them with a thank-you that links the replacement.
+2. **Release order.** Components depends on the SDK (`dioxus-primitives` → `dioxus-sdk-time`), and its unpublished `preview` crate depends on icons and code. The dioxus-code docsite depends on `dioxus-primitives` from components via git. So:
+   1. Release the SDK and icons: PR to `0.8` (create the branch from `main` if it doesn't exist), merge, publish, tag.
+   2. Open the components PR to `0.8`. Until the crates above are published, point it at their release branches as git dependencies. Merge it.
+   3. Release dioxus-code. Pin the docsite to the components merge commit with `rev = "<sha>"`, not `branch = "0.8"`. Because both repos pin Dioxus exactly, a branch reference breaks resolution as soon as components moves to the next alpha.
+   4. Follow-up PR in components: switch to exact pins on the published crates (`=NEW`, `=0.x.0-alpha.N`). Check that `Cargo.lock` has no `git+` sources left.
+3. **Each release PR:** bump the Dioxus pins and the crate versions, update the README install lines and any compatibility notes, then run the repo's CI commands locally. CI on these repos usually only runs for PRs into `main`, so it won't run on a PR into `0.8` (components#307 adds version-branch CI there). Expect API fixes from that Dioxus release, such as the keyboard-types 0.8 `Key::Named(NamedKey::…)` change in alpha.3.
+4. **Publish** (confirmation gate). Publish from a clean `git worktree add --detach <dir> <merge commit>`:
+   - Check `git diff --stat <tested head> <merge commit>` is empty (PRs are squash-merged) and the squash commit kept the `Co-authored-by` trailers.
+   - Check `cargo workspaces list` shows only the crates above, with no examples.
+   - Run `publish-with-retry.sh <worktree> <log prefix>`. Use `cargo workspaces` for dioxus-code too: `dioxus-code-macro` dev-depends on `dioxus-code`, and plain `cargo publish` can't handle that cycle.
+5. **Tag and release** (confirmation gates): add a lightweight `v<version>` tag on the merge commit, then run `gh release create ... --prerelease --latest=false`. Above GitHub's generated notes (`target_commitish=0.8`, `previous_tag_name=<last tag>`), add a short intro: the Dioxus version it targets, the install line, a note that 0.7 users aren't affected, and credit for the PRs it builds on. The generated list only credits whoever opened the release PR.
+6. **Verify:**
+   - every version returns 200 from the crates.io API, and `max_stable_version` is unchanged
+   - a scratch project that depends on Dioxus `NEW` plus the new crates resolves everything from the registry, with one `dioxus`, and passes `cargo check`
+   - docs.rs builds. `dioxus-sdk` and `dioxus-sdk-window` fail because `listen` and `get_theme_platform` are defined twice under all features (0.7.0 failed the same way). Large crates like `dioxus-icons` take a few minutes to show as built.
+7. **Gotchas:**
+   - The components `preview` and dioxus-code docsite web builds compile C to wasm32 (`arborium-sysroot`), which Apple clang can't do. Without an LLVM clang, check those for desktop instead.
+   - None of these repos delete merged branches automatically. Delete the temporary release branches only once nothing references them, including the docsite's components rev.
+
+## 9. Wrap up
 
 Report back:
 
