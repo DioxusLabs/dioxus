@@ -227,6 +227,71 @@ impl WebviewEdits {
     }
 }
 
+/// A custom protocol handler marked as `Send + Sync`, which wry requires since 0.56.
+///
+/// Our handlers hold `Rc`s and are not thread safe. Wry only calls them on the thread that created
+/// the webview, except on Android where they run on WebView worker threads. Wry used to hold a
+/// mutex around those calls and its removal of the handler, and since 0.56 no longer does, so
+/// `with` and `drop` take a lock of our own there.
+struct ProtocolHandler<F> {
+    handler: std::mem::ManuallyDrop<F>,
+    #[cfg(not(target_os = "android"))]
+    created_on: std::thread::ThreadId,
+}
+
+// SAFETY: upheld by the caller of `new`. `with` checks the calling thread, or locks on Android,
+// where `drop` locks too.
+unsafe impl<F> Send for ProtocolHandler<F> {}
+unsafe impl<F> Sync for ProtocolHandler<F> {}
+
+impl<F> ProtocolHandler<F> {
+    /// # Safety
+    ///
+    /// `handler` must only be handed to wry as a custom protocol handler, from the thread that
+    /// creates the webview, and never be called on another thread except through `with`.
+    unsafe fn new(handler: F) -> Self {
+        Self {
+            handler: std::mem::ManuallyDrop::new(handler),
+            #[cfg(not(target_os = "android"))]
+            created_on: std::thread::current().id(),
+        }
+    }
+
+    fn with<R>(&self, f: impl FnOnce(&F) -> R) -> R {
+        #[cfg(not(target_os = "android"))]
+        assert_eq!(
+            self.created_on,
+            std::thread::current().id(),
+            "custom protocol handler called off the thread that created the webview"
+        );
+
+        #[cfg(target_os = "android")]
+        let _lock = android_handler_lock();
+
+        f(&self.handler)
+    }
+}
+
+impl<F> Drop for ProtocolHandler<F> {
+    fn drop(&mut self) {
+        // Wry drops the handler on the activity's thread or a WebView worker thread
+        #[cfg(target_os = "android")]
+        let _lock = android_handler_lock();
+
+        // SAFETY: the handler is not used again
+        unsafe { std::mem::ManuallyDrop::drop(&mut self.handler) }
+    }
+}
+
+/// Serializes calls to and drops of all protocol handlers.
+///
+/// Not `android_runtime_lock`: handlers take that themselves.
+#[cfg(target_os = "android")]
+fn android_handler_lock() -> std::sync::MutexGuard<'static, ()> {
+    static HANDLER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    HANDLER_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
@@ -324,10 +389,7 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
-            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
-                #[cfg(feature = "tokio_runtime")]
-                let _guard = tokio_rt.enter();
-
+            let handler = move |request, responder: RequestAsyncResponder| {
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -338,6 +400,15 @@ impl WebviewInstance {
                     &root_name,
                     headless,
                 )
+            };
+            // SAFETY: only moved into the protocol handler passed to wry below
+            let handler = unsafe { ProtocolHandler::new(handler) };
+
+            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
+                #[cfg(feature = "tokio_runtime")]
+                let _guard = tokio_rt.enter();
+
+                handler.with(|handler| handler(request, responder))
             }
         };
 
@@ -456,10 +527,12 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
+            // SAFETY: only moved into the protocol handler passed to wry below
+            let handler = unsafe { ProtocolHandler::new(handler) };
             webview = webview.with_custom_protocol(name, move |a, b| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
-                handler(a, b)
+                handler.with(|handler| handler(a, b))
             });
         }
 
@@ -467,10 +540,12 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
+            // SAFETY: only moved into the protocol handler passed to wry below
+            let handler = unsafe { ProtocolHandler::new(handler) };
             webview = webview.with_asynchronous_custom_protocol(name, move |a, b, c| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
-                handler(a, b, c)
+                handler.with(|handler| handler(a, b, c))
             });
         }
 
