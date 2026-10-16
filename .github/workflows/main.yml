@@ -112,14 +112,7 @@ jobs:
       - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-msrv
         run: cargo binstall cargo-msrv -y --force --locked
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
+      - uses: ./.github/actions/rust-cache
       - name: Rustfmt
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -137,8 +130,6 @@ jobs:
       - name: Find MSRV on verify failure
         if: ${{ failure() }}
         run: cargo msrv --output-format json find -- cargo check
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
 
   docs:
     needs: rust
@@ -157,21 +148,12 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: ${{ needs.rust.outputs.rust_nightly }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
+      - uses: ./.github/actions/rust-cache
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
         env:
           RUSTDOCFLAGS: -Dwarnings --document-private-items
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
 
   test-docs:
     needs: rust
@@ -190,19 +172,10 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: ${{ needs.rust.outputs.rust_nightly }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
+      - uses: ./.github/actions/rust-cache
       - name: "doc --lib --all-features"
         run: |
           cargo test --doc --workspace --all-features
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
 
   bundle-linux-smoke:
     needs: rust
@@ -223,14 +196,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.rust.outputs.rust_stable }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
+      - uses: ./.github/actions/rust-cache
       - name: Bundle hotdog as Linux packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage --package-types deb --package-types rpm
@@ -242,8 +208,6 @@ jobs:
           test -n "$(find target -name '*.AppImage' -print -quit)"
           test -n "$(find target -name '*.deb' -print -quit)"
           test -n "$(find target -name '*.rpm' -print -quit)"
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
@@ -266,14 +230,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.rust.outputs.rust_stable }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
+      - uses: ./.github/actions/rust-cache
       - name: Bundle hotdog as macOS packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types macos --package-types dmg
@@ -283,8 +240,6 @@ jobs:
           find target -type f -name '*.dmg' -print
           test -n "$(find target -type d -name '*.app' -print -quit)"
           test -n "$(find target -type f -name '*.dmg' -print -quit)"
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
@@ -312,13 +267,9 @@ jobs:
         with:
           toolchain: ${{ needs.rust.outputs.rust_stable }}
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/rust-cache
         with:
           key: "windows-bundle-${{ runner.os }}"
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
           workspaces: ${{ env.DIOXUS_WORKSPACE }}
       - name: Bundle hotdog as Windows packages
         working-directory: ${{ env.DIOXUS_WORKSPACE }}/examples/01-app-demos/hotdog
@@ -376,13 +327,9 @@ jobs:
           toolchain: ${{ needs.rust.outputs.rust_stable }}
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/rust-cache
         with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
           workspaces: ${{ env.DIOXUS_WORKSPACE }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Playwright
         working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
         env:
@@ -440,15 +387,9 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
           targets: ${{ matrix.targets }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/rust-cache
         with:
           key: "playwright-${{ matrix.toolchain }}-${{ runner.os }}"
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
       - name: Wipe dx cache
         if: runner.os == 'Linux'
         run: |
@@ -463,8 +404,6 @@ jobs:
           npm install -D @playwright/test
           npx playwright install
           npx playwright test
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
@@ -493,18 +432,9 @@ jobs:
         with:
           toolchain: ${{ needs.rust.outputs.rust_stable }}
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
+      - uses: ./.github/actions/rust-cache
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
 
   release-test:
     needs: rust
@@ -525,18 +455,9 @@ jobs:
         with:
           toolchain: ${{ needs.rust.outputs.rust_stable }}
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
+      - uses: ./.github/actions/rust-cache
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
 
   matrix_test:
     needs: rust
@@ -631,21 +552,13 @@ jobs:
         if: ${{ matrix.platform.cross == true }}
         uses: taiki-e/install-action@cross
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/rust-cache
         with:
           key: "matrix-${{ matrix.platform.target }}"
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
 
       - name: test
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
 
   # Verify that declared minimum dependency versions actually compile.
   # Catches issues like https://github.com/DioxusLabs/dioxus/issues/5433 where
@@ -669,20 +582,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.rust.outputs.rust_stable }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Mark cached cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py mark target
+      - uses: ./.github/actions/rust-cache
       - name: Generate minimal-version lockfile
         run: cargo +${{ needs.rust.outputs.rust_nightly }} update -Zdirect-minimal-versions
       - name: Check workspace with minimum versions
         run: cargo +${{ needs.rust.outputs.rust_stable }} check --workspace
-      - name: Prune unused cargo artifacts
-        run: python3 .github/workflows/prune-cargo-target.py prune target
 
   nix:
     needs: rust
