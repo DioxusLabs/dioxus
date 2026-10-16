@@ -8,7 +8,8 @@
 //
 // Cargo reads the fingerprint of every unit in the build graph (fresh or not) and ignores atime, so
 // under `relatime` any unit still at atime 0 after the build was not part of it. If no fingerprint
-// was read at all (e.g. a `noatime` mount) nothing is deleted.
+// was read at all, or reading an unread one does not update its atime (e.g. a `noatime` mount),
+// nothing is deleted.
 
 const fs = require("fs");
 const path = require("path");
@@ -69,17 +70,31 @@ function size(p) {
 function prune(target) {
   const profiles = [...profileDirs(target)];
   const live = new Map();
+  let unread;
   for (const profile of profiles) {
     const hashes = new Set();
     for (const [name, files] of fingerprintUnits(profile)) {
       const m = UNIT_RE.exec(name);
-      if (m && files.some((f) => fs.lstatSync(f, { bigint: true }).atimeNs > 0n)) hashes.add(m[1]);
+      let read = false;
+      for (const f of files) {
+        const st = fs.lstatSync(f, { bigint: true });
+        if (st.atimeNs > 0n) read = true;
+        else if (!unread && st.size > 0n) unread = f;
+      }
+      if (m && read) hashes.add(m[1]);
     }
     live.set(profile, hashes);
   }
   if (![...live.values()].some((hashes) => hashes.size > 0)) {
     console.log(`No fingerprints in ${target} were read since \`mark\`; not pruning`);
     return;
+  }
+  if (unread) {
+    fs.readFileSync(unread);
+    if (fs.lstatSync(unread, { bigint: true }).atimeNs === 0n) {
+      console.log(`Reading ${unread} did not update its atime; not pruning`);
+      return;
+    }
   }
 
   for (const profile of profiles) {
