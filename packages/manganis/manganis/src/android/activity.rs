@@ -1,15 +1,24 @@
-use jni::{JNIEnv, JavaVM, objects::JObject};
-use std::sync::OnceLock;
+use jni::{
+    JNIEnv, JavaVM,
+    objects::{GlobalRef, JObject},
+};
+use std::sync::{OnceLock, RwLock};
 
-/// Cached reference to the Android activity.
-static ACTIVITY: OnceLock<jni::objects::GlobalRef> = OnceLock::new();
+/// The live Android activity, replaced whenever the system recreates it.
+static CURRENT_ACTIVITY: RwLock<Option<GlobalRef>> = RwLock::new(None);
 static JAVA_VM: OnceLock<JavaVM> = OnceLock::new();
 
-/// Execute a JNI operation with a cached activity reference.
+/// Make `activity` the one [`with_activity`] hands out, called by the renderer for every new activity.
+pub fn set_current_activity(activity: GlobalRef) {
+    *CURRENT_ACTIVITY
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(activity);
+}
+
+/// Execute a JNI operation with the current activity.
 ///
-/// This function handles the boilerplate of getting the JavaVM and Activity
-/// references, caching them for subsequent calls. It's the foundation for
-/// most Android mobile API operations.
+/// Without an activity registered through [`set_current_activity`], the closure receives the
+/// `ndk_context` context.
 ///
 /// # Arguments
 ///
@@ -44,20 +53,17 @@ where
     };
     let mut env = vm.attach_current_thread().ok()?;
 
-    let activity = if let Some(activity) = ACTIVITY.get() {
-        activity
-    } else {
-        let raw_activity = unsafe { JObject::from_raw(ctx.context() as jni::sys::jobject) };
-        let global = env.new_global_ref(&raw_activity).ok()?;
-        match ACTIVITY.set(global) {
-            Ok(()) => ACTIVITY.get().unwrap(),
-            Err(global) => {
-                drop(global);
-                ACTIVITY.get()?
-            }
+    // The clone keeps the reference alive while `f` runs, even if the activity is replaced meanwhile.
+    let activity = CURRENT_ACTIVITY
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    match activity {
+        Some(activity) => f(&mut env, activity.as_obj()),
+        None => {
+            // SAFETY: `ndk_context` holds this global reference for as long as it is initialised.
+            let context = unsafe { JObject::from_raw(ctx.context() as jni::sys::jobject) };
+            f(&mut env, &context)
         }
-    };
-
-    let activity_obj = activity.as_obj();
-    f(&mut env, &activity_obj)
+    }
 }

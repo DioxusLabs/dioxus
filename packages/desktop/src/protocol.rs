@@ -13,13 +13,13 @@ use wry::{
 };
 
 #[cfg(target_os = "android")]
-const BASE_URI: &str = "https://dioxus.index.html/";
+pub(crate) const BASE_URI: &str = "https://dioxus.index.html/";
 
 #[cfg(target_os = "windows")]
-const BASE_URI: &str = "http://dioxus.index.html/";
+pub(crate) const BASE_URI: &str = "http://dioxus.index.html/";
 
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
-const BASE_URI: &str = "dioxus://index.html/";
+pub(crate) const BASE_URI: &str = "dioxus://index.html/";
 
 #[cfg(debug_assertions)]
 static DEFAULT_INDEX: &str = include_str!("./assets/dev.index.html");
@@ -127,7 +127,7 @@ fn index_request(
     // Might want to document this
     index.insert_str(
         index.find("</body>").expect("Body element to exist"),
-        &module_loader(root_name, headless, edit_state),
+        &module_loader(root_name, headless, edit_state.serve_page()),
     );
 
     Response::builder()
@@ -143,13 +143,11 @@ fn index_request(
 /// - root_name: the root element (by Id) that we stream edits into
 /// - headless: is this page being loaded but invisible? Important because not all windows are visible and the
 ///   interpreter can't connect until the window is ready.
-/// - port: the port that the websocket server is listening on for edits
-/// - webview_id: the id of the webview that we're loading this into. This is used to differentiate between
-///   multiple webviews in the same application, so that we can send edits to the correct one.
-fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> String {
-    let edits_path = edit_state.wry_queue.edits_path();
-    let expected_key = edit_state.wry_queue.required_server_key();
-
+/// - page: the number of this document in its webview
+///
+/// The page reports `initialize` with its number once loaded, and the host answers with the edits
+/// connection to open.
+fn module_loader(root_id: &str, headless: bool, page: u32) -> String {
     format!(
         r#"
 <script type="module">
@@ -161,15 +159,15 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
 
     // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
     window.interpreter = new NativeInterpreter("{BASE_URI}", {headless});
+    window.dioxusPage = {page};
 
     // Wait for the page to load before sending the initialize message
     window.onload = function() {{
         let root_element = window.document.getElementById("{root_id}");
         if (root_element != null) {{
             window.interpreter.initialize(root_element);
-            window.interpreter.sendIpcMessage("initialize");
+            window.interpreter.sendIpcMessage("initialize", {{ page: {page} }});
         }}
-        window.interpreter.waitForRequest("{edits_path}", "{expected_key}");
     }}
 </script>
 <script type="module">

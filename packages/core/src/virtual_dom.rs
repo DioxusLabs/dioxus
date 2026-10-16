@@ -6,7 +6,7 @@ use crate::innerlude::{VProps, Work};
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
-    ComponentFunction, Element, Mutations, NoOpMutations,
+    ComponentFunction, Element, Mutations, NoOpMutations, RenderTargetId,
     arena::ElementId,
     innerlude::{SchedulerMsg, ScopeOrder, ScopeState, WriteMutations},
     mutations::append_children_to,
@@ -213,6 +213,11 @@ pub struct VirtualDom {
     // The scopes that have been resolved since the last render
     pub(crate) resolved_scopes: Vec<ScopeId>,
 
+    /// The render target a call to [`VirtualDom::remount_render_target`] is currently
+    /// recovering, scoped to that call so a sibling target reached through a nested
+    /// portal is never touched.
+    pub(crate) remount_boundary: Option<RenderTargetId>,
+
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
 
@@ -316,6 +321,7 @@ impl VirtualDom {
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             resolved_scopes: Default::default(),
+            remount_boundary: None,
         };
 
         let root_props = Box::new(VProps::new(
@@ -589,7 +595,7 @@ impl VirtualDom {
         }
     }
 
-    fn rebuild_with_writer(&mut self, to: &mut dyn WriteMutations) {
+    pub(crate) fn rebuild_with_writer(&mut self, to: &mut dyn WriteMutations) {
         let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
         append_children_to(to, ElementId::ROOT, self.runtime.clone(), |to| {
             self.runtime.clone().while_rendering(|| {

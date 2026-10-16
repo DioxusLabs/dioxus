@@ -481,8 +481,7 @@ impl VNode {
             dom,
             to,
             destroy_component_state,
-            &root_ids,
-            &root_anchor_indices,
+            (&root_ids, &root_anchor_indices),
         );
 
         if destroy_component_state {
@@ -534,9 +533,9 @@ impl VNode {
         dom: &mut VirtualDom,
         mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
-        root_ids: &[usize],
-        root_anchor_indices: &[usize],
+        root_anchors: (&[usize], &[usize]),
     ) {
+        let (root_ids, root_anchor_indices) = root_anchors;
         for &id in root_ids {
             let dynamic_node = &self.dynamic_node_values()[id];
             // Empty Fragments contribute no DOM and have nothing to reclaim
@@ -562,6 +561,11 @@ impl VNode {
         }
     }
 
+    /// Remove one dynamic node value from an allocated mount slot.
+    ///
+    /// A `Component` slot already live on a different render target than
+    /// [`VirtualDom::remount_boundary`] is left fully untouched, for
+    /// [`VirtualDom::remount_render_target`].
     fn remove_dynamic_node(
         &self,
         mount: MountId,
@@ -574,6 +578,12 @@ impl VNode {
         match node {
             Component(_comp) => {
                 let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
+                if let Some(boundary) = dom.remount_boundary
+                    && dom.runtime.get_state(scope_id).target_id() != boundary
+                {
+                    // On a different render target than this walk is scoped to: leave it untouched.
+                    return;
+                }
                 dom.remove_component_node(to, destroy_component_state, scope_id);
             }
             Text(_) => {
@@ -851,7 +861,6 @@ impl VNode {
             Text(text) => self.create_dynamic_text_node(mount, idx, text, state),
         }
     }
-
     fn create_dynamic_text_node(
         &self,
         mount: MountId,
