@@ -173,6 +173,13 @@ pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
             return None;
         }
 
+        // A project that is itself a workspace root can't be a member of another workspace.
+        let manifest: toml_edit::DocumentMut =
+            std::fs::read_to_string(&manifest_path).ok()?.parse().ok()?;
+        if manifest.contains_key("workspace") {
+            return None;
+        }
+
         let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
         let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
         let relative_path = path.strip_prefix(metadata.workspace_root).ok()?;
