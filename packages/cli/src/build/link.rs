@@ -1412,6 +1412,8 @@ impl BuildRequest {
             BuildMode::Fat => "fat",
             BuildMode::Base => "base",
             BuildMode::Thin { .. } => "thin",
+            BuildMode::Check { clippy: true } => "clippy",
+            BuildMode::Check { clippy: false } => "check",
         }
     }
 
