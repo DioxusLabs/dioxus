@@ -28,7 +28,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { workspace = true, default-features = false, features = ["os-webview", "protocol"] }
+wry = { workspace = true, default-features = false, features = ["os-webview"] }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
   "sync",
@@ -60,7 +60,7 @@ webbrowser = { workspace = true }
 signal-hook = "0.3.18"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-wry = { workspace = true, features = ["os-webview", "protocol", "linux-body"] }
+wry = { workspace = true, features = ["os-webview", "linux-body"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.9.0"
@@ -97,9 +97,11 @@ lazy-js-bundle = { workspace = true }
 [features]
 default = ["tokio_runtime", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
-fullscreen = ["wry/fullscreen"]
+# No-op since wry 0.56, which always enables fullscreen support. Kept for compatibility.
+fullscreen = []
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
-transparent = ["wry/transparent"]
+# No-op since wry 0.56, which always enables transparency support. Kept for compatibility.
+transparent = []
 gnu = []
 
 [package.metadata.docs.rs]

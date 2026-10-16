@@ -227,6 +227,41 @@ impl WebviewEdits {
     }
 }
 
+/// Marks a custom protocol handler as `Send + Sync`, which wry requires since 0.56.
+///
+/// Our handlers hold `Rc`s and are not thread safe. Wry only calls them on the thread that created
+/// the webview, except on Android where they run on a WebView thread and anything touching the
+/// `VirtualDom` must hold [`android_runtime_lock`](crate::android_sync_lock::android_runtime_lock).
+struct AssertSendSync<F> {
+    handler: F,
+    #[cfg(not(target_os = "android"))]
+    created_on: std::thread::ThreadId,
+}
+
+// SAFETY: see the type docs. `get` checks the calling thread in debug builds.
+unsafe impl<F> Send for AssertSendSync<F> {}
+unsafe impl<F> Sync for AssertSendSync<F> {}
+
+impl<F> AssertSendSync<F> {
+    fn new(handler: F) -> Self {
+        Self {
+            handler,
+            #[cfg(not(target_os = "android"))]
+            created_on: std::thread::current().id(),
+        }
+    }
+
+    fn get(&self) -> &F {
+        #[cfg(not(target_os = "android"))]
+        debug_assert_eq!(
+            self.created_on,
+            std::thread::current().id(),
+            "custom protocol handler called off the thread that created the webview"
+        );
+        &self.handler
+    }
+}
+
 pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
@@ -324,10 +359,7 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
-            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
-                #[cfg(feature = "tokio_runtime")]
-                let _guard = tokio_rt.enter();
-
+            let handler = AssertSendSync::new(move |request, responder: RequestAsyncResponder| {
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -338,6 +370,13 @@ impl WebviewInstance {
                     &root_name,
                     headless,
                 )
+            });
+
+            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
+                #[cfg(feature = "tokio_runtime")]
+                let _guard = tokio_rt.enter();
+
+                handler.get()(request, responder)
             }
         };
 
@@ -456,10 +495,11 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
+            let handler = AssertSendSync::new(handler);
             webview = webview.with_custom_protocol(name, move |a, b| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
-                handler(a, b)
+                handler.get()(a, b)
             });
         }
 
@@ -467,10 +507,11 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
+            let handler = AssertSendSync::new(handler);
             webview = webview.with_asynchronous_custom_protocol(name, move |a, b, c| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
-                handler(a, b, c)
+                handler.get()(a, b, c)
             });
         }
 
