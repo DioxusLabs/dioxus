@@ -8,6 +8,9 @@ publish = false
 
 [dependencies]
 dioxus = { path = "../../dioxus", features = ["fullstack"] }
+# This standalone workspace cannot inherit the root dependency or lockfile.
+# Pin wasm-bindgen to the version in the root lockfile.
+wasm-bindgen = { version = "=0.2.121" }
 
 [features]
 web = ["dioxus/web"]

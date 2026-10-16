@@ -8,7 +8,9 @@ publish = false
 
 [dependencies]
 dioxus = { path = "../../dioxus", features = ["web"] }
-wasm-bindgen = { version = "0.2.114" }
+# This standalone workspace cannot inherit the root dependency or lockfile.
+# Pin wasm-bindgen to the version in the root lockfile.
+wasm-bindgen = { version = "=0.2.121" }
 web-sys = { version = "*", features = ["MouseEvent"] }
 
 [workspace]
