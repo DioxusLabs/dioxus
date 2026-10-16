@@ -12,7 +12,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: Swatinem/rust-cache@v2
+    - uses: ./.github/actions/rust-cache-upstream
       with:
         key: ${{ inputs.key }}
         workspaces: ${{ inputs.workspaces }}
@@ -20,8 +20,8 @@ runs:
         cache-workspace-crates: "true"
         # warpbuild's bundled `@actions/glob` matches no paths on Windows (Swatinem/rust-cache#355
         # fixed only the GitHub provider), so Windows caches go to GitHub's cache service instead.
-        cache-provider: ${{ runner.os == 'Windows' && 'github' || 'warpbuild' }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-provider: warpbuild
+        save-if: ${{ github.ref == 'refs/heads/main' || runner.os == 'Windows' }}
     - uses: ./.github/actions/prune-cargo-target
       with:
         target-dir: ${{ inputs.workspaces }}/target

@@ -1,0 +1,77 @@
+name: "Rust Cache"
+description: "A GitHub Action that implements smart caching for rust/cargo projects with sensible defaults."
+author: "Arpad Borsos <swatinem@swatinem.de>"
+inputs:
+  prefix-key:
+    description: "The prefix cache key, this can be changed to start a new cache manually."
+    required: false
+    default: "v0-rust"
+  shared-key:
+    description: "A cache key that is used instead of the automatic `job`-based key, and is stable over multiple jobs."
+    required: false
+  key:
+    description: "An additional cache key that is added alongside the automatic `job`-based cache key and can be used to further differentiate jobs."
+    required: false
+  add-job-id-key:
+    description: "If the automatic `job`-based cache key should include the job id. Defaults to true."
+    required: false
+    default: "true"
+  add-rust-environment-hash-key:
+    description: "Weather the a hash of the rust environment should be included in the cache key. This includes a hash of all Cargo.toml/Cargo.lock files, rust-toolchain files, and .cargo/config.toml files (if present), as well as the specified 'env-vars'. Defaults to true."
+    required: false
+    default: "true"
+  env-vars:
+    description: "Additional environment variables to include in the cache key, separated by spaces."
+    required: false
+  workspaces:
+    description: "Paths to multiple Cargo workspaces and their target directories, separated by newlines."
+    required: false
+  cache-directories:
+    description: "Additional non workspace directories to be cached, separated by newlines."
+    required: false
+  cache-targets:
+    description: "Determines whether workspace targets are cached. If `false`, only the cargo registry will be cached."
+    required: false
+    default: "true"
+  cache-on-failure:
+    description: "Cache even if the build fails. Defaults to false."
+    required: false
+  cache-all-crates:
+    description: "Determines which crates are cached. If `true` all crates will be cached, otherwise only dependent crates will be cached."
+    required: false
+    default: "false"
+  cache-workspace-crates:
+    description: "Similar to cache-all-crates. If `true` the workspace crates will be cached."
+    required: false
+    default: "false"
+  save-if:
+    description: "Determiners whether the cache should be saved. If `false`, the cache is only restored."
+    required: false
+    default: "true"
+  cache-provider:
+    description: "Determines which provider to use for caching. Options are github, or warpbuild. Defaults to github."
+    required: false
+    default: "github"
+  cache-bin:
+    description: "Determines whether to cache ${CARGO_HOME}/bin."
+    required: false
+    default: "true"
+  lookup-only:
+    description: "Check if a cache entry exists without downloading the cache"
+    required: false
+    default: "false"
+  cmd-format:
+    description: "A format string used to format commands to be run, i.e. `rustc` and `cargo`."
+    required: false
+    default: "{0}"
+outputs:
+  cache-hit:
+    description: "A boolean value that indicates an exact match was found."
+runs:
+  using: "node24"
+  main: "dist/restore.js"
+  post: "dist/save.js"
+  post-if: "success() || env.CACHE_ON_FAILURE == 'true'"
+branding:
+  icon: "archive"
+  color: "gray-dark"
