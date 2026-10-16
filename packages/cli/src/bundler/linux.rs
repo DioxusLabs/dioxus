@@ -1,6 +1,6 @@
 use crate::{
     PackageType,
-    bundler::{AppCategory, BundleContext},
+    bundler::{AppCategory, BundleContext, version},
 };
 use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
@@ -148,7 +148,7 @@ impl BundleContext<'_> {
     pub(crate) async fn bundle_linux_deb(&self) -> Result<Vec<PathBuf>> {
         let arch = self.binary_arch().deb_arch();
         let package_name = self.deb_package_name();
-        let version = self.version_string();
+        let version = version::deb(self.package_version());
 
         let output_dir = self.project_out_directory().join("deb");
         fs::create_dir_all(&output_dir)?;
@@ -228,7 +228,7 @@ impl BundleContext<'_> {
     /// The resulting artifact is written to `project_out_directory()/bundle/rpm`.
     pub(crate) async fn bundle_linux_rpm(&self) -> Result<Vec<PathBuf>> {
         let name = self.main_binary_name().to_string();
-        let version = self.version_string();
+        let version = version::rpm(self.package_version());
         let arch = self.binary_arch().rpm_arch();
         let license = self.license().unwrap_or("Unknown").to_string();
         let description = self.short_description();
