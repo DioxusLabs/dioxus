@@ -67,29 +67,36 @@ impl WriteMutations for MutationState {
         self.channel.insert_before_top(m as u16);
     }
 
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &dioxus_core::AttributeValue) {
+    fn set_attribute(
+        &mut self,
+        name: &str,
+        ns: Option<&str>,
+        value: dioxus_core::BorrowedAttributeValue<'_>,
+    ) {
         match value {
-            dioxus_core::AttributeValue::Text(txt) => {
+            dioxus_core::BorrowedAttributeValue::Text(txt) => {
                 self.channel
                     .set_current_attribute(name, txt, ns.unwrap_or_default())
             }
-            dioxus_core::AttributeValue::Float(f) => {
+            dioxus_core::BorrowedAttributeValue::Float(f) => {
                 self.channel
                     .set_current_attribute(name, &f.to_string(), ns.unwrap_or_default())
             }
-            dioxus_core::AttributeValue::Int(n) => {
+            dioxus_core::BorrowedAttributeValue::Int(n) => {
                 self.channel
                     .set_current_attribute(name, &n.to_string(), ns.unwrap_or_default())
             }
-            dioxus_core::AttributeValue::Bool(b) => self.channel.set_current_attribute(
+            dioxus_core::BorrowedAttributeValue::Bool(b) => self.channel.set_current_attribute(
                 name,
-                if *b { "true" } else { "false" },
+                if b { "true" } else { "false" },
                 ns.unwrap_or_default(),
             ),
-            dioxus_core::AttributeValue::None => self
+            dioxus_core::BorrowedAttributeValue::None => self
                 .channel
                 .remove_current_attribute(name, ns.unwrap_or_default()),
-            _ => unreachable!("Any attributes are not supported by the current renderer"),
+            dioxus_core::BorrowedAttributeValue::Any(_) => {
+                unreachable!("Any attributes are not supported by the current renderer")
+            }
         }
     }
 
