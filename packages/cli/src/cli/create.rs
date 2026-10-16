@@ -83,6 +83,7 @@ impl Create {
             // Cargo never adds name to the path. Name is solely for project name.
             // https://github.com/cargo-generate/cargo-generate/issues/1250
             init: true,
+            no_workspace: true,
             name: self.name,
             silent: self.yes,
             vcs: self.vcs,
