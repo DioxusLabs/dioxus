@@ -1018,8 +1018,8 @@ fn create_static_prototype(node: StaticTemplateNode<'_>, to: &mut dyn WriteMutat
             to.create_element(element.tag(), element.namespace());
 
             for attr in element.attributes() {
-                let value = crate::AttributeValue::Text(attr.value.to_string());
-                to.set_attribute(attr.name, attr.namespace, &value);
+                let value = crate::BorrowedAttributeValue::Text(attr.value);
+                to.set_attribute(attr.name, attr.namespace, value);
             }
 
             let mut children = 0;

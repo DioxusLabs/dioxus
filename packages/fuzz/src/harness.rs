@@ -6,7 +6,7 @@ use crate::{
     ops::{EventBehaviorSpec, Op},
     vdom::App,
 };
-use dioxus_core::{AttributeValue, ElementId, Event, ScopeId, VirtualDom, WriteMutations};
+use dioxus_core::{BorrowedAttributeValue, ElementId, Event, ScopeId, VirtualDom, WriteMutations};
 use dioxus_renderer_oracle::{EventListenerTarget, RendererOracle, SnapshotNode};
 use std::{
     any::Any,
@@ -304,7 +304,7 @@ impl WriteMutations for TargetedRendererOracle {
         self.current_renderer().insert_before(m);
     }
 
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: BorrowedAttributeValue<'_>) {
         self.record_mutation(MutationTrace::SetAttribute {
             name: name.to_string(),
         });

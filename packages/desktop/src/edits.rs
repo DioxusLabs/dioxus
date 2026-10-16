@@ -18,7 +18,7 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
-use dioxus_core::{AttributeValue, ElementId, WriteMutations};
+use dioxus_core::{BorrowedAttributeValue, ElementId, WriteMutations};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
@@ -90,7 +90,7 @@ impl WriteMutations for WryQueue {
         replace_with(m: usize);
         insert_after(m: usize);
         insert_before(m: usize);
-        set_attribute(name: &str, ns: Option<&str>, value: &AttributeValue);
+        set_attribute(name: &str, ns: Option<&str>, value: BorrowedAttributeValue<'_>);
         set_text(value: &str);
         add_event_listener(name: &str);
         remove_event_listener(name: &str);

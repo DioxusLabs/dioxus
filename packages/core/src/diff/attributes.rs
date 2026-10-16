@@ -21,8 +21,8 @@ use core::{cmp::Ordering, iter::Peekable};
 
 use crate::innerlude::MountId;
 use crate::{
-    Attribute, AttributeValue, VNode, VirtualDom, WriteMutations, arena::MountedElementId,
-    diff::template::DynamicAnchor, mutations::TargetedLazyScope,
+    Attribute, AttributeValue, BorrowedAttributeValue, VNode, VirtualDom, WriteMutations,
+    arena::MountedElementId, diff::template::DynamicAnchor, mutations::TargetedLazyScope,
 };
 
 /// Attribute identity as seen by renderers. Value changes do not affect the key, but namespace
@@ -198,7 +198,7 @@ impl VNode {
             // The old attribute was a value and the new one is a listener, so clear the old value that the new listener won't overwrite.
             (false, true, Some(_)) => {
                 let (name, namespace) = key;
-                to.set_attribute(name, namespace, &AttributeValue::None);
+                to.set_attribute(name, namespace, BorrowedAttributeValue::None);
             }
             _ => {}
         }
@@ -237,9 +237,9 @@ impl VNode {
         let (name, namespace) = key;
         let value = anchor
             .static_attr_value_for_key(key)
-            .map(|value| AttributeValue::Text(value.to_string()))
-            .unwrap_or(AttributeValue::None);
-        to.set_attribute(name, namespace, &value);
+            .map(BorrowedAttributeValue::Text)
+            .unwrap_or(BorrowedAttributeValue::None);
+        to.set_attribute(name, namespace, value);
     }
 
     /// Write one dynamic attribute to the current renderer stack element.
@@ -254,15 +254,20 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
-        match &attribute.value {
+        let value = match &attribute.value {
             AttributeValue::Listener(_) => {
                 dom.set_element_ref_for_mount(mount, id);
                 to.add_event_listener(&attribute.name[2..]);
+                return;
             }
-            _ => {
-                to.set_attribute(attribute.name, attribute.namespace, &attribute.value);
-            }
-        }
+            AttributeValue::Text(value) => BorrowedAttributeValue::Text(value),
+            AttributeValue::Float(value) => BorrowedAttributeValue::Float(*value),
+            AttributeValue::Int(value) => BorrowedAttributeValue::Int(*value),
+            AttributeValue::Bool(value) => BorrowedAttributeValue::Bool(*value),
+            AttributeValue::Any(value) => BorrowedAttributeValue::Any(value),
+            AttributeValue::None => BorrowedAttributeValue::None,
+        };
+        to.set_attribute(attribute.name, attribute.namespace, value);
     }
 }
 
