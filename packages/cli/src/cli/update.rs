@@ -155,8 +155,8 @@ impl SelfUpdate {
 
             let install_dir = install_dir.join("dx");
             _ = std::fs::remove_dir_all(&install_dir);
-            self_update::Extract::from_source(&archive_path)
-                .extract_into(&install_dir)
+            zip::ZipArchive::new(std::fs::File::open(&archive_path)?)
+                .and_then(|mut archive| archive.extract(&install_dir))
                 .context("Failed to extract update")?;
 
             let exe = if cfg!(target_os = "windows") {
