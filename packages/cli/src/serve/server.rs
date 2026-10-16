@@ -54,6 +54,9 @@ use super::AppServer;
 pub(crate) struct WebServer {
     devserver_exposed_ip: IpAddr,
     devserver_port: u16,
+    listening_address: SocketAddr,
+    https: bool,
+    static_base_path: Option<String>,
     proxied_port: Option<u16>,
     hot_reload_sockets: Vec<ConnectedWsClient>,
     build_status_sockets: Vec<ConnectedWsClient>,
@@ -96,6 +99,7 @@ impl WebServer {
                 "Failed to bind server to: {devserver_bind_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
             )
         })?;
+        let listening_address = listener.local_addr()?;
 
         let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_exposed_ip, port));
 
@@ -121,6 +125,9 @@ impl WebServer {
             proxied_port,
             devserver_exposed_ip,
             devserver_port,
+            listening_address,
+            https: runner.client().build.config.web.https.enabled == Some(true),
+            static_base_path: runner.client().build.base_path().map(str::to_owned),
             hot_reload_sockets: Default::default(),
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
@@ -433,6 +440,57 @@ impl WebServer {
 
         Some(address)
     }
+
+    /// The browser URL for scanning on another device, without changing the listener.
+    pub fn qr_code_url(&self, current_base_path: Option<&str>) -> Result<String> {
+        if !matches!(self.bundle, BundleFormat::Web | BundleFormat::Server) {
+            bail!("QR codes are only available for web and server apps");
+        }
+
+        let address = lan_address(self.listening_address, resolve_local_ip)?;
+        // Static routes are fixed at startup, while a proxied backend can change on rebuild.
+        let base_path = if self.proxied_port.is_some() {
+            current_base_path
+        } else {
+            self.static_base_path.as_deref()
+        };
+        let protocol = if self.https { "https" } else { "http" };
+        let base_path = base_path.unwrap_or_default().trim_matches('/');
+        let path = if base_path.is_empty() {
+            String::new()
+        } else {
+            format!("/{base_path}/")
+        };
+        Ok(format!("{protocol}://{address}{path}"))
+    }
+}
+
+fn lan_address(
+    mut address: SocketAddr,
+    resolve_ip: impl FnOnce() -> Option<IpAddr>,
+) -> Result<SocketAddr> {
+    if address.ip().is_unspecified() {
+        let ip = resolve_ip()
+            .filter(|ip| ip.is_ipv4() == address.is_ipv4())
+            .context(
+                "Could not resolve a LAN address for this listener. Restart with --addr <LAN-IP>",
+            )?;
+        address.set_ip(ip);
+    }
+
+    let ip = address.ip().to_canonical();
+    if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
+        bail!(
+            "The server has no LAN address. Restart with --addr 0.0.0.0 or --addr <LAN-IP> to allow access from another device"
+        );
+    }
+    if matches!(ip, IpAddr::V6(ip) if ip.is_unicast_link_local()) {
+        bail!(
+            "A link-local IPv6 address needs a device-specific scope. Restart with --addr <LAN-IP>"
+        );
+    }
+
+    Ok(address)
 }
 
 /// Resolve the machine's primary local IP by asking the OS which interface routes to the internet.
@@ -814,5 +872,110 @@ impl SharedStatus {
     async fn send_to(&self, socket: &mut WebSocket) -> Result<(), axum::Error> {
         let msg = serde_json::to_string(&self.get()).unwrap();
         socket.send(Message::Text(msg.into())).await
+    }
+}
+
+#[cfg(test)]
+mod qr_tests {
+    use super::*;
+
+    fn server(address: &str) -> WebServer {
+        WebServer {
+            devserver_exposed_ip: address.parse::<SocketAddr>().unwrap().ip(),
+            devserver_port: 0,
+            listening_address: address.parse().unwrap(),
+            https: false,
+            static_base_path: None,
+            proxied_port: None,
+            hot_reload_sockets: Vec::new(),
+            build_status_sockets: Vec::new(),
+            new_hot_reload_sockets: futures_channel::mpsc::unbounded().1,
+            new_build_status_sockets: futures_channel::mpsc::unbounded().1,
+            build_status: SharedStatus::new_with_starting_build(),
+            application_name: String::new(),
+            bundle: BundleFormat::Web,
+        }
+    }
+
+    #[test]
+    fn qr_url_uses_listening_port_scheme_and_static_route() {
+        let mut server = server("192.168.1.2:8443");
+        server.https = true;
+        server.static_base_path = Some("/phone/".into());
+        assert_eq!(
+            server.qr_code_url(Some("/changed/")).unwrap(),
+            "https://192.168.1.2:8443/phone/"
+        );
+        server.static_base_path = Some("///".into());
+        assert_eq!(
+            server.qr_code_url(None).unwrap(),
+            "https://192.168.1.2:8443"
+        );
+    }
+
+    #[test]
+    fn qr_url_tracks_rebuilt_proxied_routes() {
+        let mut server = server("192.168.1.2:8081");
+        server.proxied_port = Some(9000);
+        server.bundle = BundleFormat::Server;
+        server.static_base_path = Some("old".into());
+        assert_eq!(
+            server.qr_code_url(Some("/new/")).unwrap(),
+            "http://192.168.1.2:8081/new/"
+        );
+        assert_eq!(server.qr_code_url(None).unwrap(), "http://192.168.1.2:8081");
+    }
+
+    #[test]
+    fn qr_url_preserves_ipv6_and_rejects_native_apps() {
+        let mut server = server("[fd12:3456::1]:8080");
+        assert_eq!(
+            server.qr_code_url(None).unwrap(),
+            "http://[fd12:3456::1]:8080"
+        );
+        server.bundle = BundleFormat::Linux;
+        assert!(server.qr_code_url(None).is_err());
+    }
+
+    #[test]
+    fn wildcard_uses_the_existing_primary_route_without_changing_the_port() {
+        let address = "0.0.0.0:8181".parse().unwrap();
+        assert_eq!(
+            lan_address(address, || Some("192.168.1.2".parse().unwrap())).unwrap(),
+            "192.168.1.2:8181".parse::<SocketAddr>().unwrap()
+        );
+        assert!(lan_address(address, || None).is_err());
+        assert!(lan_address(address, || Some("127.0.0.1".parse().unwrap())).is_err());
+        assert!(lan_address(address, || Some("0.0.0.0".parse().unwrap())).is_err());
+        assert!(
+            lan_address("[::]:8181".parse().unwrap(), || Some(
+                "192.168.1.2".parse().unwrap()
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn concrete_bind_does_not_resolve_another_interface() {
+        let address = "10.0.0.2:8080".parse().unwrap();
+        assert_eq!(
+            lan_address(address, || panic!("must keep the selected interface")).unwrap(),
+            address
+        );
+    }
+
+    #[test]
+    fn non_lan_addresses_are_not_advertised() {
+        for address in [
+            "127.0.0.1:8080",
+            "[::1]:8080",
+            "[::ffff:127.0.0.1]:8080",
+            "[fe80::1234]:8080",
+        ] {
+            assert!(
+                lan_address(address.parse().unwrap(), || panic!("not a wildcard")).is_err(),
+                "{address}"
+            );
+        }
     }
 }

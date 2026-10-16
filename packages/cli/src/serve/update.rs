@@ -29,6 +29,8 @@ pub(crate) enum ServeUpdate {
 
     OpenApp,
 
+    ShowQrCode,
+
     RequestRebuild,
 
     CycleHotreloadMode,
