@@ -67,7 +67,9 @@ impl Esbuild {
 
         tracing::info!("Installing esbuild v{ESBUILD_VERSION} from {url}...");
 
-        let bytes = reqwest::get(&url)
+        let bytes = crate::http_client::client()
+            .get(&url)
+            .send()
             .await
             .with_context(|| format!("Failed to download esbuild from {url}"))?
             .bytes()

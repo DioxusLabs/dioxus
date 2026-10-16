@@ -261,7 +261,7 @@ impl TraceController {
         let reporter = Self::enroll_reporter().ok();
 
         // Create a new telemetry uploader
-        let http_client = reqwest::Client::builder()
+        let http_client = crate::http_client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
             .ok();

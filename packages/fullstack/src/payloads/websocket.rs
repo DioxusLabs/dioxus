@@ -1193,6 +1193,10 @@ mod native {
 
     use super::{CloseCode, Message, WebsocketError};
     use dioxus_fullstack_core::RequestError;
+    use futures_util::{
+        StreamExt,
+        stream::{SplitSink, SplitStream},
+    };
     use reqwest::{
         Response, StatusCode, Version,
         header::{HeaderName, HeaderValue},
@@ -1200,13 +1204,9 @@ mod native {
     use tungstenite::protocol::WebSocketConfig;
 
     pub(crate) struct SplitSocket {
-        pub sender: futures_util::lock::Mutex<
-            async_tungstenite::WebSocketSender<tokio_util::compat::Compat<reqwest::Upgraded>>,
-        >,
+        pub sender: futures_util::lock::Mutex<SplitSink<WebSocketStream, tungstenite::Message>>,
 
-        pub receiver: futures_util::lock::Mutex<
-            async_tungstenite::WebSocketReceiver<tokio_util::compat::Compat<reqwest::Upgraded>>,
-        >,
+        pub receiver: futures_util::lock::Mutex<SplitStream<WebSocketStream>>,
     }
 
     pub async fn send_request(
@@ -1283,8 +1283,7 @@ mod native {
         })
     }
 
-    pub type WebSocketStream =
-        async_tungstenite::WebSocketStream<tokio_util::compat::Compat<reqwest::Upgraded>>;
+    pub type WebSocketStream = tokio_tungstenite::WebSocketStream<reqwest::Upgraded>;
 
     /// Error during `Websocket` handshake.
     #[derive(Debug, thiserror::Error, Clone)]
@@ -1438,23 +1437,18 @@ mod native {
                 }
             }
 
-            use tokio_util::compat::TokioAsyncReadCompatExt;
-
             let inner = WebSocketStream::from_raw_socket(
-                self.response.upgrade().await?.compat(),
+                self.response.upgrade().await?,
                 tungstenite::protocol::Role::Client,
                 web_socket_config,
             )
             .await;
 
-            let split: (
-                async_tungstenite::WebSocketSender<tokio_util::compat::Compat<reqwest::Upgraded>>,
-                async_tungstenite::WebSocketReceiver<tokio_util::compat::Compat<reqwest::Upgraded>>,
-            ) = inner.split();
+            let (sender, receiver) = inner.split();
 
             let split_socket = SplitSocket {
-                sender: futures_util::lock::Mutex::new(split.0),
-                receiver: futures_util::lock::Mutex::new(split.1),
+                sender: futures_util::lock::Mutex::new(sender),
+                receiver: futures_util::lock::Mutex::new(receiver),
             };
 
             Ok((split_socket, protocol))

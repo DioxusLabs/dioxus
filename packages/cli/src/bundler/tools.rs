@@ -257,7 +257,9 @@ async fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> 
 
 /// Download bytes from a URL using the async reqwest client.
 pub(crate) async fn download_bytes(url: &str) -> Result<Vec<u8>> {
-    let response = reqwest::get(url)
+    let response = crate::http_client::client()
+        .get(url)
+        .send()
         .await
         .with_context(|| format!("Failed to download {url}"))?;
 

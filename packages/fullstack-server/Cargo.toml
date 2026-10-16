@@ -70,7 +70,6 @@ tower = { workspace = true, features = ["util"] }
 tower-layer = { version = "0.3.3", optional = true }
 parking_lot = { workspace = true, features = ["send_guard"] }
 
-tokio-tungstenite = { workspace = true }
 http.workspace = true
 enumset = "1.1.6"
 http-body-util = "0.1.3"
