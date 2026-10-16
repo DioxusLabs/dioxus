@@ -163,6 +163,16 @@ pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
     //    This must be executed first in order to run `cargo fmt` on the new project.
     let is_workspace = metadata.is_some();
     metadata.and_then(|metadata| {
+        // A glob in `members` (e.g. `crates/*`) may already cover the new project.
+        let manifest_path = path.join("Cargo.toml");
+        if metadata
+            .packages
+            .iter()
+            .any(|package| package.manifest_path.as_std_path() == manifest_path)
+        {
+            return None;
+        }
+
         let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
         let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
         let relative_path = path.strip_prefix(metadata.workspace_root).ok()?;
