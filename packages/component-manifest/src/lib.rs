@@ -119,3 +119,37 @@ impl CargoDependency {
 pub fn component_manifest_schema() -> Schema {
     schema_for!(Component)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_command_passes_git_and_rev() {
+        let dependency = CargoDependency::Detailed {
+            name: "dioxus-primitives".to_string(),
+            version: None,
+            features: vec!["router".to_string()],
+            default_features: false,
+            git: Some("https://github.com/DioxusLabs/components".to_string()),
+            rev: Some("abc123".to_string()),
+        };
+        let command = dependency.add_command();
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(command.get_program(), "cargo");
+        assert_eq!(
+            args,
+            [
+                "add",
+                "dioxus-primitives",
+                "--features",
+                "router",
+                "--no-default-features",
+                "--git",
+                "https://github.com/DioxusLabs/components",
+                "--rev",
+                "abc123",
+            ]
+        );
+    }
+}

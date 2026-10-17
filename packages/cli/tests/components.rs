@@ -20,27 +20,50 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
+fn strings(args: &[&str]) -> Vec<String> {
+    args.iter().map(|arg| arg.to_string()).collect()
+}
+
 fn write(path: &Path, contents: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, contents).unwrap();
 }
 
-/// Commit a registry with a single `button` component on `branch`
-fn commit_registry(registry: &Path, branch: &str, button: &str) {
+/// Commit a registry on `branch` with a `button` component that depends on the registry's
+/// `primitives` crate
+fn commit_registry(registry: &Path, branch: &str, button: &str, primitives: &str) {
     git(registry, &["checkout", "-B", branch]);
     write(
         &registry.join("component.json"),
         r#"{ "name": "registry", "members": ["button"] }"#,
     );
+    let button_manifest = serde_json::json!({
+        "name": "button",
+        "description": "A button",
+        "globalAssets": ["../theme.css"],
+        "cargoDependencies": [{ "name": "primitives", "git": registry_url(registry) }],
+    });
     write(
         &registry.join("button/component.json"),
-        r#"{ "name": "button", "description": "A button", "globalAssets": ["../theme.css"] }"#,
+        &button_manifest.to_string(),
     );
     write(&registry.join("button/mod.rs"), button);
     write(&registry.join("theme.css"), "/* theme */\n");
+    write(
+        &registry.join("primitives/Cargo.toml"),
+        "[package]\nname = \"primitives\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    );
+    write(&registry.join("primitives/src/lib.rs"), primitives);
     git(registry, &["add", "."]);
     git(registry, &["commit", "-m", branch]);
 }
+
+fn registry_url(registry: &Path) -> String {
+    format!("file://{}", registry.display())
+}
+
+const PRIMITIVES: &str = "pub fn primitive() {}\n";
+const MAIN_PRIMITIVES: &str = "compile_error!(\"primitives from main\");\n";
 
 struct Fixture {
     _dir: tempfile::TempDir,
@@ -55,8 +78,8 @@ impl Fixture {
         let registry = dir.path().join("registry");
         std::fs::create_dir(&registry).unwrap();
         git(&registry, &["init"]);
-        commit_registry(&registry, "main", "// main\n");
-        commit_registry(&registry, "0.8", "// 0.8\n");
+        commit_registry(&registry, "main", "// main\n", MAIN_PRIMITIVES);
+        commit_registry(&registry, "0.8", "// 0.8\n", PRIMITIVES);
         git(&registry, &["checkout", "main"]);
 
         let project = dir.path().join("project");
@@ -75,11 +98,12 @@ impl Fixture {
         }
     }
 
-    fn dx(&self, args: &[&str]) -> Output {
+    fn dx(&self, args: &[String]) -> Output {
         let output = Command::new(env!("CARGO_BIN_EXE_dx"))
             .args(args)
             .current_dir(&self.project)
             .env("DX_HOME", &self.dx_home)
+            .env("CARGO_TARGET_DIR", self.project.join("target"))
             .output()
             .unwrap();
         eprintln!(
@@ -90,8 +114,9 @@ impl Fixture {
         output
     }
 
-    fn registry_args<'a>(&'a self, rev: &'a str) -> [&'a str; 4] {
-        ["--git", self.registry.to_str().unwrap(), "--rev", rev]
+    fn registry_args(&self, rev: &str) -> Vec<String> {
+        let url = registry_url(&self.registry);
+        ["--git", &url, "--rev", rev].map(String::from).to_vec()
     }
 
     fn read(&self, path: &str) -> String {
@@ -102,7 +127,7 @@ impl Fixture {
 #[test]
 fn add_copies_the_component_from_the_requested_branch() {
     let fixture = Fixture::new();
-    let mut args = vec!["components", "add", "button"];
+    let mut args = strings(&["components", "add", "button"]);
     args.extend(fixture.registry_args("0.8"));
     assert!(fixture.dx(&args).status.success());
 
@@ -116,14 +141,34 @@ fn add_copies_the_component_from_the_requested_branch() {
 }
 
 #[test]
+fn registry_dependencies_come_from_the_same_commit_as_the_component() {
+    let fixture = Fixture::new();
+    write(
+        &fixture.project.join("src/main.rs"),
+        "mod components;\nfn main() {\n    primitives::primitive();\n}\n",
+    );
+    let mut args = strings(&["components", "add", "button"]);
+    args.extend(fixture.registry_args("0.8"));
+    assert!(fixture.dx(&args).status.success());
+
+    let check = Command::new(env!("CARGO"))
+        .args(["check", "--quiet"])
+        .current_dir(&fixture.project)
+        .env("CARGO_TARGET_DIR", fixture.project.join("target"))
+        .status()
+        .unwrap();
+    assert!(check.success(), "cargo check failed");
+}
+
+#[test]
 fn update_fetches_new_commits_on_the_branch() {
     let fixture = Fixture::new();
-    let mut add = vec!["components", "add", "button", "--force"];
+    let mut add = strings(&["components", "add", "button", "--force"]);
     add.extend(fixture.registry_args("0.8"));
     assert!(fixture.dx(&add).status.success());
 
-    commit_registry(&fixture.registry, "0.8", "// 0.8 updated\n");
-    let mut update = vec!["components", "update"];
+    commit_registry(&fixture.registry, "0.8", "// 0.8 updated\n", PRIMITIVES);
+    let mut update = strings(&["components", "update"]);
     update.extend(fixture.registry_args("0.8"));
     assert!(fixture.dx(&update).status.success());
 
@@ -137,7 +182,7 @@ fn update_fetches_new_commits_on_the_branch() {
 #[test]
 fn a_missing_rev_leaves_no_cache_behind() {
     let fixture = Fixture::new();
-    let mut args = vec!["components", "add", "button"];
+    let mut args = strings(&["components", "add", "button"]);
     args.extend(fixture.registry_args("no-such-branch"));
     assert!(!fixture.dx(&args).status.success());
 

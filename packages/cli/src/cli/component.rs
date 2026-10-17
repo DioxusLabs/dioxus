@@ -562,6 +562,15 @@ impl ComponentRegistry {
         // Filter out any virtual components with members
         components.retain(|c| c.members.is_empty());
 
+        // Take git dependencies on the registry itself from the commit the components were copied from
+        if self.path.is_none() {
+            let (git, _) = self.remote.resolve_or_default();
+            let commit = gix::open(&path)?.head_id()?.to_string();
+            for component in &mut components {
+                pin_registry_dependencies(&mut component.component, &git, &commit);
+            }
+        }
+
         Ok(components)
     }
 
@@ -594,6 +603,36 @@ impl Deref for ResolvedComponent {
 
     fn deref(&self) -> &Self::Target {
         &self.component
+    }
+}
+
+/// Set `rev` to `commit` on git dependencies of `component` that point at the registry `git` and
+/// have no rev, so they don't come from the registry's default branch instead.
+fn pin_registry_dependencies(component: &mut Component, git: &str, commit: &str) {
+    let registry = normalize_git_url(git);
+    for dependency in &mut component.cargo_dependencies {
+        if let CargoDependency::Detailed {
+            git: Some(dependency_git),
+            rev: rev @ None,
+            ..
+        } = dependency
+        {
+            if normalize_git_url(dependency_git) == registry {
+                *rev = Some(commit.to_string());
+            }
+        }
+    }
+}
+
+/// Normalize a git url for comparison, ignoring the scheme, case, and a trailing `/` or `.git`
+fn normalize_git_url(url: &str) -> String {
+    let url = url.trim().trim_end_matches('/').to_ascii_lowercase();
+    let url = url.strip_suffix(".git").unwrap_or(&url);
+    let url = url.split_once("://").map_or(url, |(_, rest)| rest);
+    // GitHub redirects the old name of the components repo
+    match url {
+        "github.com/dioxuslabs/dioxus-components" => "github.com/dioxuslabs/components".to_string(),
+        url => url.to_string(),
     }
 }
 
@@ -959,6 +998,45 @@ mod tests {
             rev: Some("main".to_string()),
         };
         assert_eq!(registry.resolve_or_default().1.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn registry_dependencies_are_pinned_to_the_registry_commit() {
+        let dependency = |git: &str, rev: Option<&str>| CargoDependency::Detailed {
+            name: "dioxus-primitives".to_string(),
+            version: None,
+            features: vec![],
+            default_features: true,
+            git: Some(git.to_string()),
+            rev: rev.map(str::to_string),
+        };
+        let mut component: Component = serde_json::from_str(r#"{ "name": "button" }"#).unwrap();
+        component.cargo_dependencies = vec![
+            dependency("https://github.com/DioxusLabs/components", None),
+            dependency("https://github.com/dioxuslabs/dioxus-components.git/", None),
+            dependency("https://github.com/DioxusLabs/components", Some("v1")),
+            dependency("https://github.com/someone/else", None),
+            CargoDependency::Simple("serde".to_string()),
+        ];
+
+        pin_registry_dependencies(
+            &mut component,
+            "https://github.com/dioxuslabs/components",
+            "abc123",
+        );
+
+        let revs: Vec<_> = component
+            .cargo_dependencies
+            .iter()
+            .map(|dependency| match dependency {
+                CargoDependency::Detailed { rev, .. } => rev.as_deref(),
+                CargoDependency::Simple(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            revs,
+            [Some("abc123"), Some("abc123"), Some("v1"), None, None]
+        );
     }
 
     #[test]
