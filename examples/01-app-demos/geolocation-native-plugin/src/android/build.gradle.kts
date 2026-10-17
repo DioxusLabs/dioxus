@@ -1,17 +1,22 @@
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 
 plugins {
-    id("com.android.library") version "8.4.2"
-    kotlin("android") version "1.9.24"
+    id("com.android.library") version "9.4.0"
 }
+
+// dx bundles this module into its generated Android project; compile against the same
+// SDK as the app (`compile_sdk` plus the newest installed platform minor and build-tools).
+evaluationDependsOn(":app")
+val app = project(":app").extensions.getByType<com.android.build.api.dsl.ApplicationExtension>()
 
 android {
     namespace = "com.dioxus.geolocation"
-    compileSdk = 34
+    compileSdk = app.compileSdk
+    compileSdkMinor = app.compileSdkMinor
+    buildToolsVersion = app.buildToolsVersion
 
     defaultConfig {
         minSdk = 24
-        targetSdk = 34
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -27,10 +32,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 }
 
