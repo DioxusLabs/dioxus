@@ -364,12 +364,16 @@ where
         let mut fut = Box::pin(self);
         let res = fut.as_mut().now_or_never();
 
-        if res.is_none() {
-            crate::spawn(async move {
-                if let Err(err) = fut.await {
-                    crate::throw_error(err)
-                }
-            });
+        match res {
+            Some(Ok(())) => {}
+            Some(Err(err)) => crate::throw_error(err),
+            None => {
+                crate::spawn(async move {
+                    if let Err(err) = fut.await {
+                        crate::throw_error(err)
+                    }
+                });
+            }
         }
     }
 }
