@@ -76,7 +76,7 @@ dunce = { workspace = true }
 dirs = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls-no-provider", "json", "blocking"] }
 tower = { workspace = true }
-git2 = { version = "0.21.0" }
+gix = { version = "0.87.1", default-features = false, features = ["sha1", "revision", "worktree-mutation", "blocking-http-transport-reqwest-rust-tls-trust-dns"] }
 
 # path lookup
 which = { version = "8.0.0" }
@@ -175,9 +175,6 @@ nucleo = "0.5.0"
 # 0.5.12 rust-version is too high
 home = "=0.5.11"
 clap_complete = { version = "4.5.65", features = ["unstable-dynamic"] }
-
-[target.'cfg(target_env = "musl")'.dependencies]
-git2 = { version = "0.21.0", features = ["vendored-libgit2"] }
 
 [features]
 default = []
