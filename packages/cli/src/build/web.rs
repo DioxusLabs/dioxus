@@ -110,7 +110,6 @@ impl BuildRequest {
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
-            || !self.release
             || ctx.mode == BuildMode::Fat;
         let keep_names = self.config.web.wasm_opt.keep_names
             || self.keep_names
@@ -119,7 +118,7 @@ impl BuildRequest {
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
-            debug: self.debug_symbols,
+            debug: self.config.web.wasm_opt.debug || self.debug_symbols,
             ..self.config.web.wasm_opt.clone()
         };
 

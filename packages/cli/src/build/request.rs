@@ -914,7 +914,7 @@ impl BuildRequest {
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
-            debug_symbols: args.debug_symbols,
+            debug_symbols: args.debug_symbols.unwrap_or(!release),
             keep_names: args.keep_names,
             inject_loading_scripts: args.inject_loading_scripts,
             apple_entitlements: args.apple_entitlements.clone(),
