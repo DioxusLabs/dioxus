@@ -459,10 +459,13 @@ impl ViewBuilder {
             quote! { #tag #attrs.child(#first) #(.child(#rest))* }
         };
 
+        // The diagnostics are emitted after the element so that the offset of its name in the
+        // expansion doesn't depend on their text, which rust-analyzer needs to complete the name
         if emit_diagnostics {
             quote! {{
+                let __element = #view;
                 #diagnostics
-                #view
+                __element
             }}
         } else {
             view
