@@ -3191,6 +3191,7 @@ dependencies = [
  "owo-colors",
  "path-absolutize",
  "pdb",
+ "percent-encoding",
  "plist",
  "png 0.17.16",
  "pretty_assertions",
