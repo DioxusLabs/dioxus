@@ -778,36 +778,87 @@ const CATEGORY_STRINGS: &[(&str, AppCategory)] = &[
     ("wordgames", AppCategory::WordGame),
 ];
 
-/// Recursively copy a directory tree.
-///
-/// Preserves symlinks on unix targets and falls back to copying link targets on non-unix.
+/// Recursively copies a directory tree, preserving symlinks instead of resolving them.
 pub(crate) fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
+    copy_dir_recursive_impl(src, dest, &|_| false)
+}
+
+pub(crate) fn is_build_output_dir(name: &str) -> bool {
+    name == "build" || name.starts_with('.')
+}
+
+/// Like [`copy_dir_recursive`], but omits every directory entry for which `skip` returns true.
+pub(crate) fn copy_dir_recursive_skipping(
+    src: &Path,
+    dest: &Path,
+    skip: impl Fn(&str) -> bool,
+) -> Result<()> {
+    copy_dir_recursive_impl(src, dest, &skip)
+}
+
+fn copy_dir_recursive_impl(src: &Path, dest: &Path, skip: &dyn Fn(&str) -> bool) -> Result<()> {
     std::fs::create_dir_all(dest)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
-        let source_path = entry.path();
-        let dest_path = dest.join(entry.file_name());
         let file_type = entry.file_type()?;
+        let name = entry.file_name();
+        let dest_path = dest.join(&name);
 
         if file_type.is_dir() {
-            copy_dir_recursive(&source_path, &dest_path)?;
+            if skip(&name.to_string_lossy()) {
+                continue;
+            }
+            copy_dir_recursive_impl(&entry.path(), &dest_path, skip)?;
         } else if file_type.is_symlink() {
-            #[cfg(unix)]
-            {
-                let target = std::fs::read_link(&source_path)?;
-                std::os::unix::fs::symlink(&target, &dest_path)?;
-            }
-
-            #[cfg(not(unix))]
-            {
-                std::fs::copy(&source_path, &dest_path)?;
-            }
+            copy_symlink(&entry.path(), &dest_path)?;
         } else {
-            std::fs::copy(&source_path, &dest_path)?;
+            std::fs::copy(entry.path(), &dest_path)?;
         }
     }
-
     Ok(())
+}
+
+/// Recreates a symlink at `dest` instead of copying the file or directory it points to.
+#[cfg(unix)]
+fn copy_symlink(src: &Path, dest: &Path) -> Result<()> {
+    let target = std::fs::read_link(src)?;
+    std::os::unix::fs::symlink(&target, dest)?;
+    Ok(())
+}
+
+/// Windows types a symlink as file or directory at creation time. Creating either needs
+/// Developer Mode or an elevated process, so fall back to a copy when the host denies that.
+#[cfg(windows)]
+fn copy_symlink(src: &Path, dest: &Path) -> Result<()> {
+    let target = std::fs::read_link(src)?;
+    let absolute_target = src.parent().unwrap_or(src).join(&target);
+    let created = if absolute_target.is_dir() {
+        std::os::windows::fs::symlink_dir(&target, dest)
+    } else {
+        std::os::windows::fs::symlink_file(&target, dest)
+    };
+    match created {
+        Ok(()) => Ok(()),
+        Err(_) => copy_resolved_symlink_target(&absolute_target, dest),
+    }
+}
+
+/// No symlink API exists here, so copy what the link resolves to.
+#[cfg(not(any(unix, windows)))]
+fn copy_symlink(src: &Path, dest: &Path) -> Result<()> {
+    let target = std::fs::read_link(src)?;
+    let absolute_target = src.parent().unwrap_or(src).join(&target);
+    copy_resolved_symlink_target(&absolute_target, dest)
+}
+
+#[cfg(not(unix))]
+fn copy_resolved_symlink_target(absolute_target: &Path, dest: &Path) -> Result<()> {
+    if absolute_target.is_dir() {
+        copy_dir_recursive(absolute_target, dest)
+    } else {
+        std::fs::copy(absolute_target, dest)?;
+        Ok(())
+    }
 }
 
 /// Recursively zip a directory tree while preserving relative paths and Unix modes.
@@ -862,7 +913,7 @@ pub(crate) fn zip_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::zip_dir_recursive;
+    use super::{copy_dir_recursive, zip_dir_recursive};
 
     #[test]
     fn zip_dir_preserves_layout_and_permissions() {
@@ -890,6 +941,57 @@ mod tests {
         assert_eq!(
             entry.unix_mode().map(|mode| mode & 0o777),
             Some(expected_mode)
+        );
+    }
+
+    /// The three framework symlinks from the macOS codesign bug report must survive the copy.
+    #[cfg(unix)]
+    #[test]
+    fn copy_dir_recursive_preserves_framework_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("DioxusSwiftPlugins.framework");
+        let versions_a = src.join("Versions").join("A");
+        let resources_dir = versions_a.join("Resources");
+        std::fs::create_dir_all(&resources_dir).unwrap();
+        std::fs::write(versions_a.join("DioxusSwiftPlugins"), b"dylib").unwrap();
+        std::fs::write(resources_dir.join("Info.plist"), b"plist").unwrap();
+        symlink("A", src.join("Versions").join("Current")).unwrap();
+        symlink(
+            "Versions/Current/DioxusSwiftPlugins",
+            src.join("DioxusSwiftPlugins"),
+        )
+        .unwrap();
+        symlink("Versions/Current/Resources", src.join("Resources")).unwrap();
+
+        let dst = tmp.path().join("installed.framework");
+        copy_dir_recursive(&src, &dst).unwrap();
+
+        let current_link = std::fs::symlink_metadata(dst.join("Versions").join("Current")).unwrap();
+        assert!(current_link.file_type().is_symlink());
+        assert_eq!(
+            std::fs::read_link(dst.join("Versions").join("Current")).unwrap(),
+            std::path::Path::new("A")
+        );
+
+        let exec_link = std::fs::symlink_metadata(dst.join("DioxusSwiftPlugins")).unwrap();
+        assert!(exec_link.file_type().is_symlink());
+        assert_eq!(
+            std::fs::read_link(dst.join("DioxusSwiftPlugins")).unwrap(),
+            std::path::Path::new("Versions/Current/DioxusSwiftPlugins")
+        );
+
+        let resources_link = std::fs::symlink_metadata(dst.join("Resources")).unwrap();
+        assert!(resources_link.file_type().is_symlink());
+        assert_eq!(
+            std::fs::read_link(dst.join("Resources")).unwrap(),
+            std::path::Path::new("Versions/Current/Resources")
+        );
+
+        assert_eq!(
+            std::fs::read(dst.join("Versions").join("A").join("DioxusSwiftPlugins")).unwrap(),
+            b"dylib"
         );
     }
 }
