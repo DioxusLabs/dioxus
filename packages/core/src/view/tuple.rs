@@ -27,13 +27,16 @@ macro_rules! impl_tuple_views {
     (@impl $first_name:ident $first_value:ident $first_marker:ident,) => {
         impl<$first_name: ViewTemplate> ViewTemplate for ($first_name,) {
             const TEMPLATE_TREE: &'static TemplateRawTree = $first_name::TEMPLATE_TREE;
+            const HAS_DYNAMIC: bool = $first_name::HAS_DYNAMIC;
         }
 
         impl<$first_name: View> View for ($first_name,) {
             #[inline]
             fn push(self, dynamic: &mut DynamicValues) {
                 let ($first_value,) = self;
-                $first_value.push(dynamic);
+                if $first_name::HAS_DYNAMIC {
+                    $first_value.push(dynamic);
+                }
             }
         }
 
@@ -42,14 +45,19 @@ macro_rules! impl_tuple_views {
         impl<$first_name: ViewTemplate, $($name: ViewTemplate),*> ViewTemplate for ($first_name, $($name,)*) {
             const TEMPLATE_TREE: &'static TemplateRawTree =
                 &TemplateRawTree::Sequence(&[$first_name::TEMPLATE_TREE, $($name::TEMPLATE_TREE,)*]);
+            const HAS_DYNAMIC: bool = $first_name::HAS_DYNAMIC $(|| $name::HAS_DYNAMIC)*;
         }
 
         impl<$first_name: View, $($name: View),*> View for ($first_name, $($name,)*) {
             #[inline]
             fn push(self, dynamic: &mut DynamicValues) {
                 let ($first_value, $($value,)*) = self;
-                $first_value.push(dynamic);
-                $($value.push(dynamic);)*
+                if $first_name::HAS_DYNAMIC {
+                    $first_value.push(dynamic);
+                }
+                $(if $name::HAS_DYNAMIC {
+                    $value.push(dynamic);
+                })*
             }
         }
 

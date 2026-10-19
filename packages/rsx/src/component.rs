@@ -296,12 +296,7 @@ impl Component {
                     .unwrap_or(usize::MAX);
                 dynamic_literal_index += 1;
                 let debug_value = quote! {
-                    match __hot_reload_template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
-                        Some(Some(__template_read)) => {
-                            __dynamic_literal_pool.component_property(#idx, __template_read, #literal)
-                        }
-                        _ => #release_value,
-                    }
+                    __dynamic_literal_pool.component_property_or(#idx, __hot_reload_template, #literal)
                 };
                 quote! {
                     {
