@@ -148,6 +148,8 @@ impl BuildRequest {
             large_heap: Option<bool>,
             /// Native library name (without lib prefix and .so extension)
             lib_name: String,
+            /// The jniLibs ABI directory this build stages its libraries into, e.g. "arm64-v8a"
+            abi: String,
         }
 
         // Get permission mapper from config
@@ -197,6 +199,7 @@ impl BuildRequest {
             supports_rtl: self.config.android.application.supports_rtl,
             large_heap: self.config.android.application.large_heap,
             lib_name: self.android_lib_name(),
+            abi: AndroidTools::android_jnilib(&self.triple).to_string(),
         };
         let hbs = handlebars::Handlebars::new();
 
