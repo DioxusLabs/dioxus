@@ -1657,6 +1657,13 @@ attribute_group! {
 
     /// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-setsize>
     aria_setsize: "aria-setsize";
+
+    /// Declares the namespace of the element. It is valid on HTML, SVG, and MathML roots, so it is
+    /// modeled as a global attribute (also declared in the SVG group, since SVG elements only
+    /// implement `SvgAttributesElement`).
+    ///
+    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/xmlns>
+    xmlns;
 }
 
 attribute_group! {
@@ -2405,6 +2412,9 @@ attribute_group! {
     x2;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/xmlns>
+    ///
+    /// Also declared in the global attribute group so that MathML roots (`<math>`) accept it.
+    /// SVG elements only implement `SvgAttributesElement`, so it must be listed here too.
     xmlns;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/xChannelSelector>

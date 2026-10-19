@@ -124,6 +124,12 @@ impl IfmtInput {
         self.source.to_token_stream().to_string()
     }
 
+    /// Escape literal `{` and `}` so that the text is treated as literal characters rather than
+    /// format-string interpolation when the generated `rsx!` source is re-parsed.
+    pub(crate) fn escape_literal_braces(text: &str) -> String {
+        text.replace('{', "{{").replace('}', "}}")
+    }
+
     /// Parse the source into segments
     fn from_raw(input: &str) -> Result<Vec<Segment>> {
         let mut chars = input.chars().peekable();
