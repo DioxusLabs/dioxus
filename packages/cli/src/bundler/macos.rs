@@ -482,7 +482,11 @@ impl BundleContext<'_> {
         );
 
         let version = self.version_string();
-        let bundle_version = macos_settings.bundle_version.as_deref().unwrap_or(&version);
+        let bundle_version = self
+            .build
+            .apple_bundle_version_override()
+            .or_else(|| macos_settings.bundle_version.clone())
+            .unwrap_or_else(|| version.clone());
 
         dict.insert(
             "CFBundleShortVersionString".into(),

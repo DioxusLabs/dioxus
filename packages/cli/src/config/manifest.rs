@@ -326,6 +326,14 @@ pub struct IosConfig {
     pub long_description: Option<String>,
 
     // === iOS-specific settings ===
+    /// The bundle version string (CFBundleVersion).
+    ///
+    /// This is the machine-readable build number that must increase with every upload
+    /// to App Store Connect. Can be overridden per-build with `--bundle-version` or the
+    /// `DX_BUNDLE_VERSION` environment variable. Defaults to the crate version.
+    #[serde(default)]
+    pub bundle_version: Option<String>,
+
     /// Minimum iOS deployment target (e.g., "15.0").
     #[serde(default)]
     pub deployment_target: Option<String>,
@@ -590,6 +598,16 @@ pub struct AndroidConfig {
     pub signing: Option<AndroidSigningConfig>,
 
     // === Android-specific settings ===
+    /// The version code used for `versionCode` in the generated Gradle project.
+    ///
+    /// Must be between 1 and 2100000000 (the Google Play Store maximum).
+    ///
+    /// Can be overridden per-build with `--version-code` or the `DX_ANDROID_VERSION_CODE`
+    /// environment variable. If unset, it is derived from the crate version as
+    /// `major * 1000000 + minor * 1000 + patch`.
+    #[serde(default)]
+    pub version_code: Option<u32>,
+
     /// Minimum SDK version.
     #[serde(default)]
     pub min_sdk: Option<u32>,
