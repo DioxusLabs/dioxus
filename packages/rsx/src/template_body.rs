@@ -263,6 +263,51 @@ impl ToTokens for TemplateBody {
     }
 }
 
+impl TemplateBody {
+    /// Like [`ToTokens`], but produces a `Vec<Element>` - one entry per top-level root, with
+    /// `for`/`if` roots flattened into however many elements they produce at runtime - instead of
+    /// one merged [`Element`].
+    ///
+    /// This is what a component declaring `children: Vec<Element>` receives. A component keeping
+    /// `children: Element` gets the same list merged back, via
+    /// `dioxus_core::properties::VecElementFromMarker`.
+    pub(crate) fn to_vec_tokens(&self) -> TokenStream2 {
+        let root_exprs = self.roots.iter().map(BodyNode::to_vec_tokens);
+        quote! {
+            {
+                let mut __children: ::std::vec::Vec<dioxus_core::Element> = ::std::vec::Vec::new();
+                #( __children.extend(#root_exprs); )*
+                __children
+            }
+        }
+    }
+}
+
+impl BodyNode {
+    /// See [`TemplateBody::to_vec_tokens`]. Produces an `IntoIterator<Item = Element>` expression
+    /// so the caller can `.extend(...)` it however many elements this root contributes.
+    fn to_vec_tokens(&self) -> TokenStream2 {
+        match self {
+            BodyNode::ForLoop(for_loop) => {
+                let ForLoop {
+                    pat, expr, body, ..
+                } = for_loop;
+                let inner = body.to_vec_tokens();
+                quote! {
+                    (#expr).into_iter().flat_map(move |#pat| #inner)
+                }
+            }
+            BodyNode::IfChain(if_chain) => if_chain.to_vec_tokens(),
+            // Everything else contributes exactly one `Element`: compile it as its own single-root
+            // template, reusing the `ToTokens` impl above rather than re-deriving its bookkeeping
+            _ => {
+                let single = TemplateBody::new(vec![self.clone()]);
+                quote! { ::std::vec::Vec::from([ #single ]) }
+            }
+        }
+    }
+}
+
 pub(crate) struct ViewBuilderPieces {
     definitions: Vec<TokenStream2>,
     view: TokenStream2,
