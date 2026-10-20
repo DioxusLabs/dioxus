@@ -20,8 +20,11 @@ pub(crate) struct WebConfig {
     pub(crate) https: WebHttpsConfig,
 
     /// Whether to enable pre-compression of assets and wasm during a web build in release mode
-    #[serde(default = "false_bool")]
-    pub(crate) pre_compress: bool,
+    ///
+    /// Accepts a boolean (`true` compresses with brotli, `false` disables pre-compression) or the
+    /// name of a compression algorithm (`"brotli"` or `"gzip"`).
+    #[serde(default)]
+    pub(crate) pre_compress: PreCompressConfig,
 
     /// The wasm-opt configuration
     #[serde(default)]
@@ -31,13 +34,64 @@ pub(crate) struct WebConfig {
 impl Default for WebConfig {
     fn default() -> Self {
         Self {
-            pre_compress: false_bool(),
+            pre_compress: Default::default(),
             app: Default::default(),
             https: Default::default(),
             wasm_opt: Default::default(),
             proxy: Default::default(),
             watcher: Default::default(),
             resource: Default::default(),
+        }
+    }
+}
+
+/// Which compression algorithm to use when pre-compressing web assets
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum CompressionAlgorithm {
+    /// Compress with brotli, emitting `.br` files
+    Brotli,
+    /// Compress with gzip, emitting `.gz` files
+    Gzip,
+}
+
+impl CompressionAlgorithm {
+    /// Every algorithm that pre-compression can emit files for
+    pub(crate) const ALL: &'static [Self] = &[Self::Brotli, Self::Gzip];
+
+    /// The extension appended to a file compressed with this algorithm
+    pub(crate) fn extension(self) -> &'static str {
+        match self {
+            Self::Brotli => "br",
+            Self::Gzip => "gz",
+        }
+    }
+}
+
+/// Whether to pre-compress web assets, and with which algorithm
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub(crate) enum PreCompressConfig {
+    /// `true` compresses with brotli, `false` disables pre-compression
+    Enabled(bool),
+
+    /// Compress with the given algorithm
+    Algorithm(CompressionAlgorithm),
+}
+
+impl Default for PreCompressConfig {
+    fn default() -> Self {
+        Self::Enabled(false)
+    }
+}
+
+impl PreCompressConfig {
+    /// The algorithm to compress with, or `None` if pre-compression is disabled
+    pub(crate) fn algorithm(self) -> Option<CompressionAlgorithm> {
+        match self {
+            Self::Enabled(false) => None,
+            Self::Enabled(true) => Some(CompressionAlgorithm::Brotli),
+            Self::Algorithm(algorithm) => Some(algorithm),
         }
     }
 }
@@ -190,4 +244,48 @@ fn false_bool() -> bool {
 
 pub(crate) fn default_title() -> String {
     "dioxus | ⛺".into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::DioxusConfig;
+
+    fn parse_pre_compress(value: &str) -> PreCompressConfig {
+        let source = format!("[web]\npre_compress = {value}\n");
+        let config: DioxusConfig = toml::from_str(&source).expect("parse config");
+        config.web.pre_compress
+    }
+
+    #[test]
+    fn pre_compress_defaults_to_disabled() {
+        assert_eq!(DioxusConfig::default().web.pre_compress.algorithm(), None);
+    }
+
+    #[test]
+    fn pre_compress_accepts_booleans() {
+        assert_eq!(parse_pre_compress("false").algorithm(), None);
+        assert_eq!(
+            parse_pre_compress("true").algorithm(),
+            Some(CompressionAlgorithm::Brotli)
+        );
+    }
+
+    #[test]
+    fn pre_compress_accepts_algorithm_names() {
+        assert_eq!(
+            parse_pre_compress(r#""brotli""#).algorithm(),
+            Some(CompressionAlgorithm::Brotli)
+        );
+        assert_eq!(
+            parse_pre_compress(r#""gzip""#).algorithm(),
+            Some(CompressionAlgorithm::Gzip)
+        );
+    }
+
+    #[test]
+    fn pre_compress_rejects_unknown_algorithms() {
+        let source = "[web]\npre_compress = \"zstd\"\n";
+        toml::from_str::<DioxusConfig>(source).expect_err("unknown algorithm should not parse");
+    }
 }
