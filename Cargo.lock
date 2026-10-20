@@ -3960,6 +3960,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-document",
  "dioxus-fullstack-core",
  "dioxus-history",
  "dioxus-hooks",
