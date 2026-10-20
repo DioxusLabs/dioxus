@@ -258,7 +258,7 @@ mod tests {
               = note: `if you_are_happy && you_know_it { … }` is the conditional
         "#};
 
-        assert_eq!(expected, issue_report.to_string());
+        assert_eq!(expected, issue_report.unwrap().to_string());
     }
 
     #[test]
@@ -289,7 +289,7 @@ mod tests {
               = note: `match you_are_happy && you_know_it { … }` is the conditional
         "#};
 
-        assert_eq!(expected, issue_report.to_string());
+        assert_eq!(expected, issue_report.unwrap().to_string());
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod tests {
               = note: `for i in 0..10 { … }` is the loop
         "#};
 
-        assert_eq!(expected, issue_report.to_string());
+        assert_eq!(expected, issue_report.unwrap().to_string());
     }
 
     #[test]
@@ -345,7 +345,7 @@ mod tests {
               = note: `while check_thing() { … }` is the loop
         "#};
 
-        assert_eq!(expected, issue_report.to_string());
+        assert_eq!(expected, issue_report.unwrap().to_string());
     }
 
     #[test]
@@ -373,7 +373,7 @@ mod tests {
               = note: `loop { … }` is the loop
         "#};
 
-        assert_eq!(expected, issue_report.to_string());
+        assert_eq!(expected, issue_report.unwrap().to_string());
     }
 
     #[test]
@@ -399,7 +399,7 @@ mod tests {
               |                         ^^^^^^^^^^
         "#};
 
-        assert_eq!(expected, issue_report.to_string());
+        assert_eq!(expected, issue_report.unwrap().to_string());
     }
 
     #[test]
@@ -431,6 +431,6 @@ mod tests {
               = note: `if you_are_happy && you_know_it { … }` is the conditional
         "#};
 
-        assert_eq!(expected, issue_report.to_string());
+        assert_eq!(expected, issue_report.unwrap().to_string());
     }
 }
