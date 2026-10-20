@@ -62,9 +62,27 @@ unsafe impl SerializeConst for ConstStr {
 }
 
 impl ConstStr {
-    /// Create a new constant string
+    /// The maximum number of bytes a [`ConstStr`] can store.
+    pub const MAX_LEN: usize = MAX_STR_SIZE;
+
+    /// Create a new constant string.
+    ///
+    /// Values longer than [`ConstStr::MAX_LEN`] bytes cannot be stored.
+    ///
+    /// ```compile_fail
+    /// use const_serialize::ConstStr;
+    ///
+    /// const TOO_LONG: &str = unsafe {
+    ///     std::str::from_utf8_unchecked(&[b'a'; ConstStr::MAX_LEN + 1])
+    /// };
+    /// const _: ConstStr = ConstStr::new(TOO_LONG);
+    /// ```
     pub const fn new(s: &str) -> Self {
         let str_bytes = s.as_bytes();
+        assert!(
+            str_bytes.len() <= Self::MAX_LEN,
+            "ConstStr capacity exceeded"
+        );
         let mut bytes = [MaybeUninit::uninit(); MAX_STR_SIZE];
         let mut i = 0;
         while i < str_bytes.len() {
@@ -122,7 +140,7 @@ impl ConstStr {
     pub const fn push_str(self, str: &str) -> Self {
         let Self { mut bytes, len } = self;
         assert!(
-            str.len() + len as usize <= MAX_STR_SIZE,
+            str.len() + len as usize <= Self::MAX_LEN,
             "String is too long"
         );
         let str_bytes = str.as_bytes();

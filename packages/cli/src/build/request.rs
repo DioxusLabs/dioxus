@@ -209,7 +209,6 @@ use depinfo::RustcDepInfo;
 use dioxus_cli_config::PRODUCT_NAME_ENV;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use krates::{NodeId, cm::TargetKind};
-use manganis::BundledAsset;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
 use std::{borrow::Cow, collections::VecDeque, ffi::OsString};
@@ -1461,13 +1460,13 @@ impl BuildRequest {
                     let from = entry.path().to_path_buf();
                     let relative_path = from.strip_prefix(&dir).unwrap();
                     let to = format!("../{}", relative_path.display());
-                    manifest.insert_asset(BundledAsset::new(
+                    manifest.insert_asset(crate::opt::try_create_bundled_asset(
                         from.to_string_lossy().as_ref(),
                         to.as_str(),
                         manganis_core::AssetOptions::builder()
                             .with_hash_suffix(false)
                             .into_asset_options(),
-                    ));
+                    )?);
                 }
             }
         }
