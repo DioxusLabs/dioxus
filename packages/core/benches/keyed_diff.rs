@@ -57,6 +57,7 @@ fn keyed_diff(c: &mut Criterion) {
     // ~490 stable rows on each side untouched.
     bench(&mut group, "reverse 20 mid-list", &initial, reverse_window);
     bench(&mut group, "shuffle 20 mid-list", &initial, shuffle_window);
+    bench(&mut group, "replace 100 mid-list", &initial, replace_middle);
 
     // No shared keys: the create-all + remove-all path.
     bench(&mut group, "replace all", &initial, replace_all);
@@ -147,6 +148,11 @@ fn shuffle_window(v: &mut Vec<u64>) {
     let mid = v.len() / 2;
     let mut rng = SmallRng::seed_from_u64(0xD10C);
     v[mid - 10..mid + 10].shuffle(&mut rng);
+}
+
+fn replace_middle(v: &mut Vec<u64>) {
+    let start = (v.len() - CHUNK as usize) / 2;
+    v.splice(start..start + CHUNK as usize, FRESH..FRESH + CHUNK);
 }
 
 // --- harness -----------------------------------------------------------------
