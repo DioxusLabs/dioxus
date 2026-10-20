@@ -83,7 +83,7 @@ impl AppManifest {
     pub fn get_first_asset_for_source(&self, path: &Path) -> Option<&BundledAsset> {
         self.assets
             .get(path)
-            .and_then(|assets| assets.iter().next())
+            .and_then(|assets| assets.iter().min_by(compare_by_output_path))
     }
 
     /// Check if the manifest contains a specific asset
@@ -95,11 +95,61 @@ impl AppManifest {
 
     /// Iterate over all the assets with unique output paths in the manifest. This will not include
     /// assets that have different source paths, but the same file contents.
+    ///
+    /// Assets are yielded in [`compare_by_output_path`] order so that everything derived from this
+    /// iterator - the bundle layout, the generated `index.html` - is reproducible across builds.
     pub fn unique_assets(&self) -> impl Iterator<Item = &BundledAsset> {
         let mut seen = HashSet::new();
         self.assets
             .values()
-            .flat_map(|assets| assets.iter())
+            .flat_map(|assets| {
+                let mut sorted: Vec<_> = assets.iter().collect();
+                sorted.sort_unstable_by(compare_by_output_path);
+                sorted
+            })
             .filter(move |asset| seen.insert(asset.bundled_path()))
+    }
+}
+
+/// Order two assets by the path they are bundled to, falling back to their source path.
+///
+/// The manifest groups assets in hash sets, whose iteration order changes from run to run, so every
+/// walk over them needs an explicit order to keep build output stable.
+fn compare_by_output_path(a: &&BundledAsset, b: &&BundledAsset) -> std::cmp::Ordering {
+    a.bundled_path()
+        .cmp(b.bundled_path())
+        .then_with(|| a.absolute_source_path().cmp(b.absolute_source_path()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manganis::AssetOptions;
+
+    #[test]
+    fn unique_assets_are_ordered_by_bundled_path() {
+        // Assets that share a source path live in one hash set, whose iteration order changes from
+        // run to run, so the manifest has to impose the order itself
+        let names = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
+        let mut manifest = AppManifest::new();
+        for name in names {
+            manifest.insert_asset(BundledAsset::new(
+                "/app/assets/style.css",
+                &format!("style-{name}.css"),
+                AssetOptions::css().into_asset_options(),
+            ));
+        }
+
+        let bundled: Vec<_> = manifest
+            .unique_assets()
+            .map(|asset| asset.bundled_path().to_string())
+            .collect();
+        let expected: Vec<_> = names
+            .iter()
+            .map(|name| format!("style-{name}.css"))
+            .collect();
+
+        assert_eq!(bundled, expected);
     }
 }

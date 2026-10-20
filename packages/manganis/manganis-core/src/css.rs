@@ -115,6 +115,8 @@ impl AssetOptionsBuilder<CssAssetOptions> {
         AssetOptions {
             add_hash: true,
             variant: AssetVariant::Css(self.variant),
+            fetch_priority: self.fetch_priority,
+            preload_order: self.preload_order,
         }
     }
 }

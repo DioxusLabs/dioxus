@@ -53,6 +53,8 @@ impl AssetOptionsBuilder<FolderAssetOptions> {
         AssetOptions {
             add_hash: false,
             variant: crate::AssetVariant::Folder(self.variant),
+            fetch_priority: self.fetch_priority,
+            preload_order: self.preload_order,
         }
     }
 }
