@@ -54,6 +54,7 @@ impl BundleContext<'_> {
         let wix_program_files_folder = arch.wix_program_files_folder();
 
         let product_name = self.product_name();
+        let product_file_name = self.product_file_name();
         let version = wix_version(
             &wix_settings
                 .version
@@ -61,11 +62,11 @@ impl BundleContext<'_> {
                 .unwrap_or_else(|| self.version_string()),
         )?;
 
-        let msi_name = format!("{product_name}_{version}_{arch_str}.msi");
+        let msi_name = format!("{product_file_name}_{version}_{arch_str}.msi");
         let output_path = output_dir.join(&msi_name);
 
         let upgrade_code = wix_settings.upgrade_code.unwrap_or_else(|| {
-            let input = format!("{}.exe.app.{}", product_name, arch_str);
+            let input = format!("{}.exe.app.{}", product_file_name, arch_str);
             Uuid::new_v5(&Uuid::NAMESPACE_DNS, input.as_bytes())
         });
 
@@ -94,7 +95,7 @@ impl BundleContext<'_> {
         let mut data = BTreeMap::new();
         data.insert(
             "product_name".to_string(),
-            serde_json::Value::String(product_name.clone()),
+            serde_json::Value::String(xml_escape(&product_name)),
         );
         data.insert(
             "version".to_string(),
@@ -118,7 +119,7 @@ impl BundleContext<'_> {
         );
         data.insert(
             "short_description".to_string(),
-            serde_json::Value::String(self.short_description()),
+            serde_json::Value::String(xml_escape(&self.short_description())),
         );
         data.insert(
             "bundle_id".to_string(),
@@ -132,7 +133,7 @@ impl BundleContext<'_> {
             .unwrap_or_else(|| product_name.clone());
         data.insert(
             "publisher".to_string(),
-            serde_json::Value::String(publisher),
+            serde_json::Value::String(xml_escape(&publisher)),
         );
 
         data.insert(
@@ -226,7 +227,7 @@ impl BundleContext<'_> {
         let wxs_content =
             render_template(&wix_template, &data).context("Failed to render WiX template")?;
 
-        let wxs_path = output_dir.join(format!("{product_name}.wxs"));
+        let wxs_path = output_dir.join(format!("{product_file_name}.wxs"));
         std::fs::write(&wxs_path, &wxs_content).context("Failed to write WiX source file")?;
 
         let mut fragment_wxs_paths = Vec::new();
@@ -239,7 +240,7 @@ impl BundleContext<'_> {
         }
 
         tracing::info!("Running candle.exe to compile WiX source...");
-        let wixobj_path = output_dir.join(format!("{product_name}.wixobj"));
+        let wixobj_path = output_dir.join(format!("{product_file_name}.wixobj"));
 
         let mut candle_cmd = Command::new(&candle);
         candle_cmd
@@ -392,8 +393,9 @@ impl BundleContext<'_> {
         let arch_str = arch.windows_arch();
 
         let product_name = self.product_name();
+        let product_file_name = self.product_file_name();
         let version = self.version_string();
-        let installer_name = format!("{product_name}_{version}_{arch_str}-setup.exe");
+        let installer_name = format!("{product_file_name}_{version}_{arch_str}-setup.exe");
         let output_path = output_dir.join(&installer_name);
 
         let staging_dir = output_dir.join("_staging");
@@ -427,7 +429,7 @@ impl BundleContext<'_> {
         let mut data = BTreeMap::new();
         data.insert(
             "product_name".to_string(),
-            JsonValue::String(product_name.clone()),
+            JsonValue::String(nsis_escape(&product_name)),
         );
         data.insert("version".to_string(), JsonValue::String(version.clone()));
         data.insert(
@@ -444,7 +446,7 @@ impl BundleContext<'_> {
         );
         data.insert(
             "short_description".to_string(),
-            JsonValue::String(self.short_description()),
+            JsonValue::String(nsis_escape(&self.short_description())),
         );
         data.insert(
             "bundle_id".to_string(),
@@ -456,12 +458,15 @@ impl BundleContext<'_> {
             .map(|s| s.to_string())
             .or_else(|| self.authors_comma_separated())
             .unwrap_or_else(|| product_name.clone());
-        data.insert("publisher".to_string(), JsonValue::String(publisher));
+        data.insert(
+            "publisher".to_string(),
+            JsonValue::String(nsis_escape(&publisher)),
+        );
 
         if let Some(copyright) = self.copyright_string() {
             data.insert(
                 "copyright".to_string(),
-                JsonValue::String(copyright.to_string()),
+                JsonValue::String(nsis_escape(copyright)),
             );
         }
 
@@ -481,7 +486,7 @@ impl BundleContext<'_> {
             .unwrap_or_else(|| product_name.clone());
         data.insert(
             "start_menu_folder".to_string(),
-            JsonValue::String(start_menu_folder),
+            JsonValue::String(nsis_escape(&start_menu_folder)),
         );
 
         if let Some(icon) = &nsis_settings.installer_icon {
@@ -572,7 +577,7 @@ impl BundleContext<'_> {
             render_template(NSIS_TEMPLATE, &data)?
         };
 
-        let nsi_path = output_dir.join(format!("{product_name}.nsi"));
+        let nsi_path = output_dir.join(format!("{product_file_name}.nsi"));
         std::fs::write(&nsi_path, &nsi_content).context("Failed to write NSIS script")?;
 
         tracing::info!("Running makensis to build NSIS installer...");
@@ -926,6 +931,28 @@ fn render_template(template: &str, data: &BTreeMap<String, JsonValue>) -> Result
         .render("template", data)
         .context("Failed to render template")?;
     Ok(rendered.replace(BACKSLASH_PLACEHOLDER, "\\"))
+}
+
+/// Escape a string for use in WiX XML attribute values.
+///
+/// [`render_template`] disables Handlebars' default HTML escaping (paths must be
+/// rendered verbatim), so text values interpolated into the WiX XML must be
+/// escaped at the call site.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('\"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+/// Escape a string for use inside a double-quoted NSIS string literal.
+///
+/// `$` introduces variables/escapes in NSIS strings and `\"` would terminate the
+/// literal, so both must be escaped when interpolating user-provided text into
+/// the generated `.nsi` script.
+fn nsis_escape(s: &str) -> String {
+    s.replace('$', "$$").replace('\"', "$\\\"")
 }
 
 /// Convert a semver version string to a WiX-compatible version.
@@ -1299,5 +1326,20 @@ mod tests {
         assert!(!rendered.contains("<Directory Id=\"ProgramFilesFolder\">"));
         // Verify \{{ substitution works: registry key should contain actual values
         assert!(rendered.contains("Software\\Dioxus Labs\\Hotdog"));
+    }
+
+    #[test]
+    fn xml_escape_escapes_special_characters() {
+        assert_eq!(
+            super::xml_escape("Tom & Jerry's <App>"),
+            "Tom &amp; Jerry&apos;s &lt;App&gt;"
+        );
+        assert_eq!(super::xml_escape("My App"), "My App");
+    }
+
+    #[test]
+    fn nsis_escape_escapes_special_characters() {
+        assert_eq!(super::nsis_escape("Cash $ App"), "Cash $$ App");
+        assert_eq!(super::nsis_escape("My App"), "My App");
     }
 }
