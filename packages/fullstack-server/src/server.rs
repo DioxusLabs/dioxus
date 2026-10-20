@@ -406,7 +406,7 @@ where
     use tower_http::services::{ServeDir, ServeFile};
 
     let dir = std::fs::read_dir(directory)
-        .unwrap_or_else(|e| panic!("Couldn't read public directory at {:?}: {}", &directory, e));
+        .unwrap_or_else(|e| panic!("Couldn't read public directory at {:?}: {}", directory, e));
 
     for entry in dir.flatten() {
         let path = entry.path();

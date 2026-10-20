@@ -2226,9 +2226,9 @@ impl BuildRequest {
     pub(crate) fn load_bundle_manifest(&self) -> Result<AppManifest> {
         let manifest_path = self.bundle_manifest_file();
         let manifest_data = std::fs::read_to_string(&manifest_path)
-            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
+            .with_context(|| format!("Failed to read manifest at {:?}", manifest_path))?;
         let manifest: AppManifest = serde_json::from_str(&manifest_data)
-            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
+            .with_context(|| format!("Failed to parse manifest at {:?}", manifest_path))?;
         Ok(manifest)
     }
 

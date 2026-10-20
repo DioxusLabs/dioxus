@@ -20,6 +20,7 @@ use tokio::net::TcpStream;
 /// Establish a TCP connection to the backend with retry, then send the HTTP request.
 /// This reuses the same TCP connection for both health check and request,
 /// and supports streaming request bodies (no buffering).
+#[allow(clippy::result_large_err)]
 async fn send_with_retry(
     url: &Uri,
     req: Request<MyBody>,

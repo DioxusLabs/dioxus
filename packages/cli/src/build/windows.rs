@@ -620,7 +620,7 @@ impl WindowsResource {
             .output()?;
 
         if !status.status.success() {
-            return Err(anyhow!("Compiling resource file {:?}", &status.stderr));
+            return Err(anyhow!("Compiling resource file {:?}", status.stderr));
         }
 
         let libname = output_dir.join("libresource.a");
@@ -635,7 +635,7 @@ impl WindowsResource {
         if !status.status.success() {
             return Err(anyhow!(
                 "Creating static library for resource file {:?}",
-                &status.stderr
+                status.stderr
             ));
         }
 
@@ -667,7 +667,7 @@ impl WindowsResource {
             .output()?;
 
         if !status.status.success() {
-            return Err(anyhow!("Compiling resource file {:?}", &status.stderr));
+            return Err(anyhow!("Compiling resource file {:?}", status.stderr));
         }
 
         Ok(())
