@@ -20,6 +20,9 @@ fn wrap_event_data<T: Any>(value: T) -> Rc<dyn Any> {
     Rc::new(PlatformEventData::new(Box::new(value)))
 }
 
+#[cfg(test)]
+mod event_tests;
+
 /// Get the value of the "dioxus-data-id" attribute parsed aa usize
 fn get_dioxus_id(node: &Node) -> Option<ElementId> {
     node.element_data()?
@@ -273,27 +276,26 @@ impl EventHandler for DioxusEventHandler<'_> {
             return;
         };
 
-        for &node_id in chain {
-            // Get dioxus vdom id for node
-            let dioxus_id = mutr.doc.get_node(node_id).and_then(get_dioxus_id);
-            let Some(id) = dioxus_id else {
-                continue;
-            };
+        let dioxus_id = chain
+            .iter()
+            .find_map(|node_id| mutr.doc.get_node(*node_id).and_then(get_dioxus_id));
+        let Some(id) = dioxus_id else {
+            return;
+        };
 
-            // Handle event in vdom
-            let dx_event = Event::new(event_data.clone(), event.bubbles);
-            self.vdom
-                .runtime()
-                .handle_event(event.name(), dx_event.clone(), id);
+        // The runtime already bubbles through mapped ancestors. Redispatching on
+        // each native ancestor repeats callbacks with fresh prevention metadata.
+        let dx_event = Event::new(event_data, event.bubbles);
+        self.vdom
+            .runtime()
+            .handle_event(event.name(), dx_event.clone(), id);
 
-            // Update event state
-            if !dx_event.default_action_enabled() {
-                event_state.prevent_default();
-            }
-            if !dx_event.propagates() {
-                event_state.stop_propagation();
-                break;
-            }
+        // Update event state
+        if !dx_event.default_action_enabled() {
+            event_state.prevent_default();
+        }
+        if !dx_event.propagates() {
+            event_state.stop_propagation();
         }
     }
 }
