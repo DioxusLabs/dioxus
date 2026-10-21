@@ -77,6 +77,7 @@ twoway![
     long_if_else_attr,
     empty_component_body,
     empty_braces_oneliner,
+    closure_chain_wrapped_head,
 ];
 
 fn assert_idempotent(src: &str) {

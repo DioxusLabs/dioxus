@@ -982,7 +982,8 @@ impl<'a> Writer<'a> {
         if src_lines.peek().is_none() {
             out = pretty;
         } else {
-            for line in pretty.lines() {
+            let mut pretty_lines = pretty.lines().peekable();
+            while let Some(line) = pretty_lines.next() {
                 let trimmed = line.trim();
                 let compacted = line.replace(" ", "").replace(",", "");
 
@@ -1129,6 +1130,30 @@ impl<'a> Writer<'a> {
                             continue;
                         }
                         break;
+                    }
+
+                    let mut rest = acc
+                        .strip_prefix(compacted.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let overshot = !rest.is_empty();
+                    while overshot && let Some(next) = pretty_lines.peek() {
+                        let next = next.replace(" ", "").replace(",", "");
+                        if !rest.is_empty()
+                            && let Some(remaining) = rest.strip_prefix(&next)
+                        {
+                            rest = remaining.to_string();
+                        } else if rest.is_empty()
+                            && let Some(src) = src_lines.next_if(|src| {
+                                src.trim_start().starts_with('.')
+                                    && src.replace(" ", "").replace(",", "") == next
+                            })
+                        {
+                            ml.push(src);
+                        } else {
+                            break;
+                        }
+                        pretty_lines.next();
                     }
 
                     // Write multi-line with adjusted indentation
