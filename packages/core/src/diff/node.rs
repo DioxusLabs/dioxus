@@ -18,9 +18,11 @@ use dioxus_core_template::{StaticTemplateNode, TemplateAnchor, TemplatePath};
 
 /// How a dynamic-slot edge scan ([`VNode::dynamic_node_edge_element`]) reads mount state.
 ///
-/// `find_first`/`find_last` walk the *live* render output of a subtree and trust every mount
-/// ([`EdgeScan::live`]). Placement sibling scans ([`EdgeScan::placement`]) read the committed
-/// component mount view so placement queries only observe coherent committed state.
+/// Fragment children always walk their own committed mount view (`current_mounted_view`) so
+/// sibling scans never pair an uncommitted ancestor vnode's child slice with a child mount that
+/// has already committed a new template. For components, `find_first`/`find_last` walk the scope's
+/// live output ([`EdgeScan::live`]), while placement sibling scans ([`EdgeScan::placement`]) read
+/// the committed component root mount view.
 #[derive(Clone, Copy)]
 pub(super) struct EdgeScan {
     target_id: crate::RenderTargetId,
@@ -92,7 +94,7 @@ impl<'a> DiffFrame<'a> {
             return created.mount;
         }
 
-        state.enter_context(current_mount, old, new);
+        let mut state = state.enter_context(current_mount, old, new);
 
         // If the templates are the same, we don't need to do anything, except copy over the mount information
         if old == new {
@@ -627,7 +629,8 @@ impl VNode {
                 .try_with_mounted_fragment_children(mount, idx, nodes.len(), |child_mounts| {
                     edge.find_map(nodes.len(), |i| {
                         let child_mount = child_mounts[i];
-                        nodes[i].find_element_in_roots(child_mount, dom, target_id, edge)
+                        let view = dom.current_mounted_view(child_mount)?;
+                        view.find_element_in_roots(child_mount, dom, target_id, edge)
                     })
                 })
                 .flatten(),
