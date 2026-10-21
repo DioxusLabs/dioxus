@@ -1272,24 +1272,18 @@ impl BuildRequest {
 
         for dep_name in self.workspace_crate_dep_names() {
             if !scope_dir.join(format!("{dep_name}.lib.json")).exists() {
+                bust.insert(dep_name.replace('_', "-"));
                 bust.insert(dep_name);
             }
         }
 
-        let fingerprint_dir = self.cargo_fingerprint_dir();
-        for entry in std::fs::read_dir(&fingerprint_dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
-            if let Some(fname) = entry.file_name().to_str() {
-                if let Some((name, _)) = fname.rsplit_once('-') {
-                    if bust.contains(name) {
-                        _ = std::fs::remove_dir_all(entry.path());
-                    }
-                }
-            }
-        }
+        Self::remove_cargo_fingerprints(
+            &self
+                .target_dir
+                .join(self.triple.to_string())
+                .join(&self.profile),
+            &bust,
+        );
 
         Ok(())
     }
@@ -3154,13 +3148,6 @@ impl BuildRequest {
             .collect()
     }
 
-    fn cargo_fingerprint_dir(&self) -> PathBuf {
-        self.target_dir
-            .join(self.triple.to_string())
-            .join(&self.profile)
-            .join(".fingerprint")
-    }
-
     fn is_apple_target(&self) -> bool {
         matches!(
             self.triple.operating_system,
@@ -3207,5 +3194,81 @@ impl BuildRequest {
         }
 
         deps
+    }
+
+    /// Remove Cargo fingerprints for `bust` packages across both the legacy
+    /// `<profile>/.fingerprint/<pkg>-<hash>` layout and Cargo's v2 build-dir
+    /// `<profile>/build/<pkg>/<hash>/fingerprint` layout. Build-script execution units
+    /// (identified by a sibling `run` directory in v2) are preserved.
+    fn remove_cargo_fingerprints(profile_dir: &Path, bust: &HashSet<String>) {
+        let fingerprint_dir = profile_dir.join(".fingerprint");
+        for entry in std::fs::read_dir(&fingerprint_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if let Some(fname) = entry.file_name().to_str() {
+                if let Some((name, _)) = fname.rsplit_once('-') {
+                    if bust.contains(name) {
+                        _ = std::fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }
+
+        let build_dir = profile_dir.join("build");
+        for pkg in bust {
+            for unit in std::fs::read_dir(build_dir.join(pkg))
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                let unit_path = unit.path();
+                if !unit_path.join("run").exists() {
+                    _ = std::fs::remove_dir_all(unit_path.join("fingerprint"));
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod fingerprint_tests {
+    use super::BuildRequest;
+    use std::collections::HashSet;
+
+    #[test]
+    fn removes_v1_and_v2_cargo_fingerprints_except_build_script_runs() {
+        let temp = tempfile::tempdir().unwrap();
+        let profile_dir = temp.path().join("aarch64-apple-darwin/desktop-dev");
+
+        // Legacy .fingerprint layout
+        let v1_tip = profile_dir.join(".fingerprint/app-1234abcd");
+        let v1_other = profile_dir.join(".fingerprint/other-5678ef90");
+        std::fs::create_dir_all(&v1_tip).unwrap();
+        std::fs::create_dir_all(&v1_other).unwrap();
+
+        // Cargo v2 build-dir layout: bin unit (no `run` dir) vs build-script unit (has `run` dir)
+        let v2_bin_fp = profile_dir.join("build/app/a082cdc11624f007/fingerprint");
+        let v2_build_script_unit = profile_dir.join("build/app/26e52b3aafdefb69");
+        let v2_build_script_fp = v2_build_script_unit.join("fingerprint");
+        let v2_dep_fp = profile_dir.join("build/my-dep/03f4cc9e60f625c7/fingerprint");
+        std::fs::create_dir_all(&v2_bin_fp).unwrap();
+        std::fs::create_dir_all(&v2_build_script_fp).unwrap();
+        std::fs::create_dir_all(v2_build_script_unit.join("run")).unwrap();
+        std::fs::create_dir_all(&v2_dep_fp).unwrap();
+
+        let bust = HashSet::from([
+            "app".to_string(),
+            "my_dep".to_string(),
+            "my-dep".to_string(),
+        ]);
+        BuildRequest::remove_cargo_fingerprints(&profile_dir, &bust);
+
+        assert!(!v1_tip.exists());
+        assert!(v1_other.exists());
+        assert!(!v2_bin_fp.exists());
+        assert!(v2_build_script_fp.exists());
+        assert!(!v2_dep_fp.exists());
     }
 }
