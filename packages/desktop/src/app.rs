@@ -271,7 +271,7 @@ impl App {
         if let Some(temp) = msg.params().as_object() {
             if temp.contains_key("href") {
                 if let Some(href) = temp.get("href").and_then(|v| v.as_str()) {
-                    if let Err(err) = webbrowser::open(href) {
+                    if let Err(err) = open_url(href) {
                         tracing::error!("Failed to open URL: {}", err);
                     }
                 }
@@ -711,4 +711,13 @@ pub(crate) struct PreservedWindowState {
 pub(crate) fn restore_file() -> std::path::PathBuf {
     let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(std::env::temp_dir);
     dir.join("window-state.json")
+}
+
+pub(crate) fn open_url(url: &str) -> std::io::Result<()> {
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    if url.starts_with("mailto:") {
+        return open::that_detached(url);
+    }
+
+    webbrowser::open(url)
 }

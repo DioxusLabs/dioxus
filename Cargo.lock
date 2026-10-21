@@ -3396,6 +3396,7 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-ui-kit",
+ "open",
  "percent-encoding",
  "rand 0.9.4",
  "reqwest",
