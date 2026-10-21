@@ -1132,27 +1132,15 @@ impl<'a> Writer<'a> {
                         break;
                     }
 
-                    let mut rest = acc
-                        .strip_prefix(compacted.as_str())
-                        .unwrap_or_default()
-                        .to_string();
-                    let overshot = !rest.is_empty();
-                    while overshot && let Some(next) = pretty_lines.peek() {
-                        let next = next.replace(" ", "").replace(",", "");
-                        if !rest.is_empty()
-                            && let Some(remaining) = rest.strip_prefix(&next)
-                        {
-                            rest = remaining.to_string();
-                        } else if rest.is_empty()
-                            && let Some(src) = src_lines.next_if(|src| {
-                                src.trim_start().starts_with('.')
-                                    && src.replace(" ", "").replace(",", "") == next
-                            })
-                        {
-                            ml.push(src);
-                        } else {
-                            break;
-                        }
+                    let mut rest = acc.strip_prefix(&compacted).unwrap_or_default();
+                    while !rest.is_empty()
+                        && let Some(next) = pretty_lines
+                            .peek()
+                            .map(|l| l.replace(" ", "").replace(",", ""))
+                        && !next.is_empty()
+                        && let Some(remaining) = rest.strip_prefix(&next)
+                    {
+                        rest = remaining;
                         pretty_lines.next();
                     }
 
