@@ -125,6 +125,8 @@ impl BuildRequest {
             min_sdk: u32,
             target_sdk: u32,
             compile_sdk: u32,
+            compile_sdk_minor: Option<u32>,
+            build_tools_version: Option<String>,
             /// Android permission strings (e.g., "android.permission.CAMERA")
             permissions: Vec<String>,
             /// Android hardware features (e.g., "android.hardware.location.gps")
@@ -176,14 +178,23 @@ impl BuildRequest {
         // Foreground service types as pipe-separated string
         let foreground_service_type = mapper.android_foreground_service_types.join("|");
 
+        let compile_sdk = self.config.android.compile_sdk.unwrap_or(37);
+        let android_tools = self.workspace.android_tools().ok();
+
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
             version: self.crate_version(),
             android_bundle: self.config.bundle.android.clone(),
             min_sdk: self.config.android.min_sdk.unwrap_or(24),
-            target_sdk: self.config.android.target_sdk.unwrap_or(34),
-            compile_sdk: self.config.android.compile_sdk.unwrap_or(34),
+            target_sdk: self.config.android.target_sdk.unwrap_or(36),
+            compile_sdk,
+            compile_sdk_minor: android_tools
+                .as_ref()
+                .and_then(|tools| tools.compile_sdk_minor(compile_sdk)),
+            build_tools_version: android_tools
+                .as_ref()
+                .and_then(|tools| tools.build_tools_version()),
             permissions,
             features,
             raw_manifest,
@@ -475,7 +486,7 @@ impl BuildRequest {
                 self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
 
                 // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
-                self.strip_gradle_plugin_versions(&module_dir)?;
+                Self::strip_gradle_plugin_versions(&module_dir)?;
 
                 // Add to settings.gradle
                 self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
@@ -931,7 +942,10 @@ impl BuildRequest {
     /// on the classpath. This function removes version specifications like:
     /// - `version "8.4.2"` or `version "1.9.24"`
     /// - Entire version calls from plugin declarations
-    pub(crate) fn strip_gradle_plugin_versions(&self, module_dir: &Path) -> Result<()> {
+    ///
+    /// It also drops AGP 8 declarations that AGP 9 rejects: the Kotlin Android plugin,
+    /// `kotlinOptions`, and library `targetSdk`.
+    pub(crate) fn strip_gradle_plugin_versions(module_dir: &Path) -> Result<()> {
         use std::fs;
 
         let build_gradle = module_dir.join("build.gradle.kts");
@@ -947,10 +961,18 @@ impl BuildRequest {
         let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#).expect("Invalid regex");
         let cleaned = version_pattern.replace_all(&contents, "");
 
+        // AGP 9 compiles Kotlin itself and has no library `targetSdk`, so drop the Kotlin
+        // Android plugin, its `kotlinOptions` block and `targetSdk` from AGP 8 modules.
+        let agp8_pattern = regex::Regex::new(
+            r#"(?m)^[ \t]*(?:kotlin\("android"\)|id\("org\.jetbrains\.kotlin\.android"\)|id\("kotlin-android"\)|targetSdk\s*=.*|kotlinOptions\s*\{[^}]*\})[ \t]*(?:\r?\n|$)"#,
+        )
+        .expect("Invalid regex");
+        let cleaned = agp8_pattern.replace_all(&cleaned, "");
+
         if cleaned != contents {
             fs::write(&build_gradle, cleaned.as_ref())?;
             tracing::debug!(
-                "Stripped version specifiers from {}",
+                "Stripped version specifiers and AGP 8 settings from {}",
                 build_gradle.display()
             );
         }
@@ -1216,6 +1238,49 @@ impl AndroidTools {
             .unwrap_or_else(|| self.ndk.parent().unwrap().parent().unwrap().to_path_buf())
     }
 
+    /// The highest installed minor release of `compile_sdk`, e.g. `2` for `platforms/android-37.2`.
+    ///
+    /// AGP resolves `compileSdk = 37` to `android-37.0`, so the minor version must be set
+    /// explicitly to build against a newer installed platform. Previews like `android-37.2-beta1` are ignored.
+    pub(crate) fn compile_sdk_minor(&self, compile_sdk: u32) -> Option<u32> {
+        std::fs::read_dir(self.sdk().join("platforms"))
+            .ok()?
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name();
+                let (major, minor) = name.to_str()?.strip_prefix("android-")?.split_once('.')?;
+                if major.parse::<u32>().ok()? != compile_sdk {
+                    return None;
+                }
+                minor.parse::<u32>().ok()
+            })
+            .max()
+            .filter(|&minor| minor > 0)
+    }
+
+    /// The newest installed stable build-tools version, e.g. `"37.0.0"`.
+    ///
+    /// Release candidates, and versions below AGP 9.4's minimum of 36.0.0, which AGP would ignore
+    /// with a warning, are skipped.
+    pub(crate) fn build_tools_version(&self) -> Option<String> {
+        const AGP_MIN_BUILD_TOOLS: &[u32] = &[36, 0, 0];
+
+        std::fs::read_dir(self.sdk().join("build-tools"))
+            .ok()?
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().into_string().ok()?;
+                let version = name
+                    .split('.')
+                    .map(|part| part.parse::<u32>().ok())
+                    .collect::<Option<Vec<_>>>()?;
+                Some((version, name))
+            })
+            .filter(|(version, _)| version.as_slice() >= AGP_MIN_BUILD_TOOLS)
+            .max()
+            .map(|(_, name)| name)
+    }
+
     pub(crate) fn emulator(&self) -> PathBuf {
         self.sdk().join("emulator").join("emulator")
     }
@@ -1383,5 +1448,110 @@ impl AndroidTools {
             .inspect_err(|_| tracing::trace!("{name} not set"))
             .ok()
             .map(PathBuf::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AndroidTools, BuildRequest};
+
+    #[test]
+    fn compile_sdk_minor_picks_highest_installed_stable_minor() {
+        let sdk = tempfile::tempdir().unwrap();
+        let platforms = sdk.path().join("platforms");
+        for platform in [
+            "android-34",
+            "android-36.1",
+            "android-37.0",
+            "android-37.2",
+            "android-37.3-beta1",
+        ] {
+            std::fs::create_dir_all(platforms.join(platform)).unwrap();
+        }
+        let tools = AndroidTools {
+            sdk: Some(sdk.path().to_path_buf()),
+            ndk: Default::default(),
+            adb: Default::default(),
+            java_home: None,
+        };
+
+        assert_eq!(tools.compile_sdk_minor(37), Some(2));
+        assert_eq!(tools.compile_sdk_minor(36), Some(1));
+        // `android-34` has no minor release, and `android-35` is not installed.
+        assert_eq!(tools.compile_sdk_minor(34), None);
+        assert_eq!(tools.compile_sdk_minor(35), None);
+    }
+
+    #[test]
+    fn build_tools_version_picks_newest_stable_version() {
+        let sdk = tempfile::tempdir().unwrap();
+        let tools = AndroidTools {
+            sdk: Some(sdk.path().to_path_buf()),
+            ndk: Default::default(),
+            adb: Default::default(),
+            java_home: None,
+        };
+        assert_eq!(tools.build_tools_version(), None);
+
+        // AGP 9.4 ignores build-tools below 36.0.0, so they are never emitted.
+        std::fs::create_dir_all(sdk.path().join("build-tools").join("35.0.1")).unwrap();
+        assert_eq!(tools.build_tools_version(), None);
+
+        // Compared numerically, so "9.0.0" must not beat "36.1.0"; the newer rc is skipped.
+        for version in ["9.0.0", "34.0.0", "36.1.0", "36.0.0", "37.0.0-rc1"] {
+            std::fs::create_dir_all(sdk.path().join("build-tools").join(version)).unwrap();
+        }
+        assert_eq!(tools.build_tools_version().as_deref(), Some("36.1.0"));
+    }
+
+    #[test]
+    fn strip_gradle_plugin_versions_removes_agp8_library_syntax() {
+        let module = tempfile::tempdir().unwrap();
+        let build_gradle = module.path().join("build.gradle.kts");
+        std::fs::write(
+            &build_gradle,
+            r#"plugins {
+    id("com.android.library") version "8.4.2"
+    kotlin("android") version "1.9.24"
+    id("org.jetbrains.kotlin.android") version "1.9.24"
+    id("kotlin-android") version "1.9.24"
+}
+
+android {
+    namespace = "example.library"
+    compileSdk = 35
+    targetSdk = 35
+}
+
+kotlinOptions {
+    jvmTarget = "17"
+}
+
+dependencies {
+    implementation("example:dependency:1.0")
+}
+"#,
+        )
+        .unwrap();
+
+        BuildRequest::strip_gradle_plugin_versions(module.path()).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(build_gradle).unwrap(),
+            r#"plugins {
+    id("com.android.library")
+}
+
+android {
+    namespace = "example.library"
+    compileSdk = 35
+}
+
+
+dependencies {
+    implementation("example:dependency:1.0")
+}
+"#,
+        );
     }
 }

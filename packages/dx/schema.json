@@ -83,7 +83,7 @@
       }
     },
     "AndroidConfig": {
-      "description": "Android-specific configuration.\n\nExample:\n```toml\n[android]\nmin_sdk = 24\ntarget_sdk = 34\nidentifier = \"com.example.myapp.android\"  # Override bundle.identifier for Android\nfeatures = [\"android.hardware.location.gps\"]\n\n# Android signing configuration (previously in [bundle.android])\n[android.signing]\njks_file = \"keystore.jks\"\njks_password = \"password\"\nkey_alias = \"mykey\"\nkey_password = \"keypassword\"\n\n[android.permissions]\n\"android.permission.FOREGROUND_SERVICE\" = { description = \"Background service\" }\n```",
+      "description": "Android-specific configuration.\n\nExample:\n```toml\n[android]\nmin_sdk = 24\ntarget_sdk = 36\nidentifier = \"com.example.myapp.android\"  # Override bundle.identifier for Android\nfeatures = [\"android.hardware.location.gps\"]\n\n# Android signing configuration (previously in [bundle.android])\n[android.signing]\njks_file = \"keystore.jks\"\njks_password = \"password\"\nkey_alias = \"mykey\"\nkey_password = \"keypassword\"\n\n[android.permissions]\n\"android.permission.FOREGROUND_SERVICE\" = { description = \"Background service\" }\n```",
       "type": "object",
       "properties": {
         "application": {
@@ -98,7 +98,7 @@
           ]
         },
         "compile_sdk": {
-          "description": "Compile SDK version.",
+          "description": "Compile SDK version.\n\nDefaults to 37. If a newer minor release of that platform is installed, dx builds against it.",
           "type": [
             "integer",
             "null"
@@ -253,7 +253,7 @@
           ]
         },
         "target_sdk": {
-          "description": "Target SDK version.",
+          "description": "Target SDK version.\n\nDefaults to 36, the minimum Google Play accepts for new apps and updates.",
           "type": [
             "integer",
             "null"
