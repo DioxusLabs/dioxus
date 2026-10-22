@@ -23,7 +23,7 @@ generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
 anyhow = { workspace = true }
-image = { workspace = true }
+image = { workspace = true, features = ["png"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

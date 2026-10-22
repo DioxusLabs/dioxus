@@ -242,7 +242,7 @@ prettyplease = { version = "0.2.35", features = ["verbatim"] }
 const_format = "0.2.34"
 cargo_toml = { version = "1.0.1" }
 icns = "0.4.0"
-image = "0.25.6"
+image = { version = "0.25.6", default-features = false }
 zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
 sha1 = "0.10.6"
 md5 = "0.8.0"
