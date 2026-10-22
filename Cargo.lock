@@ -8279,8 +8279,9 @@ dependencies = [
 
 [[package]]
 name = "krates"
-version = "0.21.3"
-source = "git+https://github.com/nikuda/krates?branch=integration%2Fdioxus-build-directory#a74a4a642ce5fe39724e3d8c018a6a8c3086e26f"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8fd33eabd6efa4e9f9963c0bd6e4cc2f229fe8acad52eaeb5d7d61134545fcf"
 dependencies = [
  "camino",
  "cfg-expr 0.20.10",
