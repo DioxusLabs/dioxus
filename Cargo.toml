@@ -286,7 +286,7 @@ axum-extra = "0.12.6"
 reqwest = { version = "0.13.5", default-features = false }
 owo-colors = "4.2.2"
 ciborium = "0.2.2"
-base64 = "0.22.1"
+base64 = "0.23.1"
 uuid = "1.23.1"
 convert_case = "0.8.0"
 tungstenite = { version = "0.29.0" }

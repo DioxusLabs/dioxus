@@ -3361,7 +3361,7 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "dioxus",
  "dioxus-asset-resolver",
@@ -3481,7 +3481,7 @@ version = "0.7.5"
 dependencies = [
  "anyhow",
  "axum-core",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "ciborium",
  "dioxus",
@@ -3533,7 +3533,7 @@ dependencies = [
  "axum",
  "axum-core",
  "axum-extra",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "ciborium",
  "const-str 0.7.1",
@@ -3598,7 +3598,7 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "anyhow",
  "axum-core",
- "base64 0.22.1",
+ "base64 0.23.1",
  "ciborium",
  "dioxus",
  "dioxus-core",
@@ -3953,7 +3953,7 @@ name = "dioxus-router"
 version = "0.8.0-alpha.3"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "ciborium",
  "criterion",
  "dioxus",
@@ -4043,7 +4043,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "chrono",
  "ciborium",
