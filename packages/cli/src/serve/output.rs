@@ -33,7 +33,20 @@ use super::{AppServer, HotReloadMode};
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 92;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
-const VIEWPORT_HEIGHT_BIG: u16 = 14;
+const VIEWPORT_HEIGHT_BIG: u16 = 15;
+
+fn qr_code_text(url: &str) -> Result<Text<'static>> {
+    let code = qrcode::QrCode::new(url).context("Could not encode the server URL")?;
+    let rendered = code.render::<qrcode::render::unicode::Dense1x2>().build();
+    let mut lines = vec![Line::raw(url.to_owned())];
+    lines.extend(rendered.lines().map(|line| {
+        Line::styled(
+            line.to_owned(),
+            Style::default().fg(Color::Black).bg(Color::White),
+        )
+    }));
+    Ok(Text::from(lines))
+}
 
 /// The TUI that drives the console output.
 ///
@@ -254,6 +267,7 @@ impl Output {
             }
             KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
             KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
+            KeyCode::Char('q') => return Ok(Some(ServeUpdate::ShowQrCode)),
             KeyCode::Char('p') => return Ok(Some(ServeUpdate::CycleHotreloadMode)),
             KeyCode::Char('v') => {
                 self.verbose = !self.verbose;
@@ -296,21 +310,7 @@ impl Output {
             // This is a bit of a hack since crossterm doesn't technically support changing the
             // size of an inline viewport.
             KeyCode::Char('/') => {
-                if let Some(terminal) = self.term.borrow_mut().as_mut() {
-                    // Toggle the more modal, which will change our current viewport height
-                    self.more_modal_open = !self.more_modal_open;
-
-                    // Clear the terminal before resizing it, such that it doesn't tear
-                    terminal.clear()?;
-
-                    // And then set the new viewport, which essentially mimics a resize
-                    *terminal = Terminal::with_options(
-                        CrosstermBackend::new(stdout()),
-                        TerminalOptions {
-                            viewport: Viewport::Inline(self.viewport_current_height()),
-                        },
-                    )?;
-                }
+                self.set_more_modal_open(!self.more_modal_open)?;
             }
 
             _ => {}
@@ -318,6 +318,46 @@ impl Output {
 
         // Out of safety, we always redraw, since it's relatively cheap operation
         Ok(Some(ServeUpdate::Redraw))
+    }
+
+    fn set_more_modal_open(&mut self, open: bool) -> Result<()> {
+        if let Some(terminal) = self.term.borrow_mut().as_mut() {
+            self.more_modal_open = open;
+            terminal.clear()?;
+            *terminal = Terminal::with_options(
+                CrosstermBackend::new(stdout()),
+                TerminalOptions {
+                    viewport: Viewport::Inline(self.viewport_current_height()),
+                },
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn print_qr_code(&mut self, url: &str) -> Result<()> {
+        let code = qr_code_text(url)?;
+        let width = code.lines[1].width();
+        if let Some(terminal) = self.term.borrow().as_ref() {
+            let size = terminal.size()?;
+            if width > size.width as usize {
+                bail!("Terminal is too narrow for the QR code. Widen it or open {url}");
+            }
+            // The URL may scroll, but keep the entire symbol and status display visible.
+            if code.height() - 1 + VIEWPORT_HEIGHT_SMALL as usize > size.height as usize {
+                bail!("Terminal is too short for the QR code. Enlarge it or open {url}");
+            }
+        }
+
+        // Leave room for the QR code above the normal status display.
+        if self.more_modal_open {
+            self.set_more_modal_open(false)?;
+        }
+        if let Some(terminal) = self.term.borrow_mut().as_mut() {
+            terminal.insert_before(code.height() as u16, |buffer| {
+                Paragraph::new(code).render(buffer.area, buffer);
+            })?;
+        }
+        Ok(())
     }
 
     /// Push a TraceMsg to be printed on the next render
@@ -843,6 +883,7 @@ impl Output {
             "",
             "r: rebuild the app",
             "o: open the app",
+            "q: show QR code",
             "p: cycle hotreload mode",
             "v: toggle verbose logs",
             "t: toggle tracing logs",
@@ -850,7 +891,7 @@ impl Output {
             "d: attach debugger",
             "/: toggle more commands",
         ];
-        let layout: [_; 9] = Layout::vertical(cmds.iter().map(|_| Constraint::Length(1)))
+        let layout: [_; 10] = Layout::vertical(cmds.iter().map(|_| Constraint::Length(1)))
             .horizontal_margin(1)
             .areas(col2);
         for (idx, cmd) in cmds.iter().enumerate() {
@@ -1130,5 +1171,75 @@ impl std::ops::Drop for Output {
 
         // Tear down the TUI if it's active at this point.
         _ = crate::serve::Output::remote_shutdown(self.interactive);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn qr_shortcut_preserves_other_commands() {
+        let mut output = Output {
+            term: Rc::new(RefCell::new(None)),
+            events: None,
+            more_modal_open: false,
+            interactive: false,
+            verbose: false,
+            trace: false,
+            pending_logs: VecDeque::new(),
+            dx_version: String::new(),
+            tick_animation: false,
+            tick_interval: tokio::time::interval(Duration::from_millis(TICK_RATE_MS)),
+            throbber: RefCell::new(throbber_widgets_tui::ThrobberState::default()),
+        };
+        let mut press = |key| output.handle_keypress(KeyEvent::new(key, KeyModifiers::NONE));
+        assert!(matches!(
+            press(KeyCode::Char('q')).unwrap(),
+            Some(ServeUpdate::ShowQrCode)
+        ));
+        assert!(matches!(
+            press(KeyCode::Char('r')).unwrap(),
+            Some(ServeUpdate::RequestRebuild)
+        ));
+        assert!(matches!(
+            press(KeyCode::Char('o')).unwrap(),
+            Some(ServeUpdate::OpenApp)
+        ));
+        assert!(matches!(
+            press(KeyCode::Char('p')).unwrap(),
+            Some(ServeUpdate::CycleHotreloadMode)
+        ));
+        assert!(matches!(
+            press(KeyCode::Char('/')).unwrap(),
+            Some(ServeUpdate::Redraw)
+        ));
+        assert!(matches!(
+            output
+                .handle_keypress(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL))
+                .unwrap(),
+            Some(ServeUpdate::Exit { error: None })
+        ));
+    }
+
+    #[test]
+    fn qr_output_has_a_quiet_zone_and_fixed_contrast() {
+        let url = "https://192.168.1.2:8443/phone/";
+        let text = qr_code_text(url).unwrap();
+        assert_eq!(text.lines[0], Line::raw(url));
+        let width = text.lines[1].width();
+        let area = Rect::new(0, 0, width as u16, text.height() as u16);
+        let mut buffer = Buffer::empty(area);
+        Paragraph::new(text).render(area, &mut buffer);
+        for y in 1..area.height {
+            for x in 0..area.width {
+                let cell = &buffer[(x, y)];
+                assert_eq!(cell.fg, Color::Black);
+                assert_eq!(cell.bg, Color::White);
+                if y == 1 || x < 4 || x >= area.width - 4 {
+                    assert_eq!(cell.symbol(), " ");
+                }
+            }
+        }
     }
 }
