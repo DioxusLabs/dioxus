@@ -15,6 +15,7 @@
 //! source of truth is the read-out of the link args after the initial build
 
 use super::HotpatchModuleCache;
+use crate::cli::link::quote_linker_command_file_argument;
 use crate::{BuildArtifacts, BuildMode, WorkspaceRustcArgs};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
@@ -1490,15 +1491,6 @@ impl BuildRequest {
     }
 }
 
-fn quote_linker_command_file_argument(arg: &str, linker_flavor: &LinkerFlavor) -> String {
-    let arg = if linker_flavor == &LinkerFlavor::Msvc {
-        arg.to_owned()
-    } else {
-        arg.replace('\\', "\\\\").replace('"', "\\\"")
-    };
-    format!("\"{arg}\"")
-}
-
 /// Reconstruct the dep-info `.d` path that rustc will write for an invocation, by parsing the
 /// `--out-dir`, `--crate-name`, and `-C extra-filename=` from the captured args. This mirrors
 /// rustc's own naming convention: `<out_dir>/<crate_name><extra_filename>.d`.
@@ -1547,34 +1539,4 @@ fn dep_info_path_for_rustc_args(args: &[String]) -> Option<PathBuf> {
     let out_dir = out_dir?;
     let crate_name = crate_name?;
     Some(PathBuf::from(out_dir).join(format!("{crate_name}{extra}.d")))
-}
-
-#[cfg(test)]
-mod linker_response_file_tests {
-    use super::*;
-
-    #[test]
-    fn response_file_arguments_use_the_target_linker_quoting() {
-        assert_eq!(
-            quote_linker_command_file_argument(
-                r#"C:\Users\me\objects with spaces\file.o"#,
-                &LinkerFlavor::Gnu,
-            ),
-            r#""C:\\Users\\me\\objects with spaces\\file.o""#
-        );
-        assert_eq!(
-            quote_linker_command_file_argument(
-                r#"C:\path\with spaces "quoted".o"#,
-                &LinkerFlavor::Darwin,
-            ),
-            r#""C:\\path\\with spaces \"quoted\".o""#
-        );
-        assert_eq!(
-            quote_linker_command_file_argument(
-                r#"C:\Users\me\objects with spaces\file.o"#,
-                &LinkerFlavor::Msvc,
-            ),
-            r#""C:\Users\me\objects with spaces\file.o""#
-        );
-    }
 }
