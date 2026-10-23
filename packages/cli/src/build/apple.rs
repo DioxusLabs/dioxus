@@ -1937,6 +1937,8 @@ pub async fn create_framework_bundle(
         }
     }
 
+    adhoc_sign_macho(&framework_dir).await?;
+
     tracing::debug!(
         "Created {} framework bundle: {}",
         if is_ios { "iOS" } else { "macOS" },
@@ -2005,5 +2007,80 @@ fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
             output
         }
         serde_json::Value::Null => String::new(),
+    }
+}
+
+/// Ad-hoc re-sign a Mach-O binary after `install_name_tool` modifies its load commands.
+///
+/// On Apple Silicon, `install_name_tool` invalidates the linker's ad-hoc signature and
+/// leaves a modified code directory that `dlopen` rejects with `SIGKILL (Code Signature Invalid)`.
+async fn adhoc_sign_macho(path: &Path) -> Result<()> {
+    let output = Command::new("codesign")
+        .args(["--force", "--sign", "-"])
+        .arg(path)
+        .output()
+        .await
+        .context("Failed to run `codesign` - is `codesign` in your path?")?;
+
+    if !output.status.success() {
+        bail!(
+            "Failed to ad-hoc codesign {}: {}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::create_framework_bundle;
+    use std::path::Path;
+    use target_lexicon::Triple;
+    use tokio::process::Command;
+
+    async fn compile_dummy_dylib(dir: &Path) -> std::path::PathBuf {
+        let src = dir.join("plugin.c");
+        let dylib = dir.join("libplugin.dylib");
+        std::fs::write(&src, "int dioxus_test_plugin(void) { return 42; }\n").unwrap();
+        let status = Command::new("clang")
+            .args(["-dynamiclib", "-o"])
+            .arg(&dylib)
+            .arg(&src)
+            .status()
+            .await
+            .unwrap();
+        assert!(status.success());
+        dylib
+    }
+
+    #[tokio::test]
+    async fn create_framework_bundle_produces_validly_signed_macos_framework() {
+        let temp = tempfile::tempdir().unwrap();
+        let dylib = compile_dummy_dylib(temp.path()).await;
+        let triple: Triple = "aarch64-apple-darwin".parse().unwrap();
+
+        let created = create_framework_bundle(
+            &dylib,
+            "DioxusSwiftPlugins",
+            temp.path(),
+            &triple,
+            "com.dioxus.swift.plugins",
+        )
+        .await
+        .unwrap();
+
+        let verify = Command::new("codesign")
+            .args(["--verify", "--deep", "--strict"])
+            .arg(&created)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            verify.status.success(),
+            "codesign verify failed: {}",
+            String::from_utf8_lossy(&verify.stderr)
+        );
     }
 }
