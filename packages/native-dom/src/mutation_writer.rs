@@ -32,12 +32,12 @@ pub(crate) trait RealDom {
         &mut self,
         target: Self::NodeId,
         replacements: &[Self::NodeId],
-        on_drop: &mut dyn FnMut(Self::NodeId),
+        on_drop: impl FnMut(Self::NodeId),
     );
 
     /// Remove `node` and drop it, calling `on_drop` with the id of every dropped
     /// node (`node` and all of its descendants).
-    fn remove(&mut self, node: Self::NodeId, on_drop: &mut dyn FnMut(Self::NodeId));
+    fn remove(&mut self, node: Self::NodeId, on_drop: impl FnMut(Self::NodeId));
 
     fn set_attribute(
         &mut self,
@@ -204,7 +204,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
         let replacements = self.state.pop_nodes(m);
         let target = self.state.pop_entry().node;
         let state = &mut *self.state;
-        self.backend.replace(target, &replacements, &mut |dropped| {
+        self.backend.replace(target, &replacements, |dropped| {
             state.clear_dropped_mapping(dropped)
         });
     }
@@ -253,7 +253,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
         let node = self.state.pop_entry().node;
         let state = &mut *self.state;
         self.backend
-            .remove(node, &mut |dropped| state.clear_dropped_mapping(dropped));
+            .remove(node, |dropped| state.clear_dropped_mapping(dropped));
     }
 }
 
@@ -370,16 +370,16 @@ impl RealDom for BlitzBackend<'_> {
         &mut self,
         target: NodeId,
         replacements: &[NodeId],
-        on_drop: &mut dyn FnMut(NodeId),
+        mut on_drop: impl FnMut(NodeId),
     ) {
         trace!("replace target:{target} replacements:{replacements:?}");
         self.docm.insert_nodes_before(target, replacements);
-        self.docm.remove_and_drop_node_with(target, on_drop);
+        self.docm.remove_and_drop_node_with(target, &mut on_drop);
     }
 
-    fn remove(&mut self, node: NodeId, on_drop: &mut dyn FnMut(NodeId)) {
+    fn remove(&mut self, node: NodeId, mut on_drop: impl FnMut(NodeId)) {
         trace!("remove node:{node}");
-        self.docm.remove_and_drop_node_with(node, on_drop);
+        self.docm.remove_and_drop_node_with(node, &mut on_drop);
     }
 
     fn set_attribute(
