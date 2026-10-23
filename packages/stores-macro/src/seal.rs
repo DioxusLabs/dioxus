@@ -162,7 +162,7 @@ impl SealBuilder {
             quote! {
                 #[doc(hidden)]
                 #[allow(non_camel_case_types)]
-                trait #witness<__V> {}
+                pub trait #witness<__V> {}
             }
         });
         let witness_impls = buckets.iter().map(|b| {
