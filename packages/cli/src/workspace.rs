@@ -49,6 +49,9 @@ impl Workspace {
 
             let mut cmd = Cmd::new();
             cmd.lock_opts(lock_options);
+            if let Some(manifest_path) = &manifest_options.manifest_path {
+                cmd.manifest_path(manifest_path);
+            }
 
             let mut builder = krates::Builder::new();
             builder.workspace(true);
@@ -345,7 +348,8 @@ impl Workspace {
         if let Some(ws) = &self.cargo_toml.workspace {
             for default in &ws.default_members {
                 let mut workspace_members = self.krates.workspace_members();
-                let default_member_path = std::fs::canonicalize(default).unwrap();
+                let default_member_path =
+                    std::fs::canonicalize(self.workspace_root().join(default)).unwrap();
 
                 let found = workspace_members.find_map(|node| {
                     if let krates::Node::Krate { id, krate, .. } = node {
@@ -372,8 +376,15 @@ impl Workspace {
             }
         }
 
-        // Otherwise find the package that is the closest parent of the current directory
-        let current_dir = std::env::current_dir()?;
+        // Otherwise find the package that is the closest parent of the current directory, or of
+        // the manifest passed with `--manifest-path`
+        let current_dir = match &crate::logging::VERBOSITY.get().unwrap().manifest_path {
+            Some(manifest_path) => dunce::canonicalize(manifest_path)?
+                .parent()
+                .context("--manifest-path has no parent directory")?
+                .to_path_buf(),
+            None => std::env::current_dir()?,
+        };
         let current_dir = current_dir.as_path();
 
         // Go through each member and find the path that is a parent of the current directory
