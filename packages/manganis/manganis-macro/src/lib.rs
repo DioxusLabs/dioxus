@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-use std::path::{Component, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
@@ -301,24 +301,30 @@ pub fn ffi(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
+/// Set by build systems that run rustc in a tree of symlinks, such as a Bazel or Buck2 sandbox.
+///
+/// Asset paths then resolve without following symlinks and are recorded relative to this directory,
+/// so the bundler has to run in it. A relative value is taken against rustc's working directory.
+pub(crate) const ASSET_ROOT_ENV: &str = "MANGANIS_ASSET_ROOT";
+
 struct PathResolver {
     src: PathBuf,
     manifest_dir: PathBuf,
     out_dir: Option<PathBuf>,
     file_path: Option<PathBuf>,
     looks_like_rust_analyzer: bool,
+    asset_root: Option<PathBuf>,
 }
 
 impl PathResolver {
     fn new(src: impl Into<PathBuf>, span: &Span) -> Self {
+        let asset_root = std::env::var_os(ASSET_ROOT_ENV).map(PathBuf::from);
         let manifest_dir = Self::get_manifest_dir();
 
         // The output directory is only available when a build script is present
         let out_dir = std::env::var("OUT_DIR")
             .ok()
-            .map(dunce::canonicalize)
-            .transpose()
-            .unwrap();
+            .map(|dir| existing_path(Path::new(&dir), asset_root.is_none()).unwrap());
 
         Self {
             src: src.into(),
@@ -326,11 +332,14 @@ impl PathResolver {
             out_dir,
             file_path: span.local_file(),
             looks_like_rust_analyzer: looks_like_rust_analyzer(span),
+            asset_root,
         }
     }
 
     fn get_manifest_dir() -> PathBuf {
-        dunce::canonicalize(std::env::var("CARGO_MANIFEST_DIR").unwrap()).unwrap()
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let follow_symlinks = std::env::var_os(ASSET_ROOT_ENV).is_none();
+        existing_path(Path::new(&manifest_dir), follow_symlinks).unwrap()
     }
 
     fn resolve(self) -> Result<PathBuf, AssetParseError> {
@@ -342,11 +351,10 @@ impl PathResolver {
         // the output directory, but `/src/assets/foo.css` is treated as a relative path
         // because it does not canonicalize to a location within the manifest or output directory.
         if self.src.is_absolute() {
-            if let Some(path) = dunce::canonicalize(&self.src)
-                .ok()
+            if let Some(path) = existing_path(&self.src, self.asset_root.is_none())
                 .and_then(|path| self.canonicalize_path_within_crate(path).ok())
             {
-                return Ok(path);
+                return self.relative_to_asset_root(path);
             }
         }
 
@@ -364,7 +372,25 @@ impl PathResolver {
             self.resolve_manifest_relative_path()
         };
 
-        self.canonicalize_path_within_crate(path)
+        let path = self.canonicalize_path_within_crate(path)?;
+        self.relative_to_asset_root(path)
+    }
+
+    /// Record the path relative to [`ASSET_ROOT_ENV`] if it is set.
+    fn relative_to_asset_root(&self, path: PathBuf) -> Result<PathBuf, AssetParseError> {
+        let Some(root) = &self.asset_root else {
+            return Ok(path);
+        };
+
+        match existing_path(root, false)
+            .and_then(|root| path.strip_prefix(root).ok().map(PathBuf::from))
+        {
+            Some(relative) => Ok(relative),
+            None => Err(AssetParseError::OutsideAssetRoot {
+                path,
+                root: root.clone(),
+            }),
+        }
     }
 
     /// Resolve paths like `/path/to/file` that are relative to the manifest directory.
@@ -403,7 +429,7 @@ impl PathResolver {
         };
 
         // 2. Ensure the path exists
-        let Ok(path) = dunce::canonicalize(&path) else {
+        let Some(path) = existing_path(&path, self.asset_root.is_none()) else {
             return Err(AssetParseError::DoesNotExist { path });
         };
         let in_manifest_dir = path != self.manifest_dir && path.starts_with(&self.manifest_dir);
@@ -424,6 +450,30 @@ impl PathResolver {
 
         Ok(path)
     }
+}
+
+/// The absolute path of an existing file or directory.
+///
+/// Canonicalizing follows symlinks, which moves a symlinked asset out of the crate, so without
+/// `follow_symlinks` the path is normalized lexically instead.
+fn existing_path(path: &Path, follow_symlinks: bool) -> Option<PathBuf> {
+    if follow_symlinks {
+        return dunce::canonicalize(path).ok();
+    }
+
+    let mut normalized = PathBuf::new();
+    for component in std::path::absolute(path).ok()?.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+            component => normalized.push(component),
+        }
+    }
+    normalized.exists().then_some(normalized)
 }
 
 /// Parse `T`, while also collecting the tokens it was parsed from.
@@ -448,6 +498,7 @@ enum AssetParseError {
     FileBaseUnavailable,
     DoesNotExist { path: PathBuf },
     Outside { path: PathBuf },
+    OutsideAssetRoot { path: PathBuf, root: PathBuf },
 }
 
 impl std::fmt::Display for AssetParseError {
@@ -461,6 +512,14 @@ impl std::fmt::Display for AssetParseError {
             }
             AssetParseError::Outside { path } => {
                 write!(f, "Path {} is outside of allowed folders.", path.display())
+            }
+            AssetParseError::OutsideAssetRoot { path, root } => {
+                write!(
+                    f,
+                    "Path {} is outside {ASSET_ROOT_ENV} {}.",
+                    path.display(),
+                    root.display()
+                )
             }
         }
     }
@@ -487,7 +546,7 @@ fn looks_like_rust_analyzer(span: &Span) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use super::{AssetParseError, PathResolver};
     use tempfile::TempDir;
@@ -520,6 +579,7 @@ mod tests {
                 out_dir: Some(self.out_path.clone()),
                 file_path: Some(self.crate_root.join("src/lib.rs")),
                 looks_like_rust_analyzer: false,
+                asset_root: None,
             }
         }
     }
@@ -653,6 +713,7 @@ mod tests {
                 out_dir: Some(ctx.out_path.clone()),
                 file_path: Some(ctx.crate_root.join("src/lib.rs")),
                 looks_like_rust_analyzer: false,
+                asset_root: None,
             }
             .resolve(),
             Ok(ctx.out_path.join("generated-asset.txt")),
@@ -676,5 +737,94 @@ mod tests {
         let ctx = Ctx::init();
 
         assert!(ctx.create_resolver(&ctx.out_path).resolve().is_err());
+    }
+
+    /// A crate at `<root>/app` with `assets/real.css`, and `<root>/shared/linked.css` outside it.
+    fn asset_root_fixture() -> (TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join("app/assets")).unwrap();
+        std::fs::create_dir_all(root.join("shared")).unwrap();
+        std::fs::write(root.join("app/assets/real.css"), b"").unwrap();
+        std::fs::write(root.join("shared/linked.css"), b"").unwrap();
+        (dir, root)
+    }
+
+    fn asset_root_resolver(root: &Path, src: &str, asset_root: Option<PathBuf>) -> PathResolver {
+        PathResolver {
+            src: src.into(),
+            manifest_dir: root.join("app"),
+            out_dir: None,
+            file_path: Some(root.join("app/src/main.rs")),
+            looks_like_rust_analyzer: false,
+            asset_root,
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn asset_root_accepts_a_symlinked_asset_and_records_it_relative_to_the_root() {
+        let (_dir, root) = asset_root_fixture();
+        std::os::unix::fs::symlink(
+            "../../shared/linked.css",
+            root.join("app/assets/linked.css"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            asset_root_resolver(&root, "/assets/linked.css", None).resolve(),
+            Err(AssetParseError::Outside {
+                path: root.join("shared/linked.css"),
+            }),
+        );
+        assert_eq!(
+            asset_root_resolver(&root, "/assets/linked.css", Some(root.clone())).resolve(),
+            Ok(PathBuf::from("app/assets/linked.css")),
+        );
+    }
+
+    #[test]
+    fn asset_root_resolves_file_paths() {
+        let (_dir, root) = asset_root_fixture();
+
+        assert_eq!(
+            asset_root_resolver(&root, "../assets/real.css", Some(root.clone())).resolve(),
+            Ok(PathBuf::from("app/assets/real.css")),
+        );
+    }
+
+    #[test]
+    fn asset_root_rejects_paths_outside_the_crate() {
+        let (_dir, root) = asset_root_fixture();
+
+        assert_eq!(
+            asset_root_resolver(&root, "/../shared/linked.css", Some(root.clone())).resolve(),
+            Err(AssetParseError::Outside {
+                path: root.join("shared/linked.css"),
+            }),
+        );
+    }
+
+    #[test]
+    fn asset_root_rejects_missing_assets() {
+        let (_dir, root) = asset_root_fixture();
+
+        assert!(matches!(
+            asset_root_resolver(&root, "/assets/nope.css", Some(root.clone())).resolve(),
+            Err(AssetParseError::DoesNotExist { .. }),
+        ));
+    }
+
+    #[test]
+    fn asset_root_rejects_assets_outside_the_root() {
+        let (_dir, root) = asset_root_fixture();
+
+        assert_eq!(
+            asset_root_resolver(&root, "/assets/real.css", Some(root.join("shared"))).resolve(),
+            Err(AssetParseError::OutsideAssetRoot {
+                path: root.join("app/assets/real.css"),
+                root: root.join("shared"),
+            }),
+        );
     }
 }
