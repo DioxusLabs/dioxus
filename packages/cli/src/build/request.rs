@@ -842,11 +842,7 @@ impl BuildRequest {
             );
         }
 
-        let target_dir = std::env::var("CARGO_TARGET_DIR")
-            .ok()
-            .map(PathBuf::from)
-            .or_else(|| cargo_config.build.target_dir.clone())
-            .unwrap_or_else(|| workspace.workspace_root().join("target"));
+        let target_dir = workspace.target_dir.clone();
 
         // If the user provided a profile and wasm_split is enabled, we should check that LTO=true and debug=true
         if args.wasm_split {
@@ -886,7 +882,9 @@ impl BuildRequest {
                 • bundle format: {bundle:?}
                 • session cache dir: {session_cache_dir:?}
                 • linker: {custom_linker:?}
-                • target_dir: {target_dir:?}"#,
+                • target_dir: {target_dir:?}
+                • build_dir: {:?}"#,
+            workspace.build_dir.as_path(),
         );
 
         Ok(Self {
@@ -1276,20 +1274,12 @@ impl BuildRequest {
             }
         }
 
-        let fingerprint_dir = self.cargo_fingerprint_dir();
-        for entry in std::fs::read_dir(&fingerprint_dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
-            if let Some(fname) = entry.file_name().to_str() {
-                if let Some((name, _)) = fname.rsplit_once('-') {
-                    if bust.contains(name) {
-                        _ = std::fs::remove_dir_all(entry.path());
-                    }
-                }
-            }
-        }
+        bust_cargo_fingerprints(
+            &self.workspace.build_dir,
+            &self.triple,
+            &self.profile,
+            &bust,
+        );
 
         Ok(())
     }
@@ -3154,13 +3144,6 @@ impl BuildRequest {
             .collect()
     }
 
-    fn cargo_fingerprint_dir(&self) -> PathBuf {
-        self.target_dir
-            .join(self.triple.to_string())
-            .join(&self.profile)
-            .join(".fingerprint")
-    }
-
     fn is_apple_target(&self) -> bool {
         matches!(
             self.triple.operating_system,
@@ -3207,5 +3190,66 @@ impl BuildRequest {
         }
 
         deps
+    }
+}
+
+fn bust_cargo_fingerprints(
+    build_dir: &Path,
+    triple: &Triple,
+    profile: &str,
+    bust: &HashSet<String>,
+) {
+    let fingerprint_dir = build_dir
+        .join(triple.to_string())
+        .join(profile)
+        .join(".fingerprint");
+    for entry in std::fs::read_dir(fingerprint_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        if let Some(fname) = entry.file_name().to_str() {
+            if let Some((name, _)) = fname.rsplit_once('-') {
+                if bust.contains(name) {
+                    _ = std::fs::remove_dir_all(entry.path());
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bust_cargo_fingerprints;
+    use std::collections::HashSet;
+    use target_lexicon::Triple;
+
+    #[test]
+    fn fat_rebuilds_repeatedly_bust_fingerprints_in_build_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let target_dir = temp.path().join("target");
+        let build_dir = temp.path().join("build");
+        let triple = Triple::host();
+        let profile = "desktop-dev";
+        let fingerprint_suffix = triple.to_string();
+        let target_fingerprint = target_dir
+            .join(&fingerprint_suffix)
+            .join(profile)
+            .join(".fingerprint")
+            .join("example-unchanged");
+        let build_fingerprint = build_dir
+            .join(&fingerprint_suffix)
+            .join(profile)
+            .join(".fingerprint")
+            .join("example-removed");
+        let bust = HashSet::from(["example".to_string()]);
+
+        std::fs::create_dir_all(&target_fingerprint).unwrap();
+        for _ in 0..2 {
+            std::fs::create_dir_all(&build_fingerprint).unwrap();
+            bust_cargo_fingerprints(&build_dir, &triple, profile, &bust);
+            assert!(!build_fingerprint.exists());
+            assert!(target_fingerprint.exists());
+        }
     }
 }
