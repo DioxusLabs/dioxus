@@ -127,9 +127,7 @@ impl SerializedPointInteraction {
         let [page_x, page_y]: [f64; 2] = coordinates.page().cast().into();
         let [screen_x, screen_y]: [f64; 2] = coordinates.screen().cast().into();
         Self {
-            button: trigger_button
-                .map_or(MouseButton::default(), |b| b)
-                .into_web_code(),
+            button: trigger_button.unwrap_or_default().into_web_code(),
             buttons: crate::input_data::encode_mouse_button_set(held_buttons),
             meta_key,
             ctrl_key,

@@ -12,6 +12,7 @@ use tokio_tungstenite::tungstenite::protocol::{
     CloseFrame as ServerCloseFrame, Message as ServerMessage,
 };
 
+#[allow(clippy::result_large_err)]
 pub(crate) async fn proxy_websocket(
     mut parts: Parts,
     req: Request<Body>,

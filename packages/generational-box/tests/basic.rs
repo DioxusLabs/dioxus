@@ -127,7 +127,7 @@ fn fuzz() {
             for key in valid_keys.iter() {
                 println!("reading {key:?}");
                 let value = key.read();
-                println!("{:?}", &*value);
+                println!("{:?}", *value);
                 assert!(value.starts_with("hello world"));
             }
             for key in invalid_keys.iter() {
@@ -196,7 +196,7 @@ fn fuzz_rc() {
                 for key in keys {
                     println!("reading {key:?}");
                     let value = key.read();
-                    println!("{:?}", &*value);
+                    println!("{:?}", *value);
                     assert!(value.starts_with("hello world"));
                 }
             }

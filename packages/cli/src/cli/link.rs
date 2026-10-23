@@ -150,7 +150,7 @@ impl LinkAction {
             Some(linker) => {
                 let mut cmd = std::process::Command::new(linker);
                 match cfg!(target_os = "windows") {
-                    true => cmd.arg(format!("@{}", &self.link_args_file.display())),
+                    true => cmd.arg(format!("@{}", self.link_args_file.display())),
                     false => cmd.args(args),
                 };
                 let res = cmd.output().expect("Failed to run linker");
@@ -259,10 +259,8 @@ pub fn handle_linker_arg_response_file(arg: String) -> Vec<String> {
         // This may be a utf-16le file. Let's try utf-8 first.
         let mut content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
             // Convert Vec<u8> to Vec<u16> to convert into a String
-            let binary_u16le: Vec<u16> = file_binary
-                .chunks_exact(2)
-                .map(|a| u16::from_le_bytes([a[0], a[1]]))
-                .collect();
+            let (pairs, _) = file_binary.as_chunks::<2>();
+            let binary_u16le: Vec<u16> = pairs.iter().map(|&p| u16::from_le_bytes(p)).collect();
 
             String::from_utf16_lossy(&binary_u16le)
         });

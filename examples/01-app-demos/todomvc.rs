@@ -57,7 +57,7 @@ fn app() -> Element {
     // If all todos are checked, uncheck them all. If any are unchecked, check them all.
     let toggle_all = move |_| {
         let check = active_todo_count() != 0;
-        for (_, item) in todos.write().iter_mut() {
+        for item in todos.write().values_mut() {
             item.checked = check;
         }
     };
