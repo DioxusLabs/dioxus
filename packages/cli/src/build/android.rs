@@ -125,6 +125,8 @@ impl BuildRequest {
             min_sdk: u32,
             target_sdk: u32,
             compile_sdk: u32,
+            /// The jniLibs ABI directory this build stages its libraries into, e.g. "arm64-v8a"
+            abi: String,
             /// Android permission strings (e.g., "android.permission.CAMERA")
             permissions: Vec<String>,
             /// Android hardware features (e.g., "android.hardware.location.gps")
@@ -184,6 +186,7 @@ impl BuildRequest {
             min_sdk: self.config.android.min_sdk.unwrap_or(24),
             target_sdk: self.config.android.target_sdk.unwrap_or(34),
             compile_sdk: self.config.android.compile_sdk.unwrap_or(34),
+            abi: AndroidTools::android_jnilib(&self.triple).to_string(),
             permissions,
             features,
             raw_manifest,
