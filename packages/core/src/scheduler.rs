@@ -71,6 +71,7 @@
 //! 2. Tasks:
 //!    Description: Futures spawned in the dioxus runtime each have an unique task id. When the waker for that future is called, the task is rerun.
 //!    Priority: These are the second highest priority tasks. They are run after all other dirty scopes have been resolved because those dirty scopes may cause children (and the tasks those children own) to drop which should cancel the futures.
+//!    Fairness: A synchronous pass over the queue polls each task a bounded number of times. A task that keeps waking itself (a `yield_now` that wakes immediately, or a tokio resource once the task's cooperative budget is spent) is set aside for the next pass once it reaches that bound, and `wait_for_work` hands control back to the executor between passes. Otherwise such a task would be polled forever without the executor ever running again.
 //!
 //! 3. Effects:
 //!    Description: Effects should always run after all changes to the DOM have been applied.
@@ -80,6 +81,7 @@ use crate::ScopeId;
 use crate::Task;
 use crate::VirtualDom;
 use crate::innerlude::Effect;
+use rustc_hash::FxHashMap;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Eq)]
@@ -115,6 +117,35 @@ impl Ord for ScopeOrder {
 impl Hash for ScopeOrder {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
+    }
+}
+
+/// The tasks polled by one synchronous pass over the scheduler queue.
+///
+/// A task that wakes itself while it is being polled is queued again before the poll returns.
+/// Polling it again in the same pass lets short chains of immediate wakeups settle within one
+/// `render_immediate`, but a task that is always ready would be polled forever and the pass would
+/// never return. A pass therefore polls each task at most [`TaskPass::MAX_POLLS_PER_TASK`] times.
+/// A task that comes up again after that is set aside, and [`VirtualDom::end_task_pass`] queues it
+/// again for the next pass.
+#[derive(Default)]
+pub(crate) struct TaskPass {
+    polls: FxHashMap<Task, u32>,
+    set_aside: Vec<Task>,
+}
+
+impl TaskPass {
+    const MAX_POLLS_PER_TASK: u32 = 32;
+
+    /// Returns true if `task` may be polled again in this pass, and sets it aside otherwise.
+    fn claim(&mut self, task: Task) -> bool {
+        let polls = self.polls.entry(task).or_insert(0);
+        if *polls == Self::MAX_POLLS_PER_TASK {
+            self.set_aside.push(task);
+            return false;
+        }
+        *polls += 1;
+        true
     }
 }
 
@@ -194,6 +225,27 @@ impl VirtualDom {
         Some(task)
     }
 
+    /// Take the top task that `pass` may still poll
+    pub(crate) fn pop_task_in_pass(&mut self, pass: &mut TaskPass) -> Option<Task> {
+        std::iter::from_fn(|| self.pop_task()).find(|&task| pass.claim(task))
+    }
+
+    /// Check if any task is queued to be polled
+    pub(crate) fn has_dirty_tasks(&self) -> bool {
+        self.runtime
+            .dirty_tasks
+            .borrow()
+            .values()
+            .any(|tasks| !tasks.is_empty())
+    }
+
+    /// Queue the tasks that `pass` set aside, so the next pass polls them
+    pub(crate) fn end_task_pass(&mut self, pass: TaskPass) {
+        for task in pass.set_aside {
+            self.mark_task_dirty(task);
+        }
+    }
+
     /// Take any effects from the highest scope. This should only be called if there are no pending scope reruns or tasks.
     pub(crate) fn pop_effect(&mut self) -> Option<Effect> {
         let mut pending_effects = self.runtime.pending_effects.borrow_mut();
@@ -240,6 +292,14 @@ impl VirtualDom {
             (None, Some(_)) => Some(Work::PollTask(self.pop_task().unwrap())),
             (None, None) => None,
         }
+    }
+
+    /// Take the top work item, skipping tasks that `pass` may not poll again
+    pub(crate) fn pop_work_in_pass(&mut self, pass: &mut TaskPass) -> Option<Work> {
+        std::iter::from_fn(|| self.pop_work()).find(|work| match work {
+            Work::PollTask(task) => pass.claim(*task),
+            Work::RerunScope(_) => true,
+        })
     }
 }
 
