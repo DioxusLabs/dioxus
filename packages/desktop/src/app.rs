@@ -653,7 +653,18 @@ impl App {
     /// Whenever sigkill is sent, we shut down the app and save the window state
     #[cfg(debug_assertions)]
     fn connect_preserve_window_state_handler(&self) {
-        // TODO: make this work on windows
+        #[cfg(windows)]
+        {
+            // `ctrlc` handles `CTRL_C_EVENT` and `CTRL_BREAK_EVENT`, which the CLI sends on shutdown.
+            // This fails if the user already installed a handler, in which case we leave theirs.
+            let target = self.app_context.proxy.clone();
+            _ = ctrlc::set_handler(move || {
+                if target.send_event(UserWindowEvent::Shutdown).is_err() {
+                    std::process::exit(0);
+                }
+            });
+        }
+
         #[cfg(unix)]
         {
             // Wire up the trap
