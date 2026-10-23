@@ -271,7 +271,7 @@ impl App {
         if let Some(temp) = msg.params().as_object() {
             if temp.contains_key("href") {
                 if let Some(href) = temp.get("href").and_then(|v| v.as_str()) {
-                    if let Err(err) = webbrowser::open(href) {
+                    if let Err(err) = open_url(href) {
                         tracing::error!("Failed to open URL: {}", err);
                     }
                 }
@@ -711,4 +711,40 @@ pub(crate) struct PreservedWindowState {
 pub(crate) fn restore_file() -> std::path::PathBuf {
     let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(std::env::temp_dir);
     dir.join("window-state.json")
+}
+
+pub(crate) fn open_url(url: &str) -> std::io::Result<()> {
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    if let Some(mailto) = encoded_mailto(url) {
+        return open::that_detached(mailto);
+    }
+
+    webbrowser::open(url)
+}
+
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+fn encoded_mailto(url: &str) -> Option<String> {
+    use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
+    const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+
+    url.starts_with("mailto:")
+        .then(|| utf8_percent_encode(url, FRAGMENT).to_string())
+}
+
+#[cfg(all(test, not(any(target_os = "ios", target_os = "android"))))]
+mod tests {
+    use super::encoded_mailto;
+
+    #[test]
+    fn mailto_is_percent_encoded_before_reaching_the_os_handler() {
+        assert_eq!(
+            encoded_mailto("mailto:a@b.c?subject=Hi there&body=50%25").as_deref(),
+            Some("mailto:a@b.c?subject=Hi%20there&body=50%25")
+        );
+        assert_eq!(
+            encoded_mailto("mailto:x\" & calc & \"").as_deref(),
+            Some("mailto:x%22%20&%20calc%20&%20%22")
+        );
+        assert_eq!(encoded_mailto("https://dioxuslabs.com"), None);
+    }
 }

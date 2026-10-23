@@ -3396,6 +3396,7 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-ui-kit",
+ "open",
  "percent-encoding",
  "rand 0.9.4",
  "reqwest",
@@ -10016,6 +10017,7 @@ version = "5.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fbaa89d2ddc8473c78a3adf69eea8cffa28c483b8e02a971ef31527cd0fc92c"
 dependencies = [
+ "dunce",
  "is-wsl",
  "libc",
  "pathdiff",
