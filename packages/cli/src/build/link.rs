@@ -15,6 +15,7 @@
 //! source of truth is the read-out of the link args after the initial build
 
 use super::HotpatchModuleCache;
+use crate::cli::link::quote_linker_command_file_argument;
 use crate::{BuildArtifacts, BuildMode, WorkspaceRustcArgs};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
@@ -265,9 +266,10 @@ impl BuildRequest {
         out_args.extend(out_arg.iter().map(Into::into));
 
         if cfg!(windows) {
+            let linker_flavor = self.linker_flavor();
             let cmd_contents: String = out_args
                 .iter()
-                .map(|s| format!("\"{}\"", s.to_string_lossy()))
+                .map(|s| quote_linker_command_file_argument(&s.to_string_lossy(), &linker_flavor))
                 .join(" ");
             std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
@@ -1125,7 +1127,11 @@ impl BuildRequest {
         // Handle windows command files
         let mut out_args = args.clone();
         if cfg!(windows) {
-            let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
+            let linker_flavor = self.linker_flavor();
+            let cmd_contents: String = out_args
+                .iter()
+                .map(|arg| quote_linker_command_file_argument(arg, &linker_flavor))
+                .join(" ");
             std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
             out_args = vec![format!("@{}", self.windows_command_file().display())];
