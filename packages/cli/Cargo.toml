@@ -145,7 +145,7 @@ wasmparser = { workspace = true }
 
 # bundler dependencies
 icns = { workspace = true }
-image = { workspace = true }
+image = { workspace = true, features = ["default"] }
 zip = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
