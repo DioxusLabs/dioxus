@@ -362,6 +362,12 @@ impl TraceController {
         ServeUpdate::TracingLog { log }
     }
 
+    /// Take a log message that is already queued, without waiting. Lets the serve loop drain a burst
+    /// of logs (e.g. cargo's per-crate output) into a single render instead of one render per line.
+    pub(crate) fn try_recv(&self) -> Option<TraceMsg> {
+        self.tui_rx.try_lock().ok()?.try_recv().ok()
+    }
+
     /// Uploads telemetry logs from the filesystem to the telemetry endpoint.
     ///
     /// As the app runs, we simply fire off messages into the TelemetryTx handle.

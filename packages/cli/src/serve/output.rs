@@ -1,7 +1,7 @@
 use crate::Result;
 use crate::{
     BuildId, BuildStage, BuilderUpdate, BundleFormat, TraceContent, TraceMsg, TraceSrc,
-    serve::{ServeUpdate, WebServer, ansi_buffer::ansi_string_to_line},
+    serve::{ServeUpdate, WebServer},
 };
 use anyhow::{Context, anyhow, bail};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -17,7 +17,7 @@ use crossterm::{
 use ratatui::{
     TerminalOptions, Viewport,
     prelude::*,
-    widgets::{Block, BorderType, Borders, LineGauge, Paragraph},
+    widgets::{Block, BorderType, Borders, LineGauge, Paragraph, Wrap},
 };
 use std::{
     cell::RefCell,
@@ -322,7 +322,7 @@ impl Output {
 
     /// Push a TraceMsg to be printed on the next render
     pub fn push_log(&mut self, message: TraceMsg) {
-        self.pending_logs.push_front(message);
+        self.pending_logs.push_back(message);
     }
 
     pub fn push_cargo_log(&mut self, message: Diagnostic) {
@@ -451,9 +451,8 @@ impl Output {
         };
 
         // First, dequeue any logs that have built up from event handling
-        while let Some(log) = self.pending_logs.pop_back() {
-            _ = self.render_log(term, log);
-        }
+        let logs = std::mem::take(&mut self.pending_logs);
+        _ = self.render_logs(term, logs);
 
         // Then, draw the frame, passing along all the state of the TUI so we can render it properly
         _ = term.draw(|frame| {
@@ -888,110 +887,45 @@ impl Output {
     /// close to real as possible. Once the log is printed, it is lost, so we need to be very careful
     /// here to not print it incorrectly.
     ///
-    /// This method works by printing lines at the top of the viewport frame, and then scrolling up
-    /// the viewport accordingly, such that our final call to "clear"  will cause the terminal the viewport
-    /// to be comlpetely erased and rewritten. This is slower since we're going around ratatui's diff
-    /// logic, but it's the only way to do this that gives us "true println!" semantics.
+    /// Ratatui's `insert_before` (with the `scrolling-regions` feature) sets a scroll region covering
+    /// the rows above the viewport, scrolls that region up and draws the log lines into the gap. The
+    /// viewport itself is never cleared or redrawn, so the frame doesn't flicker and the scrollback
+    /// receives the logs just like a println would.
     ///
-    /// In the future, Ratatui's insert_before method will get scroll regions, which will make this logic
-    /// much simpler. In that future, we'll simply insert a line into the scrollregion which should automatically
-    /// force that portion of the terminal to scroll up.
+    /// Crucially, this path never queries the cursor position. Ratatui's fallback implementation
+    /// calls `Terminal::clear`, which does, and that query has to share crossterm's input lock with
+    /// our `EventStream`. The stream holds the lock while idle, so the query would block for two
+    /// seconds and then fail - dropping the log and stalling the whole serve loop.
     ///
-    /// TODO(jon): we could look into implementing scroll regions ourselves, but I think insert_before will
-    /// land in a reasonable amount of time.
-    #[deny(clippy::manual_saturating_arithmetic)]
-    fn render_log(
-        &mut self,
+    /// All pending logs are rendered in a single `insert_before` so a burst of logs (think cargo's
+    /// per-crate output) costs one scroll instead of one per line.
+    fn render_logs(
+        &self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-        log: TraceMsg,
+        logs: impl IntoIterator<Item = TraceMsg>,
     ) -> Result<()> {
-        use unicode_segmentation::UnicodeSegmentation;
-
-        // Only show debug logs if verbose is enabled
-        if log.level == Level::DEBUG && !self.verbose {
-            return Ok(());
-        }
-
-        if log.level == Level::TRACE && !self.trace {
-            return Ok(());
-        }
-
-        // Grab out the size and location of the terminal and its viewport before we start messing with it
-        let frame_rect = terminal.get_frame().area();
-        let term_size = terminal.size().unwrap();
-
-        // Render the log into an ansi string
-        // We're going to add some metadata to it like the timestamp and source and then dump it to the raw ansi sequences we need to send to crossterm
-        let lines = Self::tracemsg_to_ansi_string(log);
-
-        // Get the lines of the output sequence and their overflow
-        let lines_printed = lines
-            .iter()
-            .map(|line| {
-                // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
-                let grapheme_count = console::strip_ansi_codes(line).graphemes(true).count();
-                grapheme_count.max(1).div_ceil(term_size.width as usize) as u16
+        let lines = logs
+            .into_iter()
+            .filter(|log| match log.level {
+                // Only show debug logs if verbose is enabled
+                Level::DEBUG => self.verbose,
+                Level::TRACE => self.trace,
+                _ => true,
             })
-            .sum::<u16>();
+            .flat_map(Self::tracemsg_to_lines)
+            .collect::<Vec<_>>();
 
-        // The viewport might be clipped, but the math still needs to work out.
-        let actual_vh_height = self.viewport_current_height().min(term_size.height);
-
-        // Move the terminal's cursor down to the number of lines printed
-        let remaining_space = term_size
-            .height
-            .saturating_sub(frame_rect.y + frame_rect.height);
-
-        // Calculate how many lines we need to push back
-        // - padding equals lines_printed when the frame is at the bottom
-        // - padding is zero when the remaining space is greater/equal than the scrollback (the frame will get pushed naturally)
-        // Determine what extra padding is remaining after we've shifted the terminal down
-        // this will be the distance between the final line and the top of the frame, only if the
-        // final line has extended into the frame
-        let final_line = frame_rect.y + lines_printed;
-        let max_frame_top = term_size.height - actual_vh_height;
-        let padding = final_line
-            .saturating_sub(max_frame_top)
-            .clamp(0, actual_vh_height - 1);
-
-        // The only reliable way we can force the terminal downards is through "insert_before".
-        //
-        // If we need to push the terminal down, we'll use this method with the number of lines
-        // Ratatui will handle this rest.
-        //
-        // This also calls `.clear()` so we don't need to call clear at the end of this function.
-        //
-        // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
-        terminal.insert_before(remaining_space.min(lines_printed), |_| {})?;
-
-        // Wipe the viewport clean so it doesn't tear
-        crossterm::queue!(
-            std::io::stdout(),
-            crossterm::cursor::MoveTo(0, frame_rect.y),
-            crossterm::terminal::Clear(ClearType::FromCursorDown),
-        )?;
-
-        // Start printing the log by writing on top of the topmost line
-        for (idx, line) in lines.into_iter().enumerate() {
-            // Move the cursor to the correct line offset but don't go past the bottom of the terminal
-            let start = frame_rect.y + idx as u16;
-            let start = start.min(term_size.height - 1);
-            crossterm::queue!(
-                std::io::stdout(),
-                crossterm::cursor::MoveTo(0, start),
-                crossterm::style::Print(line),
-                crossterm::style::Print("\n"),
-            )?;
+        if lines.is_empty() {
+            return Ok(());
         }
 
-        // Scroll the terminal if we need to
-        for _ in 0..padding {
-            crossterm::queue!(
-                std::io::stdout(),
-                crossterm::cursor::MoveTo(0, term_size.height - 1),
-                crossterm::style::Print("\n"),
-            )?;
-        }
+        // Inline viewports span the full width of the terminal, so wrapping to the viewport width
+        // matches what the terminal would do with a plain println.
+        let width = terminal.get_frame().area().width;
+        let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+        let height = paragraph.line_count(width).min(u16::MAX as usize) as u16;
+
+        terminal.insert_before(height, |buf| paragraph.render(buf.area, buf))?;
 
         Ok(())
     }
@@ -1003,7 +937,7 @@ impl Output {
         }
     }
 
-    fn tracemsg_to_ansi_string(log: TraceMsg) -> Vec<String> {
+    fn tracemsg_to_lines(log: TraceMsg) -> Vec<Line<'static>> {
         use ansi_to_tui::IntoText;
         use chrono::Timelike;
 
@@ -1075,7 +1009,7 @@ impl Output {
                     line = line.dark_gray();
                 }
 
-                lines.push(ansi_string_to_line(line));
+                lines.push(line);
             }
         }
 
@@ -1086,7 +1020,7 @@ impl Output {
     fn emit_logs_to_tracing(&mut self) {
         // In non-interactive mode (CI, piped output), drain pending logs to tracing
         // so they still appear in stdout/stderr instead of being silently dropped.
-        while let Some(log) = self.pending_logs.pop_back() {
+        while let Some(log) = self.pending_logs.pop_front() {
             let msg = match &log.content {
                 TraceContent::Text(s) => s.as_str(),
                 TraceContent::Cargo(d) => d.message.as_str(),
@@ -1117,9 +1051,8 @@ impl std::ops::Drop for Output {
         };
 
         // First, dequeue any logs that have built up from event handling
-        while let Some(log) = self.pending_logs.pop_back() {
-            _ = self.render_log(term, log);
-        }
+        let logs = std::mem::take(&mut self.pending_logs);
+        _ = self.render_logs(term, logs);
 
         // And then lets move the cursor to the bottom of the terminal
         let frame_rect = term.get_frame().area();

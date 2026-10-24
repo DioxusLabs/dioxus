@@ -5,7 +5,6 @@ use crate::{
     styles::{GLOW_STYLE, LINK_STYLE},
 };
 
-mod ansi_buffer;
 mod output;
 mod proxy;
 mod proxy_ws;
@@ -258,6 +257,13 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
 
             ServeUpdate::TracingLog { log } => {
                 screen.push_log(log);
+
+                // Logs tend to arrive in bursts (cargo emits a line per crate). Drain whatever is
+                // already queued so the whole burst is rendered in one pass, keeping the loop
+                // responsive to keyboard input instead of redrawing once per line.
+                while let Some(log) = tracer.try_recv() {
+                    screen.push_log(log);
+                }
             }
 
             ServeUpdate::OpenApp => {
