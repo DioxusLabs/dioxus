@@ -91,11 +91,13 @@ impl AssetParser {
         let link_section = generate_link_section(quote!(__ASSET), &asset_hash);
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
-        let constructor = if asset.is_relative() {
-            quote! { create_bundled_asset_relative }
-        } else {
-            quote! { create_bundled_asset }
-        };
+        // Paths under MANGANIS_ASSET_ROOT are relative by design.
+        let constructor =
+            if asset.is_relative() && std::env::var_os(crate::ASSET_ROOT_ENV).is_none() {
+                quote! { create_bundled_asset_relative }
+            } else {
+                quote! { create_bundled_asset }
+            };
 
         let options = if self.options.is_empty() {
             quote! { manganis::AssetOptions::builder() }
