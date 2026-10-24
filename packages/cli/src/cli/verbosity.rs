@@ -19,6 +19,10 @@ pub struct Verbosity {
     #[clap(long, global = true, help_heading = "Logging Options")]
     pub(crate) log_to_file: Option<PathBuf>,
 
+    /// Path to the Cargo.toml to use instead of searching the current directory and its parents
+    #[clap(long, global = true, help_heading = "Manifest Options")]
+    pub(crate) manifest_path: Option<PathBuf>,
+
     /// Assert that `Cargo.lock` will remain unchanged
     #[clap(long, global = true, help_heading = "Manifest Options")]
     pub(crate) locked: bool,
