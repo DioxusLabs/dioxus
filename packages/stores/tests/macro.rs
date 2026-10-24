@@ -837,4 +837,50 @@ mod macro_tests {
             }
         }
     }
+
+    // Stores of `HashMap` values use a lens that holds the key, so it is `Clone` but not `Copy`.
+    fn derive_transpose_non_copy_lens() {
+        #[derive(Store)]
+        struct Item {
+            checked: bool,
+            contents: String,
+        }
+
+        #[derive(Store)]
+        enum Enum {
+            Foo,
+            Bar(f32),
+            Baz { foo: i32, bar: String },
+        }
+
+        #[derive(Store)]
+        struct Maps {
+            items: HashMap<String, Item>,
+            enums: HashMap<String, Enum>,
+        }
+
+        let store = use_store(|| Maps {
+            items: HashMap::new(),
+            enums: HashMap::new(),
+        });
+
+        for (_, item) in store.items().iter() {
+            let ItemStoreTransposed { checked, contents } = item.transpose();
+            let checked: bool = checked();
+            let contents: String = contents();
+        }
+
+        for (_, value) in store.enums().iter() {
+            match value.transpose() {
+                EnumStoreTransposed::Foo => {}
+                EnumStoreTransposed::Bar(bar) => {
+                    let bar: f32 = bar();
+                }
+                EnumStoreTransposed::Baz { foo, bar } => {
+                    let foo: i32 = foo();
+                    let bar: String = bar();
+                }
+            }
+        }
+    }
 }

@@ -293,12 +293,12 @@ fn derive_store_struct(
         quote! {
             fn transpose(self) -> #transposed_name #extension_ty_generics
             where
-                Self: ::std::marker::Copy,
+                Self: ::std::clone::Clone,
                 Self: #transpose_witness<__V>
         },
         quote! {
             {
-                #( let #field_names = self.#field_names(); )*
+                #( let #field_names = ::std::clone::Clone::clone(&self).#field_names(); )*
                 #construct
             }
         },
@@ -376,6 +376,7 @@ fn select_enum_variant_field(
     field: &Field,
     field_index: usize,
     field_count: usize,
+    receiver: TokenStream2,
 ) -> TokenStream2 {
     // When we map the field, we need to use either the field name for named fields or the index for unnamed fields.
     let binding = function_name_from_field(field_index, field);
@@ -399,7 +400,7 @@ fn select_enum_variant_field(
             _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
         };
         // Map the field into a child selector that tracks the field
-        let scope = self.into_selector().child(#ordinal, __map_field, __map_mut_field);
+        let scope = #receiver.into_selector().child(#ordinal, __map_field, __map_mut_field);
         // Convert the selector into a store
         ::std::convert::Into::into(scope)
     }
@@ -484,21 +485,24 @@ fn derive_store_enum(
             transposed_fields.push(store_type.clone());
 
             // Generate the code to get Store<Field, W> from the enum
-            let select_field = select_enum_variant_field(
-                enum_name,
-                &ty_generics,
-                variant_name,
-                field,
-                i,
-                fields.len(),
-            );
+            let select_field = |receiver| {
+                select_enum_variant_field(
+                    enum_name,
+                    &ty_generics,
+                    variant_name,
+                    field,
+                    i,
+                    fields.len(),
+                    receiver,
+                )
+            };
 
             // If there is only one field, generate a field() -> Option<Store<O, W>> method
             if fields.len() == 1 {
                 let (sig, body) = generate_as_variant_method(
                     &is_fn,
                     &snake_case_variant,
-                    &select_field,
+                    &select_field(quote! { self }),
                     &store_type,
                     &readable_bounds,
                     &enum_witness,
@@ -506,7 +510,9 @@ fn derive_store_enum(
                 seal.push_method(sig, body);
             }
 
-            field_selectors.push(select_field);
+            // `transpose` borrows the store while it builds each field, so every field
+            // selector works on its own clone of the store
+            field_selectors.push(select_field(quote! { ::std::clone::Clone::clone(&self) }));
         }
 
         // Now that we have the types for the field selectors within the variant,
@@ -550,7 +556,7 @@ fn derive_store_enum(
             fn transpose(self) -> #transposed_name #extension_ty_generics
             where
                 #readable_bounds,
-                Self: ::std::marker::Copy,
+                Self: ::std::clone::Clone,
                 Self: #enum_witness<__V>
         },
         quote! {
