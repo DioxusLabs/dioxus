@@ -121,7 +121,7 @@ ansi-to-tui = { workspace = true }
 ansi-to-html = { workspace = true }
 path-absolutize = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"] }
-ratatui = { workspace = true, features = ["crossterm", "unstable"] }
+ratatui = { workspace = true, features = ["crossterm", "unstable", "scrolling-regions"] }
 shell-words = { workspace = true }
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
@@ -138,7 +138,6 @@ object = { workspace = true, features = ["all"] }
 tokio-util = { workspace = true, features = ["full"] }
 itertools = { workspace = true }
 throbber-widgets-tui = "0.11.1"
-unicode-segmentation = "1.12.0"
 handlebars = "6.3.2"
 walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
