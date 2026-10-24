@@ -32,6 +32,19 @@ static WORKSPACE_CACHE: tokio::sync::Mutex<Option<Arc<Workspace>>> =
 impl Workspace {
     /// Load the workspace from the current directory. This is cached and will only be loaded once.
     pub async fn current() -> Result<Arc<Workspace>> {
+        Self::load(true).await
+    }
+
+    /// Load the workspace members without resolving their dependencies.
+    ///
+    /// This is enough to package prebuilt executables, and it works offline without the dependency
+    /// sources. The only resolved version dx needs is wasm-bindgen's, which is read from `Cargo.lock`.
+    /// Shares the cache with [`Workspace::current`].
+    pub async fn current_without_deps() -> Result<Arc<Workspace>> {
+        Self::load(false).await
+    }
+
+    async fn load(resolve_deps: bool) -> Result<Arc<Workspace>> {
         // Lock the workspace to prevent multiple threads from loading it at the same time
         // If loading the workspace failed the first time, it won't be set and therefore permeate an error.
         let mut lock = WORKSPACE_CACHE.lock().await;
@@ -39,7 +52,7 @@ impl Workspace {
             return Ok(ws.clone());
         }
 
-        let krates_future = tokio::task::spawn_blocking(|| {
+        let krates_future = tokio::task::spawn_blocking(move || {
             let manifest_options = crate::logging::VERBOSITY.get().unwrap();
             let lock_options = LockOptions {
                 frozen: manifest_options.frozen,
@@ -50,9 +63,16 @@ impl Workspace {
             let mut cmd = Cmd::new();
             cmd.lock_opts(lock_options);
 
+            if !resolve_deps {
+                return Self::krates_without_deps(cmd);
+            }
+
             let mut builder = krates::Builder::new();
             builder.workspace(true);
-            let res = builder.build(cmd, |_| {})?;
+            let res = builder.build(cmd, |_| {}).map_err(|err| match err {
+                krates::Error::Metadata(err) => anyhow::anyhow!("{err}"),
+                err => err.into(),
+            })?;
 
             if !lock_options.offline {
                 if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
@@ -60,7 +80,7 @@ impl Workspace {
                 }
             }
 
-            Ok(res) as Result<Krates, krates::Error>
+            Ok(res) as Result<Krates>
         });
 
         let spin_future = async move {
@@ -80,13 +100,7 @@ impl Workspace {
         };
 
         let krates = tokio::select! {
-            f = krates_future => {
-                let res = f?;
-                if let Err(krates::Error::Metadata(e)) = res {
-                    bail!("{e}");
-                }
-                res?
-            },
+            f = krates_future => f??,
             _ = spin_future => bail!("cargo metadata took too long to respond, try again with --offline"),
         };
 
@@ -155,6 +169,106 @@ impl Workspace {
     pub async fn reload() -> Result<Arc<Workspace>> {
         WORKSPACE_CACHE.lock().await.take();
         Self::current().await
+    }
+
+    /// Build krates from `cargo metadata --no-deps`, which has no resolve graph.
+    ///
+    /// Every package becomes a resolve node without edges. wasm-bindgen is added at its `Cargo.lock`
+    /// version as a workspace member, since krates drops packages that no member reaches.
+    fn krates_without_deps(cmd: Cmd) -> Result<Krates> {
+        let mut metadata_cmd = krates::cm::MetadataCommand::from(cmd);
+        metadata_cmd.no_deps();
+        let output = metadata_cmd.cargo_command().output()?;
+        if !output.status.success() {
+            bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
+        }
+
+        let mut metadata: serde_json::Value =
+            serde_json::from_slice(&output.stdout).context("Failed to parse cargo metadata")?;
+        let workspace_root = metadata["workspace_root"]
+            .as_str()
+            .context("cargo metadata has no workspace_root")?;
+        let lockfile = std::fs::read_to_string(Path::new(workspace_root).join("Cargo.lock")).ok();
+        let wasm_bindgen = lockfile
+            .as_deref()
+            .map(Self::locked_wasm_bindgen_version)
+            .transpose()?
+            .flatten();
+
+        if let Some(version) = wasm_bindgen {
+            let source = "registry+https://github.com/rust-lang/crates.io-index";
+            let id = format!("{source}#wasm-bindgen@{version}");
+            metadata["packages"]
+                .as_array_mut()
+                .context("cargo metadata has no packages")?
+                .push(serde_json::json!({
+                    "name": "wasm-bindgen",
+                    "version": version,
+                    "id": id,
+                    "source": source,
+                    "dependencies": [],
+                    "targets": [],
+                    "features": {},
+                    "manifest_path": "/dev/null",
+                }));
+            metadata["workspace_members"]
+                .as_array_mut()
+                .context("cargo metadata has no workspace_members")?
+                .push(id.into());
+        }
+
+        let nodes: Vec<_> = metadata["packages"]
+            .as_array()
+            .context("cargo metadata has no packages")?
+            .iter()
+            .map(|package| {
+                serde_json::json!({
+                    "id": package["id"],
+                    "deps": [],
+                    "dependencies": [],
+                    "features": [],
+                })
+            })
+            .collect();
+        metadata["resolve"] = serde_json::json!({ "root": null, "nodes": nodes });
+
+        let metadata =
+            serde_json::from_value(metadata).context("Failed to parse cargo metadata")?;
+        let mut builder = krates::Builder::new();
+        builder.workspace(true);
+        Ok(builder.build_with_metadata(metadata, |_| {})?)
+    }
+
+    /// The wasm-bindgen version in a `Cargo.lock`, which the wasm-bindgen CLI has to match.
+    fn locked_wasm_bindgen_version(lockfile: &str) -> Result<Option<String>> {
+        #[derive(serde::Deserialize)]
+        struct Lockfile {
+            #[serde(default)]
+            package: Vec<LockedPackage>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct LockedPackage {
+            name: String,
+            version: String,
+        }
+
+        let lockfile: Lockfile = toml::from_str(lockfile).context("Failed to parse Cargo.lock")?;
+        let mut versions: Vec<_> = lockfile
+            .package
+            .into_iter()
+            .filter(|package| package.name == "wasm-bindgen")
+            .map(|package| package.version)
+            .collect();
+
+        if versions.len() > 1 {
+            bail!(
+                "Cargo.lock has several versions of wasm-bindgen ({}), so dx cannot pick a wasm-bindgen CLI",
+                versions.join(", ")
+            );
+        }
+
+        Ok(versions.pop())
     }
 
     pub fn android_tools(&self) -> Result<Arc<AndroidTools>> {
@@ -674,5 +788,82 @@ impl std::fmt::Debug for Workspace {
             .field("sysroot", &self.sysroot)
             .field("wasm_opt", &self.wasm_opt)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LOCK_HEADER: &str = r#"
+version = 4
+
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["wasm-bindgen"]
+"#;
+
+    fn locked_wasm_bindgen(version: &str) -> String {
+        format!(
+            r#"
+[[package]]
+name = "wasm-bindgen"
+version = "{version}"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+"#
+        )
+    }
+
+    fn krates_without_deps(lockfile: &str) -> Result<Krates> {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            r#"
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasm-bindgen = "0.2"
+"#,
+        )
+        .unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/main.rs"), "fn main() {}").unwrap();
+        std::fs::write(dir.path().join("Cargo.lock"), lockfile).unwrap();
+
+        let mut cmd = Cmd::new();
+        cmd.manifest_path(dir.path().join("Cargo.toml"));
+        cmd.lock_opts(LockOptions {
+            frozen: false,
+            locked: false,
+            offline: true,
+        });
+        Workspace::krates_without_deps(cmd)
+    }
+
+    #[test]
+    fn workspace_without_deps_reads_wasm_bindgen_from_the_lockfile() {
+        let lockfile = format!("{LOCK_HEADER}{}", locked_wasm_bindgen("0.2.100"));
+        let krates = krates_without_deps(&lockfile).unwrap();
+
+        assert!(krates.workspace_members().any(
+            |member| matches!(member, krates::Node::Krate { krate, .. } if krate.name == "app")
+        ));
+
+        let wasm_bindgen = krates.krates_by_name("wasm-bindgen").next().unwrap();
+        assert_eq!(wasm_bindgen.krate.version.to_string(), "0.2.100");
+    }
+
+    #[test]
+    fn workspace_without_deps_rejects_two_locked_wasm_bindgen_versions() {
+        let lockfile = format!(
+            "{LOCK_HEADER}{}{}",
+            locked_wasm_bindgen("0.2.100"),
+            locked_wasm_bindgen("0.2.101")
+        );
+        assert!(krates_without_deps(&lockfile).is_err());
     }
 }

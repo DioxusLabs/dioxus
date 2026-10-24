@@ -272,6 +272,17 @@ pub(crate) struct BuildRequest {
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
+    pub(crate) artifact_source: ArtifactSource,
+}
+
+/// Where the executable of a build comes from.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ArtifactSource {
+    /// dx compiles it with `cargo rustc`.
+    Cargo,
+
+    /// It was compiled outside dx, for example by another build system. dx packages a copy of it.
+    Prebuilt { exe: PathBuf },
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -921,6 +932,10 @@ impl BuildRequest {
             apple_team_id: args.apple_team_id.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
             windows_subsystem: args.windows_subsystem.clone(),
+            artifact_source: match &args.prebuilt_exe {
+                Some(exe) => ArtifactSource::Prebuilt { exe: exe.clone() },
+                None => ArtifactSource::Cargo,
+            },
         })
     }
 
@@ -976,7 +991,10 @@ impl BuildRequest {
 
             // In base/fat mode, we do the full chain with a root `cargo rustc`
             BuildMode::Base | BuildMode::Fat => {
-                let mut artifacts = self.cargo_build(&ctx).await?;
+                let mut artifacts = match &self.artifact_source {
+                    ArtifactSource::Cargo => self.cargo_build(&ctx).await?,
+                    ArtifactSource::Prebuilt { exe } => self.prebuilt_build(&ctx, exe).await?,
+                };
 
                 ctx.profile_phase("Post-processing executable");
                 self.post_process_executable(&artifacts).await?;
@@ -1208,6 +1226,53 @@ impl BuildRequest {
             assets,
             mode,
             depinfo,
+            root_dir: self.root_dir(),
+            patch_cache: None,
+            build_id: ctx.build_id,
+        })
+    }
+
+    /// Stand in for `cargo_build` with an executable compiled outside dx.
+    ///
+    /// Asset collection and stripping rewrite the executable in place, so dx works on a writable copy.
+    async fn prebuilt_build(&self, ctx: &BuildContext, exe: &Path) -> Result<BuildArtifacts> {
+        if matches!(ctx.mode, BuildMode::Fat) {
+            bail!("Hot-patching needs dx to compile the app, so it cannot use --prebuilt-exe");
+        }
+
+        let time_start = SystemTime::now();
+        let file_name = exe
+            .file_name()
+            .with_context(|| format!("--prebuilt-exe {} is not a file", exe.display()))?;
+        let staged = self
+            .target_dir
+            .join("dx")
+            .join(".prebuilt")
+            .join(self.triple.to_string())
+            .join(file_name);
+        std::fs::create_dir_all(staged.parent().unwrap())?;
+        _ = std::fs::remove_file(&staged);
+        std::fs::copy(exe, &staged)
+            .with_context(|| format!("Failed to copy prebuilt executable {}", exe.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = std::fs::metadata(&staged)?.permissions();
+            permissions.set_mode(permissions.mode() | 0o200);
+            std::fs::set_permissions(&staged, permissions)?;
+        }
+
+        ctx.status_start_bundle();
+        let assets = self.collect_assets_and_metadata(&staged, ctx).await?;
+
+        Ok(BuildArtifacts {
+            time_end: SystemTime::now(),
+            exe: staged,
+            workspace_rustc: WorkspaceRustcArgs::new(vec![]),
+            time_start,
+            assets,
+            mode: ctx.mode.clone(),
+            depinfo: RustcDepInfo::default(),
             root_dir: self.root_dir(),
             patch_cache: None,
             build_id: ctx.build_id,
@@ -2240,7 +2305,10 @@ impl BuildRequest {
         ctx.profile_phase("Verify Tooling");
         ctx.status_installing_tooling();
 
-        self.verify_toolchain_installed().await?;
+        // A prebuilt executable needs no target standard library
+        if self.artifact_source == ArtifactSource::Cargo {
+            self.verify_toolchain_installed().await?;
+        }
 
         match self.bundle {
             BundleFormat::Web => self.verify_web_tooling().await?,
