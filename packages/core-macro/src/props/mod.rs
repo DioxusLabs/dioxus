@@ -557,7 +557,7 @@ mod struct_info {
     use syn::spanned::Spanned;
     use syn::{Expr, Ident, parse_quote};
 
-    use crate::props::strip_option;
+    use crate::props::{looks_like_store_type, strip_option};
 
     use super::field_info::{FieldBuilderAttr, FieldInfo};
     use super::util::{
@@ -742,12 +742,36 @@ mod struct_info {
 
             let regular_fields: Vec<_> = self
                 .included_fields()
-                .filter(|f| !looks_like_signal_type(f.ty) && !looks_like_callback_type(f.ty))
+                .filter(|f| {
+                    !looks_like_signal_type(f.ty)
+                        && !looks_like_callback_type(f.ty)
+                        && !looks_like_store_type(f.ty)
+                })
                 .map(|f| {
                     let name = f.name;
                     quote!(#name)
                 })
                 .collect();
+
+            let store_fields: Vec<_> = self
+                .included_fields()
+                .filter(|f| looks_like_store_type(f.ty))
+                .map(|f| f.name)
+                .collect();
+            let move_store_fields = quote! {
+                trait MemoizeStore: Clone + PartialEq {
+                    fn __memoize(&mut self, new: &Self) -> bool {
+                        let equal = self == new;
+                        if !equal {
+                            *self = new.clone();
+                        }
+                        equal
+                    }
+                }
+                impl<T: Clone + PartialEq> MemoizeStore for T {}
+                let stores_equal = true;
+                #(let stores_equal = self.#store_fields.__memoize(&new.#store_fields) && stores_equal;)*
+            };
 
             let move_event_handlers: TokenStream = event_handlers_fields.iter().map(|field| {
                 // If this is an optional event handler, we need to check if it's None before we try to update it
@@ -790,6 +814,7 @@ mod struct_info {
 
                     // Then check if the fields are equal now that we know the signal fields are equal
                     // NOTE: we don't compare other fields individually because we want to let users opt-out of memoization for certain fields by implementing PartialEq themselves
+                    #move_store_fields
                     let non_signal_fields_equal = self == new;
 
                     // If they are not equal, we need to move over all the fields that are not event handlers or signals to self
@@ -804,10 +829,11 @@ mod struct_info {
                     #move_signal_fields
                     #move_event_handlers
 
-                    non_signal_fields_equal
+                    non_signal_fields_equal && stores_equal
                 })
             } else {
                 Ok(quote! {
+                    #move_store_fields
                     let equal = self == new;
                     // Move any signal and event fields into their old container.
                     #move_event_handlers
@@ -818,7 +844,7 @@ mod struct_info {
                             self.#regular_fields = new_clone.#regular_fields;
                         )*
                     }
-                    equal
+                    equal && stores_equal
                 })
             }
         }

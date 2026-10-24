@@ -78,6 +78,21 @@ where
 impl<Lens> Copy for SelectorScope<Lens> where Lens: Copy {}
 
 impl<Lens> SelectorScope<Lens> {
+    pub(crate) fn memoize(
+        &mut self,
+        other: &Self,
+        point_to: impl FnOnce(&Lens, &Lens) -> Result<(), BorrowError>,
+    ) -> Result<bool, BorrowError> {
+        let equal = self.path == other.path && self.store == other.store;
+        point_to(&self.write, &other.write)?;
+        if !equal {
+            self.mark_dirty();
+        }
+        self.path = other.path;
+        self.store = other.store;
+        Ok(equal)
+    }
+
     pub(crate) fn new(path: TinyVec, store: StoreSubscriptions, write: Lens) -> Self {
         Self { path, store, write }
     }

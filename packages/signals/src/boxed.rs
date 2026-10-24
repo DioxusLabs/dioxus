@@ -230,6 +230,12 @@ impl<T: ?Sized + 'static> WriteSignal<T> {
 }
 
 impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> WriteSignal<T, S> {
+    /// Point to another boxed writable value, retaining it independently of its owner.
+    #[doc(hidden)]
+    pub fn __point_to(&self, other: Self) -> BorrowResult {
+        self.value.point_to(other.value)
+    }
+
     /// Create a new boxed writable value which may be sync
     pub fn new_maybe_sync<R>(value: R) -> Self
     where
