@@ -192,6 +192,7 @@ impl OrHttpError<(), ()> for bool {
     }
 }
 
+#[doc(hidden)]
 pub struct AnyhowMarker;
 impl<T> OrHttpError<T, AnyhowMarker> for Result<T, anyhow::Error> {
     fn or_http_error(self, status: StatusCode, message: impl Into<String>) -> Result<T, HttpError> {

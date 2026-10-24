@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use schemars::{schema_for, JsonSchema, Schema};
+use schemars::{JsonSchema, Schema, schema_for};
 use serde::{Deserialize, Serialize};
 
 /// A component compatible with the dioxus components system.

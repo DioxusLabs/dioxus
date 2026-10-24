@@ -26,6 +26,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "blur" => false,
         "change" => true,
         "input" => true,
+        "beforeinput" => true,
         "invalid" => true,
         "reset" => true,
         "submit" => true,

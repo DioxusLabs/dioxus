@@ -2,8 +2,8 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    backend::{list_dogs, remove_dog, save_dog},
     Route,
+    backend::{list_dogs, remove_dog, save_dog},
 };
 
 #[component]

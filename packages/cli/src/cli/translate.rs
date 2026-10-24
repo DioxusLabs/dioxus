@@ -60,7 +60,7 @@ pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
 fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
     let mut svgs = vec![];
 
-    dioxus_rsx_rosetta::collect_svgs(&mut callbody.body.roots, &mut svgs);
+    dioxus_rsx_rosetta::collect_svgs(&mut callbody.body_mut().roots, &mut svgs);
 
     let mut out = write_component_body(dioxus_autofmt::write_block_out(&callbody).unwrap());
 
@@ -74,7 +74,7 @@ fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
 fn write_component_body(raw: String) -> String {
     let mut out = String::from("fn component() -> Element {\n    rsx! {");
     indent_and_write(&raw, 1, &mut out);
-    out.push_str("    })\n}");
+    out.push_str("    }\n}");
     out
 }
 
@@ -88,7 +88,7 @@ fn write_svg_section(out: &mut String, svgs: Vec<BodyNode>) {
         out.push_str(&idx.to_string());
         out.push_str("() -> Element {\n        rsx! {");
         indent_and_write(&raw, 2, out);
-        out.push_str("        })\n    }");
+        out.push_str("        }\n    }");
     }
 
     out.push_str("\n}");

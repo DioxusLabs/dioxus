@@ -1,4 +1,4 @@
-use dioxus_html::{geometry::PixelsSize, HasResizeData, ResizeResult};
+use dioxus_html::{HasResizeData, ResizeResult, geometry::PixelsSize};
 use wasm_bindgen::JsCast;
 use web_sys::{CustomEvent, Event, ResizeObserverEntry};
 

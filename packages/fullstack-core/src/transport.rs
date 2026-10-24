@@ -3,7 +3,7 @@
 
 use base64::Engine;
 use dioxus_core::CapturedError;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 #[cfg(feature = "web")]

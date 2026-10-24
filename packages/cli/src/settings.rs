@@ -14,8 +14,6 @@ use tracing::{error, trace, warn};
 /// This allows users to control the cli settings with ease.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct CliSettings {
-    /// Describes whether hot reload should always be on.
-    pub(crate) always_hot_reload: Option<bool>,
     /// Describes whether the CLI should always open the browser for Web targets.
     pub(crate) always_open_browser: Option<bool>,
     /// Describes whether desktop apps in development will be pinned always-on-top.
@@ -29,6 +27,8 @@ pub(crate) struct CliSettings {
     pub(crate) ignore_version_update: Option<String>,
     /// Disable telemetry
     pub(crate) disable_telemetry: Option<bool>,
+    /// Preferred editor for debug sessions
+    pub(crate) preferred_editor: Option<SupportedEditor>,
 }
 
 impl CliSettings {
@@ -167,6 +167,17 @@ impl CliSettings {
 
         *CI
     }
+}
+
+/// Supported editors for debug sessions
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum SupportedEditor {
+    /// Visual Studio Code
+    #[default]
+    Vscode,
+    /// Cursor editor
+    Cursor,
 }
 
 fn default_wsl_file_poll_interval() -> Option<u16> {

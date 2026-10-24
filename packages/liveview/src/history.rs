@@ -214,7 +214,7 @@ impl LiveviewHistory {
                     let init_eval = create_eval(
                         r#"
                         return [
-                          document.location.pathname + "?" + document.location.search + "\#" + document.location.hash,
+                          document.location.pathname + document.location.search + document.location.hash,
                           history.state,
                           JSON.parse(sessionStorage.getItem("liveview")),
                           history.length,
@@ -243,7 +243,7 @@ impl LiveviewHistory {
 
                         window.addEventListener("popstate", (event) => {{
                           dioxus.send([
-                            document.location.pathname + "?" + document.location.search + "\#" + document.location.hash,
+                            document.location.pathname + document.location.search + document.location.hash,
                             event.state,
                           ]);
                         }});
@@ -350,7 +350,7 @@ impl History for LiveviewHistory {
 
 mod routes {
     use serde::de::{MapAccess, Visitor};
-    use serde::{ser::SerializeMap, Deserializer, Serializer};
+    use serde::{Deserializer, Serializer, ser::SerializeMap};
     use std::collections::BTreeMap;
 
     pub fn serialize<S>(routes: &BTreeMap<usize, String>, serializer: S) -> Result<S::Ok, S::Error>

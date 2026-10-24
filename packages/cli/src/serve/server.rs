@@ -1,37 +1,35 @@
 use crate::{
-    config::WebHttpsConfig, serve::ServeUpdate, BuildId, BuildStage, BuilderUpdate, BundleFormat,
-    Result, TraceSrc,
+    BuildId, BuildStage, BuilderUpdate, BundleFormat, Result, TraceSrc, config::WebHttpsConfig,
+    serve::ServeUpdate,
 };
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use axum::{
+    Extension, Router,
     body::Body,
     extract::{
-        ws::{Message, WebSocket},
         Query, Request, State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     http::{
-        header::{HeaderName, HeaderValue, CACHE_CONTROL, EXPIRES, PRAGMA},
         Method, Response, StatusCode,
+        header::{CACHE_CONTROL, EXPIRES, HeaderName, HeaderValue, PRAGMA},
     },
     middleware::{self, Next},
     response::IntoResponse,
     routing::{get, get_service},
-    Extension, Router,
 };
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
-    future,
+    StreamExt, future,
     stream::{self, FuturesUnordered},
-    StreamExt,
 };
 use hyper::HeaderMap;
-use rustls::crypto::{aws_lc_rs::default_provider, CryptoProvider};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
     fs, io,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
     path::Path,
     sync::{Arc, RwLock},
     time::Duration,
@@ -39,9 +37,9 @@ use std::{
 use subsecond_types::JumpTable;
 use tokio::process::Command;
 use tower_http::{
+    ServiceBuilderExt,
     cors::Any,
     services::fs::{ServeDir, ServeFileSystemResponseBody},
-    ServiceBuilderExt,
 };
 
 use super::AppServer;
@@ -54,7 +52,6 @@ use super::AppServer;
 /// and better tooling on the pages that we serve.
 pub(crate) struct WebServer {
     devserver_exposed_ip: IpAddr,
-    devserver_bind_ip: IpAddr,
     devserver_port: u16,
     proxied_port: Option<u16>,
     hot_reload_sockets: Vec<ConnectedWsClient>,
@@ -121,7 +118,6 @@ impl WebServer {
         Ok(Self {
             build_status,
             proxied_port,
-            devserver_bind_ip,
             devserver_exposed_ip,
             devserver_port,
             hot_reload_sockets: Default::default(),
@@ -179,7 +175,12 @@ impl WebServer {
                     Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
                     _ => {
                         drop(new_message);
-                        _ = self.hot_reload_sockets.remove(idx);
+                        let socket = self.hot_reload_sockets.remove(idx);
+                        tracing::warn!(
+                            "Devtools websocket disconnected (build_id: {:?}, pid: {:?}) - this client will no longer receive hot-reloads or hot-patches",
+                            socket.build_id,
+                            socket.pid
+                        );
                     }
                 }
             }
@@ -233,17 +234,16 @@ impl WebServer {
                         total,
                         krate,
                         ..
-                    } => {
-                        if !matches!(
-                            self.build_status.get(),
-                            Status::Ready | Status::BuildError { .. }
-                        ) {
-                            self.build_status.set(Status::Building {
-                                progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
-                                build_message: format!("{krate} compiling"),
-                            });
-                            self.send_build_status().await;
-                        }
+                    } if !matches!(
+                        self.build_status.get(),
+                        Status::Ready | Status::BuildError { .. }
+                    ) =>
+                    {
+                        self.build_status.set(Status::Building {
+                            progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
+                            build_message: format!("{krate} compiling"),
+                        });
+                        self.send_build_status().await;
                     }
                     BuildStage::OptimizingWasm => {}
                     BuildStage::Aborted => {}
@@ -265,6 +265,8 @@ impl WebServer {
             BuilderUpdate::StderrReceived { .. } => {}
             BuilderUpdate::ProcessExited { .. } => {}
             BuilderUpdate::ProcessWaitFailed { .. } => {}
+            BuilderUpdate::ProfilePhase { .. } => {}
+            BuilderUpdate::DepInfoDiscovered { .. } => {}
         }
     }
 
@@ -307,6 +309,19 @@ impl WebServer {
         build: BuildId,
         for_pid: Option<u32>,
     ) {
+        if jump_table.map.is_empty() {
+            tracing::warn!(
+                "Hot-patch jump table for {build:?} is empty - the patch will have no effect. \
+                This usually means no symbols in the patch matched the running binary."
+            );
+        } else {
+            tracing::debug!(
+                "Sending hot-patch for {build:?} with {} jump table entries to {} connected client(s)",
+                jump_table.map.len(),
+                self.hot_reload_sockets.len()
+            );
+        }
+
         let msg = DevserverMsg::HotReload(HotReloadMsg {
             jump_table: Some(jump_table),
             ms_elapsed: time_taken.as_millis() as u64,
@@ -353,10 +368,17 @@ impl WebServer {
     /// Sends a devserver message to all connected clients.
     async fn send_devserver_message_to_all(&mut self, msg: DevserverMsg) {
         for socket in self.hot_reload_sockets.iter_mut() {
-            _ = socket
+            if let Err(err) = socket
                 .socket
                 .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
-                .await;
+                .await
+            {
+                tracing::warn!(
+                    "Failed to send devserver message to client (build_id: {:?}, pid: {:?}): {err}",
+                    socket.build_id,
+                    socket.pid
+                );
+            }
         }
     }
 
@@ -388,21 +410,38 @@ impl WebServer {
         }
     }
 
-    /// Get the address the server is running - showing 127.0.0.1 if the devserver is bound to 0.0.0.0
-    /// This is designed this way to not confuse users who expect the devserver to be bound to localhost
-    /// ... which it is, but they don't know that 0.0.0.0 also serves localhost.
+    /// Get the address to display to the user as a clickable link.
+    ///
+    /// When bound to 0.0.0.0, resolves the machine's primary network address so the user
+    /// sees a real clickable URL instead of the unroutable 0.0.0.0.
     pub fn displayed_address(&self) -> Option<SocketAddr> {
         let mut address = self.server_address()?;
 
         // Set the port to the devserver port since that's usually what people expect
         address.set_port(self.devserver_port);
 
-        if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
-            address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), address.port());
+        if address.ip().is_unspecified() {
+            match resolve_local_ip() {
+                Some(ip) => address.set_ip(ip),
+                None => {
+                    tracing::debug!("Could not resolve local network IP; displaying localhost");
+                    address.set_ip(IpAddr::V4(Ipv4Addr::LOCALHOST));
+                }
+            }
         }
 
         Some(address)
     }
+}
+
+/// Resolve the machine's primary local IP by asking the OS which interface routes to the internet.
+///
+/// Connects a UDP socket to a public address (no traffic is sent) and reads back the local address
+/// the OS selected. Returns `None` if the lookup fails (e.g. no network connectivity).
+fn resolve_local_ip() -> Option<IpAddr> {
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    Some(socket.local_addr().ok()?.ip())
 }
 
 async fn devserver_mainloop(
@@ -424,13 +463,11 @@ async fn devserver_mainloop(
     }
 
     // If we're using rustls, we need to install the provider, get the cert/key paths, and then set up rustls
-    if let Err(provider) = CryptoProvider::install_default(default_provider()) {
-        bail!("Failed to install default CryptoProvider: {provider:?}");
-    }
+    crate::http_client::install_crypto_provider();
     let (cert_path, key_path) = get_rustls(&https_cfg).await?;
     let rustls = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path).await?;
 
-    axum_server::from_tcp_rustls(listener, rustls)
+    axum_server::from_tcp_rustls(listener, rustls)?
         .serve(router.into_make_service())
         .await?;
 

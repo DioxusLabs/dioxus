@@ -7,9 +7,9 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use syn::{
+    ForeignItem, ForeignItemFn, Ident, ItemForeignMod, LitStr, Pat, ReturnType, Type,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    ForeignItem, ForeignItemFn, Ident, ItemForeignMod, LitStr, Pat, ReturnType, Type,
 };
 
 /// The foreign ABI being targeted
@@ -72,11 +72,11 @@ impl ForeignType {
                         "f64" => return Ok(ForeignType::F64),
                         "String" => return Ok(ForeignType::String),
                         "Option" => {
-                            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                                if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                                    let inner_type = Self::from_type(inner)?;
-                                    return Ok(ForeignType::Option(Box::new(inner_type)));
-                                }
+                            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+                                && let Some(syn::GenericArgument::Type(inner)) = args.args.first()
+                            {
+                                let inner_type = Self::from_type(inner)?;
+                                return Ok(ForeignType::Option(Box::new(inner_type)));
                             }
                             return Err(syn::Error::new(ty.span(), "Invalid Option type"));
                         }
@@ -207,18 +207,19 @@ impl ForeignFunctionDecl {
                             return Err(syn::Error::new(
                                 pat_type.pat.span(),
                                 "Expected identifier pattern",
-                            ))
+                            ));
                         }
                     };
 
                     let arg_ty = ForeignType::from_type(&pat_type.ty)?;
 
                     // Check if first arg is `this: &SomeType`
-                    if i == 0 && arg_name == "this" {
-                        if let ForeignType::OpaqueRef(type_name) = &arg_ty {
-                            receiver = Some(type_name.clone());
-                            continue; // Don't add to args
-                        }
+                    if i == 0
+                        && arg_name == "this"
+                        && let ForeignType::OpaqueRef(type_name) = &arg_ty
+                    {
+                        receiver = Some(type_name.clone());
+                        continue; // Don't add to args
                     }
 
                     args.push(ForeignArg {
@@ -289,14 +290,14 @@ impl FfiBridgeParser {
                     return Err(syn::Error::new(
                         name.span(),
                         format!("Unsupported ABI: {}. Expected 'Swift' or 'Kotlin'", other),
-                    ))
+                    ));
                 }
             },
             None => {
                 return Err(syn::Error::new(
                     item.abi.extern_token.span,
                     "Expected ABI string (e.g., extern \"Swift\")",
-                ))
+                ));
             }
         };
 
@@ -357,12 +358,12 @@ impl FfiBridgeParser {
             let trimmed = line.trim();
             if trimmed.starts_with("namespace") {
                 // Extract the quoted string
-                if let Some(start) = trimmed.find('"') {
-                    if let Some(end) = trimmed[start + 1..].find('"') {
-                        let namespace = &trimmed[start + 1..start + 1 + end];
-                        // Convert dots to slashes for JNI format
-                        return Some(namespace.replace('.', "/"));
-                    }
+                if let Some(start) = trimmed.find('"')
+                    && let Some(end) = trimmed[start + 1..].find('"')
+                {
+                    let namespace = &trimmed[start + 1..start + 1 + end];
+                    // Convert dots to slashes for JNI format
+                    return Some(namespace.replace('.', "/"));
                 }
             }
         }
@@ -502,31 +503,31 @@ impl FfiBridgeParser {
             let (binding, arg_expr) = match &arg.ty {
                 ForeignType::Bool => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Bool(if #name { 1 } else { 0 }); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::I8 | ForeignType::U8 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Byte(#name as i8); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::I16 | ForeignType::U16 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Short(#name as i16); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::I32 | ForeignType::U32 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Int(#name as i32); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::I64 | ForeignType::U64 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Long(#name as i64); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::F32 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Float(#name); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::F64 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Double(#name); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::String | ForeignType::StrRef => (
                     quote! {
@@ -724,10 +725,10 @@ impl FfiBridgeParser {
             let class_name_bytes = format!("{}\0", name);
 
             let type_def = quote! {
-                /// Opaque wrapper around an Objective-C object pointer
+                /// Opaque wrapper around a retained Objective-C object
                 /// The actual Swift class is looked up dynamically at runtime after dx links everything
                 pub struct #name {
-                    inner: *mut manganis::objc2::runtime::AnyObject,
+                    inner: manganis::objc2::rc::Retained<manganis::objc2::runtime::AnyObject>,
                 }
 
                 unsafe impl Send for #name {}
@@ -749,7 +750,7 @@ impl FfiBridgeParser {
                         static mut LOAD_RESULT: Result<(), &'static str> = Ok(());
 
                         #[link(name = "System")]
-                        extern "C" {
+                        unsafe extern "C" {
                             fn dlopen(filename: *const std::ffi::c_char, flags: std::ffi::c_int) -> *mut std::ffi::c_void;
                             fn dlerror() -> *const std::ffi::c_char;
                         }
@@ -827,17 +828,26 @@ impl FfiBridgeParser {
                             let instance: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![class, alloc];
                             let instance: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![instance, init];
 
-                            if instance.is_null() {
-                                return Err("Failed to initialize instance");
-                            }
+                            // `alloc` + `init` returns a +1 retained object; `Retained::from_raw`
+                            // takes over that reference and sends `release` on drop.
+                            let inner = manganis::objc2::rc::Retained::from_raw(instance)
+                                .ok_or("Failed to initialize instance")?;
 
-                            Ok(Self { inner: instance })
+                            Ok(Self { inner })
                         }
                     }
 
-                    /// Create from an existing object pointer
+                    /// Create from an existing object pointer.
+                    ///
+                    /// # Safety
+                    ///
+                    /// `ptr` must be a valid, non-null pointer to an Objective-C object,
+                    /// and the caller must transfer ownership of one retain count (+1)
+                    /// to the returned wrapper, which sends `release` on drop.
                     pub unsafe fn from_raw(ptr: *mut manganis::objc2::runtime::AnyObject) -> Self {
-                        Self { inner: ptr }
+                        let inner = manganis::objc2::rc::Retained::from_raw(ptr)
+                            .expect("from_raw called with a null pointer");
+                        Self { inner }
                     }
                 }
             };
@@ -960,7 +970,7 @@ impl FfiBridgeParser {
 
         // Build the msg_send call
         let this_expr = if func.receiver.is_some() {
-            quote! { this.inner }
+            quote! { manganis::objc2::rc::Retained::as_ptr(&this.inner) as *mut manganis::objc2::runtime::AnyObject }
         } else {
             // For static methods, we'd need the class
             quote! { class }

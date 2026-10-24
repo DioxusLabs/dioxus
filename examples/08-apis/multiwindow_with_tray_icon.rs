@@ -1,8 +1,7 @@
 //! Multiwindow with tray icon example
 //!
 //! This example shows how to implement a simple multiwindow application and tray icon using dioxus.
-//! This works by spawning a new window when the user clicks a button. We have to build a new virtualdom which has its
-//! own context, root elements, etc.
+//! This works by rendering a `Window` component when the user clicks a button.
 //!
 //! This is useful for apps that incorporate settings panels or persistent windows like Raycast.
 
@@ -18,6 +17,9 @@ fn main() {
 }
 
 fn app() -> Element {
+    let mut windows = use_signal(Vec::<usize>::new);
+    let mut next_id = use_signal(|| 0usize);
+
     use_hook(|| {
         // Set the close behavior for the main window
         // This will hide the window instead of closing it when the user clicks the close button
@@ -31,14 +33,24 @@ fn app() -> Element {
     rsx! {
         button {
             onclick: move |_| {
-                window().new_window(VirtualDom::new(popup), Default::default());
+                let id = next_id();
+                next_id.set(id + 1);
+                windows.write().push(id);
             },
             "New Window"
+        }
+        for id in windows() {
+            Window {
+                key: "{id}",
+                onclose: move |_| windows.write().retain(|window_id| *window_id != id),
+                Popup {}
+            }
         }
     }
 }
 
-fn popup() -> Element {
+#[component]
+fn Popup() -> Element {
     rsx! {
         div { "This is a popup window!" }
     }

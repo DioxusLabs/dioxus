@@ -1,5 +1,6 @@
 use dioxus_core::Event;
 use keyboard_types::Modifiers;
+use std::option::Option;
 
 use crate::{geometry::*, input_data::*, *};
 
@@ -104,42 +105,6 @@ pub trait HasPointerData: PointerInteraction {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event![
-    PointerData;
-    /// pointerdown
-    onpointerdown
-
-    /// pointermove
-    onpointermove
-
-    /// pointerup
-    onpointerup
-
-    /// pointercancel
-    onpointercancel
-
-    /// gotpointercapture
-    ongotpointercapture
-
-    /// lostpointercapture
-    onlostpointercapture
-
-    /// pointerenter
-    onpointerenter
-
-    /// pointerleave
-    onpointerleave
-
-    /// pointerover
-    onpointerover
-
-    /// pointerout
-    onpointerout
-
-    /// auxclick
-    onauxclick
-];
 
 impl PointerData {
     /// Gets the unique identifier of the pointer causing the event.

@@ -3,13 +3,13 @@ use crate::{
     subscriptions::{StoreSubscriptions, TinyVec},
 };
 use dioxus_core::{
-    use_hook, AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers, SuperInto,
+    AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers, SuperInto, use_hook,
 };
 use dioxus_signals::{
-    read_impls, write_impls, BorrowError, BorrowMutError, BoxedSignalStorage, CopyValue,
-    CreateBoxedSignalStorage, Global, InitializeFromFunction, MappedMutSignal, ReadSignal,
-    Readable, ReadableExt, ReadableRef, Storage, SyncStorage, UnsyncStorage, Writable, WritableExt,
-    WritableRef, WriteSignal,
+    BorrowError, BorrowMutError, BoxedSignalStorage, CopyValue, CreateBoxedSignalStorage, Global,
+    InitializeFromFunction, MappedMutSignal, ReadSignal, Readable, ReadableExt, ReadableRef,
+    Storage, SyncStorage, UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
+    read_impls, write_impls,
 };
 use std::marker::PhantomData;
 
@@ -204,7 +204,7 @@ where
 impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<MappedStore<T, Lens, __F, __FMut>>
     for ReadStore<T, S>
 where
-    Lens: Writable<Storage = S> + 'static,
+    Lens: Readable<Storage = S> + 'static,
     __F: Fn(&Lens::Target) -> &T + 'static,
     __FMut: Fn(&mut Lens::Target) -> &mut T + 'static,
     S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,

@@ -1,11 +1,15 @@
 use dioxus_rsx::CallBody;
-use syn::{parse::Parser, visit_mut::VisitMut, Expr, File, Item, MacroDelimiter};
+use syn::{Expr, File, Item, MacroDelimiter, parse::Parser, visit_mut::VisitMut};
 
 use crate::{IndentOptions, Writer};
 
 impl Writer<'_> {
     pub fn unparse_expr(&mut self, expr: &Expr) -> String {
         unparse_expr(expr, self.raw_src, &self.out.indent)
+    }
+
+    pub fn unparse_pat(&self, pat: &syn::Pat) -> String {
+        unparse_pat(pat)
     }
 }
 
@@ -35,10 +39,10 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 // once we've written out the unparsed expr from prettyplease, we can replace
                 // this dummy block with the actual formatted block
                 let body = CallBody::parse_strict.parse2(i.tokens.clone()).unwrap();
-                let multiline = !Writer::is_short_rsx_call(&body.body.roots);
+                let multiline = !Writer::is_short_rsx_call(&body.body().roots);
                 let mut formatted = {
                     let mut writer = Writer::new(self.src, self.cfg.clone());
-                    _ = writer.write_body_nodes(&body.body.roots).ok();
+                    _ = writer.write_body_nodes(&body.body().roots).ok();
                     writer.consume()
                 }
                 .unwrap();
@@ -163,6 +167,32 @@ pub fn unparse_inner(expr: &Expr) -> String {
     unwrapped(wrapped)
 }
 
+/// Unparse a pattern into a properly formatted string using prettyplease.
+///
+/// Wraps the pattern in `fn main() { for PAT in () {} }`, formats with prettyplease,
+/// then extracts just the pattern text between "for " and " in".
+pub fn unparse_pat(pat: &syn::Pat) -> String {
+    let file = File {
+        shebang: None,
+        attrs: vec![],
+        items: vec![Item::Verbatim(quote::quote! {
+            fn main() {
+                for #pat in () {}
+            }
+        })],
+    };
+    let formatted = prettyplease::unparse(&file);
+    let after_for = formatted
+        .find("for ")
+        .map(|i| i + 4)
+        .expect("prettyplease output missing 'for' keyword in pattern wrapper");
+    let before_in = formatted[after_for..]
+        .find(" in ")
+        .map(|i| i + after_for)
+        .expect("prettyplease output missing 'in' keyword in pattern wrapper");
+    formatted[after_for..before_in].trim().to_string()
+}
+
 // Split off the fn main and then cut the tabs off the front
 fn unwrapped(raw: String) -> String {
     let mut o = raw
@@ -206,7 +236,7 @@ mod tests {
     fn fmt_block_from_expr(raw: &str, tokens: TokenStream, cfg: IndentOptions) -> Option<String> {
         let body = CallBody::parse_strict.parse2(tokens).unwrap();
         let mut writer = Writer::new(raw, cfg);
-        writer.write_body_nodes(&body.body.roots).ok()?;
+        writer.write_body_nodes(&body.body().roots).ok()?;
         writer.consume()
     }
 

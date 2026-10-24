@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-logger"
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 description = "A logging utility to provide a standard interface whether you're targeting web desktop, fullstack, and more."
 authors = ["DogeDark", "Jonathan Kelley"]
 repository = "https://github.com/dioxuslabs/dioxus"
@@ -21,10 +21,14 @@ tracing-subscriber = { workspace = true, features = ["registry", "std", "env-fil
 default = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tracing-wasm = { workspace = true }
+wasm-bindgen = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+serde_json = { workspace = true }
+wasm-bindgen-test = { workspace = true }

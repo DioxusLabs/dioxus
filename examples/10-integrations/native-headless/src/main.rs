@@ -4,10 +4,14 @@
 //! (this example is not really intended to be run as-is, and requires you to fill
 //! in the missing pieces)
 use anyrender_vello::VelloScenePainter;
+use atomic_refcell::AtomicRefCell;
 use blitz_dom::{Document as _, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::{
-    events::{BlitzMouseButtonEvent, MouseEventButton, MouseEventButtons, UiEvent},
+    events::{
+        BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, Point,
+        PointerCoords, PointerDetails, UiEvent,
+    },
     shell::{ColorScheme, Viewport},
 };
 use dioxus::prelude::*;
@@ -16,7 +20,7 @@ use pollster::FutureExt as _;
 use std::sync::Arc;
 use std::task::Context;
 use vello::{
-    peniko::color::AlphaColor, RenderParams, Renderer as VelloRenderer, RendererOptions, Scene,
+    RenderParams, Renderer as VelloRenderer, RendererOptions, Scene, peniko::color::AlphaColor,
 };
 use wgpu::TextureFormat;
 use wgpu_context::WGPUContext;
@@ -112,10 +116,12 @@ fn main() {
     // (i.e. to render a custom renderer instead of Vello)
     paint_scene(
         &mut VelloScenePainter::new(&mut scene),
-        &dioxus_doc,
+        &mut dioxus_doc.inner_mut(),
         SCALE_FACTOR as f64,
         WIDTH,
         HEIGHT,
+        0,
+        0,
     );
 
     // Render the `vello::Scene` to the Texture using the `VelloRenderer`
@@ -140,12 +146,23 @@ fn main() {
     // EVENT HANDLING
     // =============
 
-    let event = UiEvent::MouseDown(BlitzMouseButtonEvent {
-        x: 30.0,
-        y: 40.0,
+    let event = UiEvent::PointerDown(BlitzPointerEvent {
+        id: BlitzPointerId::Mouse,
+        is_primary: true,
+        coords: PointerCoords {
+            page_x: 30.0,
+            page_y: 40.0,
+            client_x: 30.0,
+            client_y: 40.0,
+            screen_x: 30.0,
+            screen_y: 40.0,
+        },
         button: MouseEventButton::Main,
         buttons: MouseEventButtons::Primary, // keep track of all pressed buttons
         mods: Modifiers::empty(),            // ctrl, alt, shift, etc
+        details: PointerDetails::default(),
+        element: Point::default(),
+        active_pointers: Arc::new(AtomicRefCell::new(Vec::new())),
     });
     dioxus_doc.handle_ui_event(event);
 

@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use id_arena::Id;
-use walrus::{ir::*, ExportId};
 use walrus::{ConstExpr, Data, DataId, DataKind, Element, ExportItem, Function};
 use walrus::{ElementId, ElementItems, ElementKind, Module, RefType, Type, TypeId};
+use walrus::{ExportId, ir::*};
 use walrus::{FunctionId, FunctionKind, Global, GlobalId};
 use walrus::{GlobalKind, Memory, MemoryId, Table, TableId};
 
@@ -134,6 +134,7 @@ impl Used {
                 ExportItem::Table(t) => stack.push_table(t),
                 ExportItem::Memory(m) => stack.push_memory(m),
                 ExportItem::Global(g) => stack.push_global(g),
+                ExportItem::Tag(_) => &mut stack,
             };
         }
 
@@ -239,7 +240,8 @@ impl Used {
                         stack.push_func(*func, Location::Global { global: t });
                     }
                     GlobalKind::Local(ConstExpr::Value(_))
-                    | GlobalKind::Local(ConstExpr::RefNull(_)) => {}
+                    | GlobalKind::Local(ConstExpr::RefNull(_))
+                    | GlobalKind::Local(ConstExpr::Extended(_)) => {}
                 }
             }
 
@@ -266,7 +268,7 @@ impl Used {
                         stack.push_func(*f, Location::Element { element: e.id() });
                     });
                 }
-                if let ElementItems::Expressions(RefType::Funcref, items) = &e.items {
+                if let ElementItems::Expressions(RefType::FUNCREF, items) = &e.items {
                     for item in items {
                         match item {
                             ConstExpr::Global(g) => {
@@ -295,10 +297,11 @@ impl Used {
         // Let's keep `wabt` passing though and just say that if there are data
         // segments kept, but no memories, then we try to add the first memory,
         // if any, to the used set.
-        if !stack.used.data.is_empty() && stack.used.memories.is_empty() {
-            if let Some(mem) = module.memories.iter().next() {
-                stack.used.memories.insert(mem.id());
-            }
+        if !stack.used.data.is_empty()
+            && stack.used.memories.is_empty()
+            && let Some(mem) = module.memories.iter().next()
+        {
+            stack.used.memories.insert(mem.id());
         }
 
         stack.used

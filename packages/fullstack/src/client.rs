@@ -1,19 +1,46 @@
 #![allow(unreachable_code)]
 
-use crate::{reqwest_error_to_request_error, StreamingError};
+use crate::{StreamingError, reqwest_error_to_request_error};
 use bytes::Bytes;
 use dioxus_fullstack_core::RequestError;
 use futures::Stream;
 use futures::{TryFutureExt, TryStreamExt};
 use headers::{ContentType, Header};
-use http::{response::Parts, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
+use http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, response::Parts};
 use send_wrapper::SendWrapper;
-use serde::{de::DeserializeOwned, Serialize};
-use std::sync::{LazyLock, Mutex, OnceLock};
+use serde::{Serialize, de::DeserializeOwned};
+use std::sync::{LazyLock, Mutex, OnceLock, RwLock};
 use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future};
 use url::Url;
 
 pub static GLOBAL_REQUEST_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+/// Installs _ring_ as the process-wide rustls crypto provider, unless one is already installed.
+///
+/// Fullstack enables reqwest's `rustls-no-provider` feature, so without a process-wide provider
+/// any other `reqwest::Client` built in the app (e.g. `reqwest::get`) would panic.
+#[cfg(not(target_arch = "wasm32"))]
+#[doc(hidden)]
+pub fn install_default_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+/// TLS config for the server function client: _ring_ with the bundled webpki roots, so it works
+/// without platform verifier setup (which Android requires).
+#[cfg(not(target_arch = "wasm32"))]
+fn rustls_client_config() -> rustls::ClientConfig {
+    let roots = rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let mut config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("ring supports the default TLS versions")
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    // Websocket upgrades require HTTP/1.1
+    config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    config
+}
 
 pub type ClientResult = Result<ClientResponse, RequestError>;
 
@@ -125,7 +152,10 @@ impl ClientRequest {
             static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
                 LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
 
-            client = client.cookie_store(true).cookie_provider(COOKIES.clone());
+            client = client
+                .cookie_store(true)
+                .cookie_provider(COOKIES.clone())
+                .tls_backend_preconfigured(rustls_client_config());
         }
 
         client.build().unwrap()
@@ -497,16 +527,21 @@ impl ClientResponse {
 /// Set the root server URL that all server function paths are relative to for the client.
 ///
 /// If this is not set, it defaults to the origin.
+///
+/// This may be called more than once; the most recent value wins. Requests read
+/// the URL as they are built, so a change applies to the next server function
+/// call. Clients that talk to more than one backend can switch between them
+/// without restarting the process.
 pub fn set_server_url(url: &'static str) {
-    ROOT_URL.set(url).unwrap();
+    *ROOT_URL.write().unwrap() = Some(url);
 }
 
 /// Returns the root server URL for all server functions.
 pub fn get_server_url() -> &'static str {
-    ROOT_URL.get().copied().unwrap_or("")
+    ROOT_URL.read().unwrap().unwrap_or("")
 }
 
-static ROOT_URL: OnceLock<&'static str> = OnceLock::new();
+static ROOT_URL: RwLock<Option<&'static str>> = RwLock::new(None);
 
 /// Delete the extra request headers for all server functions.
 pub fn clear_request_headers() {

@@ -3,71 +3,6 @@
 use std::any::Any;
 use std::sync::RwLock;
 
-macro_rules! impl_event {
-    (
-        $data:ty;
-        $(
-            $( #[$attr:meta] )*
-            $name:ident $(: $js_name:literal)?
-        )*
-    ) => {
-        $(
-            $( #[$attr] )*
-            /// <details open>
-            /// <summary>General Event Handler Information</summary>
-            ///
-            #[doc = include_str!("../../docs/event_handlers.md")]
-            ///
-            /// </details>
-            ///
-            #[doc = include_str!("../../docs/common_event_handler_errors.md")]
-            $(
-                #[doc(alias = $js_name)]
-            )?
-            #[inline]
-            pub fn $name<__Marker>(mut _f: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<$data>, __Marker>) -> ::dioxus_core::Attribute {
-                let event_handler = _f.super_into();
-                ::dioxus_core::Attribute::new(
-                    impl_event!(@name $name $($js_name)?),
-                    ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        let event: ::dioxus_core::Event<$data> = e.map(|data| {
-                            data.into()
-                        });
-                        event_handler.call(event.into_any());
-                    }),
-                    None,
-                    false,
-                ).into()
-            }
-
-            #[doc(hidden)]
-            $( #[$attr] )*
-            pub mod $name {
-                use super::*;
-
-                // When expanding the macro, we use this version of the function if we see an inline closure to give better type inference
-                $( #[$attr] )*
-                pub fn call_with_explicit_closure<
-                    __Marker,
-                    Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
-                >(
-                    event_handler: impl FnMut(::dioxus_core::Event<$data>) -> Return + 'static,
-                ) -> ::dioxus_core::Attribute {
-                    #[allow(deprecated)]
-                    super::$name(event_handler)
-                }
-            }
-        )*
-    };
-
-    (@name $name:ident $js_name:literal) => {
-        $js_name
-    };
-    (@name $name:ident) => {
-        stringify!($name)
-    };
-}
-
 static EVENT_CONVERTER: RwLock<Option<Box<dyn HtmlEventConverter>>> = RwLock::new(None);
 
 #[inline]
@@ -111,179 +46,87 @@ impl PlatformEventData {
     }
 }
 
-/// A converter between a platform specific event and a general event. All code in a renderer that has a large binary size should be placed in this trait. Each of these functions should be snipped in high levels of optimization.
-pub trait HtmlEventConverter: Send + Sync {
-    /// Convert a general event to an animation data event
-    fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData;
-    /// Convert a general event to a cancel data event
-    fn convert_cancel_data(&self, event: &PlatformEventData) -> CancelData;
-    /// Convert a general event to a clipboard data event
-    fn convert_clipboard_data(&self, event: &PlatformEventData) -> ClipboardData;
-    /// Convert a general event to a composition data event
-    fn convert_composition_data(&self, event: &PlatformEventData) -> CompositionData;
-    /// Convert a general event to a drag data event
-    fn convert_drag_data(&self, event: &PlatformEventData) -> DragData;
-    /// Convert a general event to a focus data event
-    fn convert_focus_data(&self, event: &PlatformEventData) -> FocusData;
-    /// Convert a general event to a form data event
-    fn convert_form_data(&self, event: &PlatformEventData) -> FormData;
-    /// Convert a general event to an image data event
-    fn convert_image_data(&self, event: &PlatformEventData) -> ImageData;
-    /// Convert a general event to a keyboard data event
-    fn convert_keyboard_data(&self, event: &PlatformEventData) -> KeyboardData;
-    /// Convert a general event to a media data event
-    fn convert_media_data(&self, event: &PlatformEventData) -> MediaData;
-    /// Convert a general event to a mounted data event
-    fn convert_mounted_data(&self, event: &PlatformEventData) -> MountedData;
-    /// Convert a general event to a mouse data event
-    fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData;
-    /// Convert a general event to a pointer data event
-    fn convert_pointer_data(&self, event: &PlatformEventData) -> PointerData;
-    /// Convert a general event to a resize data event
-    fn convert_resize_data(&self, event: &PlatformEventData) -> ResizeData;
-    /// Convert a general event to a scroll data event
-    fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData;
-    /// Convert a general event to a selection data event
-    fn convert_selection_data(&self, event: &PlatformEventData) -> SelectionData;
-    /// Convert a general event to a toggle data event
-    fn convert_toggle_data(&self, event: &PlatformEventData) -> ToggleData;
-    /// Convert a general event to a touch data event
-    fn convert_touch_data(&self, event: &PlatformEventData) -> TouchData;
-    /// Convert a general event to a transition data event
-    fn convert_transition_data(&self, event: &PlatformEventData) -> TransitionData;
-    /// Convert a general event to a visible data event
-    fn convert_visible_data(&self, event: &PlatformEventData) -> VisibleData;
-    /// Convert a general event to a wheel data event
-    fn convert_wheel_data(&self, event: &PlatformEventData) -> WheelData;
+/// Marker for event handlers provided as closures.
+pub struct EventClosureMarker<Marker>(std::marker::PhantomData<Marker>);
+
+/// Marker for event handlers provided as listener callbacks.
+#[doc(hidden)]
+pub struct EventListenerMarker;
+
+/// Marker for event handlers provided as callbacks.
+#[doc(hidden)]
+pub struct EventCallbackMarker;
+
+/// A value that can be converted into a platform event listener.
+pub trait EventHandlerValue<Data, Marker>
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    /// Convert this handler into a platform event listener.
+    fn into_platform_listener(self) -> ::dioxus_core::ListenerCallback<PlatformEventData>;
 }
 
-impl From<&PlatformEventData> for AnimationData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_animation_data(val))
+impl<Data, Function, Spawn, Marker> EventHandlerValue<Data, EventClosureMarker<Marker>> for Function
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+    Function: FnMut(::dioxus_core::Event<Data>) -> Spawn + 'static,
+    Spawn: ::dioxus_core::SpawnIfAsync<Marker> + 'static,
+{
+    fn into_platform_listener(mut self) -> ::dioxus_core::ListenerCallback<PlatformEventData> {
+        ::dioxus_core::ListenerCallback::new(
+            move |event: ::dioxus_core::Event<PlatformEventData>| {
+                self(event.map(|data| Data::from(data)))
+            },
+        )
     }
 }
 
-impl From<&PlatformEventData> for CancelData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_cancel_data(val))
+impl<Data> EventHandlerValue<Data, EventListenerMarker> for ::dioxus_core::ListenerCallback<Data>
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    fn into_platform_listener(self) -> ::dioxus_core::ListenerCallback<PlatformEventData> {
+        ::dioxus_core::ListenerCallback::new(
+            move |event: ::dioxus_core::Event<PlatformEventData>| {
+                self.call(event.map(|data| Data::from(data)).into_any());
+            },
+        )
     }
 }
 
-impl From<&PlatformEventData> for ClipboardData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_clipboard_data(val))
+impl<Data> EventHandlerValue<Data, EventCallbackMarker>
+    for ::dioxus_core::Callback<::dioxus_core::Event<Data>>
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    fn into_platform_listener(self) -> ::dioxus_core::ListenerCallback<PlatformEventData> {
+        ::dioxus_core::ListenerCallback::new(
+            move |event: ::dioxus_core::Event<PlatformEventData>| {
+                self.call(event.map(|data| Data::from(data)));
+            },
+        )
     }
 }
 
-impl From<&PlatformEventData> for CompositionData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_composition_data(val))
-    }
+pub(crate) fn event_attribute<Data, Marker>(
+    name: &'static str,
+    event_handler: impl EventHandlerValue<Data, Marker>,
+) -> ::dioxus_core::Attribute
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    ::dioxus_core::Attribute::new(
+        name,
+        ::dioxus_core::AttributeValue::Listener(event_handler.into_platform_listener().erase()),
+        None,
+        false,
+    )
 }
 
-impl From<&PlatformEventData> for DragData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_drag_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for FocusData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_focus_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for FormData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_form_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for ImageData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_image_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for KeyboardData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_keyboard_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for MediaData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_media_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for MountedData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_mounted_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for MouseData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_mouse_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for PointerData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_pointer_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for ResizeData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_resize_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for ScrollData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_scroll_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for SelectionData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_selection_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for ToggleData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_toggle_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for TouchData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_touch_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for TransitionData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_transition_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for VisibleData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_visible_data(val))
-    }
-}
-
-impl From<&PlatformEventData> for WheelData {
-    fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_wheel_data(val))
-    }
-}
+mod generated;
 
 mod animation;
+mod before_input;
 mod cancel;
 mod clipboard;
 mod composition;
@@ -306,12 +149,14 @@ mod visible;
 mod wheel;
 
 pub use animation::*;
+pub use before_input::*;
 pub use cancel::*;
 pub use clipboard::*;
 pub use composition::*;
 pub use drag::*;
 pub use focus::*;
 pub use form::*;
+pub use generated::*;
 pub use image::*;
 pub use keyboard::*;
 pub use media::*;

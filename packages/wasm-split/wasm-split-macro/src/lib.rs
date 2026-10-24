@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 
 use digest::Digest;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, parse_quote, FnArg, Ident, ItemFn, ReturnType, Signature};
+use syn::{FnArg, Ident, ItemFn, ReturnType, Signature, parse_macro_input, parse_quote};
 
 #[proc_macro_attribute]
 pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -10,7 +10,9 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
     let item_fn = parse_macro_input!(input as ItemFn);
 
     if item_fn.sig.asyncness.is_none() {
-        panic!("wasm_split functions must be async. Use a LazyLoader with synchronous functions instead.");
+        panic!(
+            "wasm_split functions must be async. Use a LazyLoader with synchronous functions instead."
+        );
     }
 
     let LoaderNames {
@@ -73,21 +75,21 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
         #wrapper_sig {
             #(#attrs)*
             #[allow(improper_ctypes_definitions)]
-            #[no_mangle]
-            pub extern "C" #export_sig {
+            #[unsafe(no_mangle)]
+            pub unsafe extern "C" #export_sig {
                 Box::pin(async move { #(#stmts)* })
             }
 
             #[link(wasm_import_module = "./__wasm_split.js")]
-            extern "C" {
-                #[no_mangle]
+            unsafe extern "C" {
+                #[unsafe(no_mangle)]
                 fn #load_module_ident (
                     callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
                     data: *const ::std::ffi::c_void
                 );
 
                 #[allow(improper_ctypes)]
-                #[no_mangle]
+                #[unsafe(no_mangle)]
                 #import_sig;
             }
 
@@ -154,23 +156,23 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
             #[cfg(target_arch = "wasm32")]
             {
                 #[link(wasm_import_module = "./__wasm_split.js")]
-                extern "C" {
+                unsafe extern "C" {
                     // The function we'll use to initiate the download of the module
-                    #[no_mangle]
+                    #[unsafe(no_mangle)]
                     fn #load_module_ident(
                         callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
                         data: *const ::std::ffi::c_void,
                     );
 
                     #[allow(improper_ctypes)]
-                    #[no_mangle]
+                    #[unsafe(no_mangle)]
                     fn #impl_import_ident(arg: #arg_ty) #outputs;
                 }
 
 
                 #[allow(improper_ctypes_definitions)]
-                #[no_mangle]
-                pub extern "C" fn #impl_export_ident(arg: #arg_ty) #outputs {
+                #[unsafe(no_mangle)]
+                pub unsafe extern "C" fn #impl_export_ident(arg: #arg_ty) #outputs {
                     #name(arg)
                 }
 

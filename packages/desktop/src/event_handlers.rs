@@ -10,7 +10,7 @@ pub struct WryEventHandler(pub(crate) usize);
 impl WryEventHandler {
     /// Unregister this event handler from the window
     pub fn remove(&self) {
-        window().shared.event_handlers.remove(*self)
+        window().app_context().event_handlers.remove(*self)
     }
 }
 

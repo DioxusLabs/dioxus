@@ -1,0 +1,22 @@
+[package]
+name = "dioxus-core-template"
+version = { workspace = true }
+authors = ["Jonathan Kelley"]
+edition = "2024"
+description = "Static template representation and const builder for Dioxus."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react"]
+rust-version = "1.85.0"
+
+[dependencies]
+dioxus-const-vec = { workspace = true }
+serde = { workspace = true, optional = true, features = ["derive"] }
+xxhash-rust = { workspace = true, features = ["const_xxh64"] }
+
+[features]
+serialize = ["dep:serde"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

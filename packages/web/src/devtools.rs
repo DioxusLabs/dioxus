@@ -4,14 +4,14 @@
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
-use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use js_sys::JsString;
 use std::fmt::Display;
 use std::time::Duration;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use wasm_bindgen::{closure::Closure, JsValue};
-use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::{JsValue, closure::Closure};
+use web_sys::{CloseEvent, MessageEvent, WebSocket, window};
 
 const POLL_INTERVAL_MIN: i32 = 250;
 const POLL_INTERVAL_MAX: i32 = 4000;
@@ -213,6 +213,23 @@ impl Display for ToastLevel {
     }
 }
 
+#[wasm_bindgen(inline_js = r#"
+export function js_show_toast(header_text, message, level, as_ms) {
+    if (typeof showDXToast !== "undefined") {{
+        window.showDXToast(header_text, message, level, as_ms);
+    }}
+}
+export function js_schedule_toast(header_text, message, level, as_ms) {
+    if (typeof scheduleDXToast !== "undefined") {{
+        window.scheduleDXToast(header_text, message, level, as_ms);
+    }}
+}
+"#)]
+extern "C" {
+    fn js_schedule_toast(header_text: &str, message: &str, level: String, as_ms: u32);
+    fn js_show_toast(header_text: &str, message: &str, level: String, as_ms: u32);
+}
+
 /// Displays a toast to the developer.
 pub(crate) fn show_toast(
     header_text: &str,
@@ -221,20 +238,12 @@ pub(crate) fn show_toast(
     duration: Duration,
     after_reload: bool,
 ) {
-    let as_ms = duration.as_millis();
+    let as_ms: u32 = duration.as_millis().try_into().unwrap();
 
-    let js_fn_name = match after_reload {
-        true => "scheduleDXToast",
-        false => "showDXToast",
-    };
-
-    _ = js_sys::eval(&format!(
-        r#"
-            if (typeof {js_fn_name} !== "undefined") {{
-                window.{js_fn_name}(`{header_text}`, `{message}`, `{level}`, {as_ms});
-            }}
-            "#,
-    ));
+    match after_reload {
+        true => js_schedule_toast(header_text, message, level.to_string(), as_ms),
+        false => js_show_toast(header_text, message, level.to_string(), as_ms),
+    }
 }
 
 /// Force a hotreload of the assets on this page by walking them and changing their URLs to include

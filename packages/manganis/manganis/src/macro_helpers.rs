@@ -1,9 +1,7 @@
 // Re-export const_serialize types for generated code.
 pub use const_serialize;
 pub use const_serialize::{ConstStr, ConstVec, SerializeConst};
-pub use const_serialize_07;
 
-use const_serialize_07::ConstVec as ConstVec07;
 use manganis_core::{
     AndroidArtifactMetadata, AssetOptions, BundledAsset, SwiftPackageMetadata, SymbolData,
 };
@@ -66,16 +64,13 @@ pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8, 4096> {
     dx_macro_helpers::serialize_to_const_with_max_padded::<4096>(asset)
 }
 
-/// Serialize an asset to a const buffer in the legacy 0.7 format
-pub const fn serialize_asset_07(asset: &BundledAsset) -> ConstVec07<u8> {
-    dx_macro_helpers::serialize_to_const_with_layout_padded_07(asset)
-}
-
 /// Deserialize a const buffer into a BundledAsset
 pub const fn deserialize_asset(bytes: &[u8]) -> BundledAsset {
     match const_serialize::deserialize_const!(BundledAsset, bytes) {
         Some((_, asset)) => asset,
-        None => panic!("Failed to deserialize asset. This may be caused by a mismatch between your dioxus and dioxus-cli versions"),
+        None => panic!(
+            "Failed to deserialize asset. This may be caused by a mismatch between your dioxus and dioxus-cli versions"
+        ),
     }
 }
 
@@ -94,7 +89,7 @@ pub mod dx_macro_helpers {
         let mut data = const_serialize::serialize_const(value, data);
         // Reserve the maximum size of the type
         while data.len() < memory_layout_size {
-            data = data.push(0);
+            data.push(0);
         }
         data
     }
@@ -113,10 +108,10 @@ pub mod dx_macro_helpers {
         // Serialize using the default buffer, then copy into the larger buffer
         let serialized = const_serialize::serialize_const(value, ConstVec::new());
         let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
-        data = data.extend(serialized.as_ref());
+        data.extend(serialized.as_ref());
         // Reserve the maximum size of the type (pad to MEMORY_LAYOUT size)
         while data.len() < memory_layout_size {
-            data = data.push(0);
+            data.push(0);
         }
         data
     }
@@ -129,30 +124,9 @@ pub mod dx_macro_helpers {
     ) -> ConstVec<u8, MAX_SIZE> {
         let serialized = const_serialize::serialize_const(value, ConstVec::new());
         let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
-        data = data.extend(serialized.as_ref());
+        data.extend(serialized.as_ref());
         while data.len() < MAX_SIZE {
-            data = data.push(0);
-        }
-        data
-    }
-
-    /// Serialize a value using the legacy 0.7 const-serialize format and pad to layout size
-    ///
-    /// Note: The legacy ConstVec has a 1024-byte limit. If MEMORY_LAYOUT.size() exceeds this,
-    /// we pad only up to the buffer limit to avoid overflow.
-    pub const fn serialize_to_const_with_layout_padded_07<T: const_serialize_07::SerializeConst>(
-        value: &T,
-    ) -> const_serialize_07::ConstVec<u8> {
-        let data = const_serialize_07::ConstVec::new();
-        let mut data = const_serialize_07::serialize_const(value, data);
-        // Pad to MEMORY_LAYOUT size, but cap at 1024 bytes (the legacy buffer limit)
-        let target_size = if T::MEMORY_LAYOUT.size() > 1024 {
-            1024
-        } else {
-            T::MEMORY_LAYOUT.size()
-        };
-        while data.len() < target_size {
-            data = data.push(0);
+            data.push(0);
         }
         data
     }

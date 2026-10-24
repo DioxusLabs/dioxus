@@ -8,7 +8,7 @@ pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::{ScopeId, VirtualDom};
 use dom::WebsysDom;
-use futures_util::{pin_mut, select, FutureExt, StreamExt};
+use futures_util::{FutureExt, StreamExt, pin_mut, select};
 
 mod cfg;
 mod dom;
@@ -81,11 +81,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             let mut timeout = gloo_timers::future::TimeoutFuture::new(100).fuse();
             futures_util::select! {
                 msg = hotreload_rx.next() => {
-                    if let Some(msg) = msg {
-                        if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                    if let Some(msg) = msg
+                        && msg.for_build_id == Some(dioxus_cli_config::build_id()) {
                             dioxus_devtools::apply_changes(&virtual_dom, &msg);
                         }
-                    }
                 }
                 _ = &mut timeout => {
                     break;
@@ -97,7 +96,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         {
             use dioxus_fullstack_core::HydrationContext;
 
-            websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
                 export function get_initial_hydration_data() {
@@ -143,11 +141,12 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     #[cfg(feature = "document")]
                     document::init_fullstack_document();
                 });
-                virtual_dom.rebuild(&mut websys_dom);
+                // Build the vdom without emitting mutations: the SSR DOM is
+                // already in place, so hydration binds it afterward.
+                virtual_dom.rebuild_in_place();
             });
-            websys_dom.skip_mutations = false;
 
-            let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
+            let rx = websys_dom.rehydrate(&mut virtual_dom).unwrap();
             hydration_receiver = Some(rx);
 
             #[cfg(feature = "mounted")]

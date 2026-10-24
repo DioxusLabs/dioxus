@@ -1,7 +1,7 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
 use dioxus::prelude::*;
-use dioxus_core::{generation, ElementId, NoOpMutations};
+use dioxus_core::{ElementId, Mutation, NoOpMutations, generation};
 use dioxus_signals::*;
 
 #[test]
@@ -22,35 +22,55 @@ fn create_signals_global() {
         }
     }
 
-    dom.rebuild_in_place();
-
     fn create_without_cx() -> Signal<String> {
         Signal::new("hello world".to_string())
     }
+
+    let muts = dom.rebuild_to_vec();
+
+    // Each of the 10 child scopes renders a single "hello world" text node, and the parent
+    // fragment appends all 10 at once. Assert that observable structure without pinning the exact
+    // push/pop op tape, which is renderer-protocol detail this rework already churned. These
+    // assertions rely on the VirtualDOM's logic, but doing this means not introducing a dependency
+    // on a renderer.
+    let created_text = muts
+        .edits
+        .iter()
+        .filter(|edit| matches!(edit, Mutation::CreateText { value } if value == "hello world"))
+        .count();
+    assert_eq!(created_text, 10, "one text node per child signal");
+    assert!(
+        muts.edits
+            .iter()
+            .any(|edit| matches!(edit, Mutation::AppendChildren { m } if *m == 10)),
+        "all 10 children are appended together"
+    );
 }
 
 #[test]
 fn deref_signal() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static STRINGS_MATCH: AtomicBool = AtomicBool::new(false);
+
     let mut dom = VirtualDom::new(|| {
-        rsx! {
-            for _ in 0..10 {
-                Child {}
-            }
-        }
+        rsx! { Child {} }
     });
 
     fn Child() -> Element {
         let signal = Signal::new("hello world".to_string());
 
         // You can call signals like functions to get a Ref of their value.
-        assert_eq!(&*signal(), "hello world");
+        let result = &*signal();
+        STRINGS_MATCH.store(result.eq("hello world"), Ordering::Relaxed);
 
         rsx! {
-            "hello world"
+            "arbitrary text"
         }
     }
 
     dom.rebuild_in_place();
+
+    assert!(STRINGS_MATCH.load(Ordering::Relaxed));
 }
 
 #[test]

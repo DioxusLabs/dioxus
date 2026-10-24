@@ -83,38 +83,46 @@ fn is_child() {
     assert!(!Route::ParameterIndex { id: 0 }.is_child_of(&Route::ParameterIndex { id: 0 }));
     assert!(Route::ParameterFixed { id: 0 }.is_child_of(&Route::ParameterIndex { id: 0 }));
     assert!(!Route::ParameterFixed { id: 0 }.is_child_of(&Route::ParameterFixed { id: 0 }));
-    assert!(Route::HashQuery {
-        id: 0,
-        query: "query".into(),
-        hash: "hash".into()
-    }
-    .is_child_of(&Route::HashId {
-        id: 0,
-        query: "query".into()
-    }));
-    assert!(!Route::HashQuery {
-        id: 0,
-        query: "query".into(),
-        hash: "hash".into()
-    }
-    .is_child_of(&Route::HashQuery {
-        id: 0,
-        query: "query".into(),
-        hash: "hash".into()
-    }));
-    assert!(Route::HashId {
-        id: 0,
-        query: "query".into()
-    }
-    .is_child_of(&Route::HashIndex {}));
-    assert!(!Route::HashId {
-        id: 0,
-        query: "query".into()
-    }
-    .is_child_of(&Route::HashId {
-        id: 0,
-        query: "query".into()
-    }));
+    assert!(
+        Route::HashQuery {
+            id: 0,
+            query: "query".into(),
+            hash: "hash".into()
+        }
+        .is_child_of(&Route::HashId {
+            id: 0,
+            query: "query".into()
+        })
+    );
+    assert!(
+        !Route::HashQuery {
+            id: 0,
+            query: "query".into(),
+            hash: "hash".into()
+        }
+        .is_child_of(&Route::HashQuery {
+            id: 0,
+            query: "query".into(),
+            hash: "hash".into()
+        })
+    );
+    assert!(
+        Route::HashId {
+            id: 0,
+            query: "query".into()
+        }
+        .is_child_of(&Route::HashIndex {})
+    );
+    assert!(
+        !Route::HashId {
+            id: 0,
+            query: "query".into()
+        }
+        .is_child_of(&Route::HashId {
+            id: 0,
+            query: "query".into()
+        })
+    );
     assert!(Route::HashIndex {}.is_child_of(&Route::RootIndex {}));
     assert!(!Route::HashIndex {}.is_child_of(&Route::HashIndex {}));
 }

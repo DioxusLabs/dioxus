@@ -8,7 +8,7 @@ use std::{
     panic::Location,
 };
 
-use crate::{store::Store, ReadStore};
+use crate::{ReadStore, store::Store};
 use dioxus_signals::{
     AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, ReadableExt, UnsyncStorage,
     Writable, WriteLock, WriteSignal,
@@ -74,9 +74,9 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     pub fn iter(
         &self,
     ) -> impl ExactSizeIterator<Item = (K, Store<V, GetWrite<K, Lens>>)>
-           + DoubleEndedIterator
-           + FusedIterator
-           + '_
+    + DoubleEndedIterator
+    + FusedIterator
+    + '_
     where
         K: Eq + Hash + Clone,
         St: BuildHasher,
@@ -106,9 +106,9 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     pub fn values(
         &self,
     ) -> impl ExactSizeIterator<Item = Store<V, GetWrite<K, Lens>>>
-           + DoubleEndedIterator
-           + FusedIterator
-           + '_
+    + DoubleEndedIterator
+    + FusedIterator
+    + '_
     where
         K: Eq + Hash + Clone,
         St: BuildHasher,

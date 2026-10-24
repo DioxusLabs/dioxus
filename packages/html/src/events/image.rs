@@ -94,13 +94,3 @@ pub trait HasImageData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event! [
-    ImageData;
-
-    /// onerror
-    onerror
-
-    /// onload
-    onload
-];

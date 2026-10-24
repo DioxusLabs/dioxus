@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal};
-use dioxus_core::{use_hook, Callback, Subscribers, Task};
+use dioxus_core::{Callback, Subscribers, Task, use_hook};
 use dioxus_signals::*;
 use std::future::Future;
 use std::ops::Deref;
@@ -95,7 +95,7 @@ pub enum UseFutureState {
     /// The future has been forcefully stopped
     Stopped,
 
-    /// The future has been paused, tempoarily
+    /// The future has been paused, temporarily
     Paused,
 
     /// The future has completed

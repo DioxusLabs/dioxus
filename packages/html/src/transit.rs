@@ -53,97 +53,12 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 
 #[cfg(feature = "serialize")]
 fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, serde_json::Error> {
-    use EventData::*;
-
-    // a little macro-esque thing to make the code below more readable
-    #[inline]
-    fn de<'de, F>(f: &'de serde_json::Value) -> Result<F, serde_json::Error>
-    where
-        F: Deserialize<'de>,
-    {
-        F::deserialize(f)
+    match deserialize_raw_event(name, data)? {
+        Some(result) => Ok(result),
+        None => Err(serde::de::Error::custom(format!(
+            "Unknown event type: {name}"
+        ))),
     }
-
-    let data = match name {
-        // Cancel
-        "cancel" => Cancel(de(data)?),
-
-        // Mouse
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => Mouse(de(data)?),
-
-        // Clipboard
-        "copy" | "cut" | "paste" => Clipboard(de(data)?),
-
-        // Composition
-        "compositionend" | "compositionstart" | "compositionupdate" => Composition(de(data)?),
-
-        // Keyboard
-        "keydown" | "keypress" | "keyup" => Keyboard(de(data)?),
-
-        // Focus
-        "blur" | "focus" | "focusin" | "focusout" => Focus(de(data)?),
-
-        // Form
-        "change" | "input" | "invalid" | "reset" | "submit" => Form(de(data)?),
-
-        // Drag
-        "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
-        | "drop" => Drag(de(data)?),
-
-        // Pointer
-        "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup"
-        | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture"
-        | "lostpointercapture" | "auxclick" => Pointer(de(data)?),
-
-        // Selection
-        "selectstart" | "selectionchange" | "select" => Selection(de(data)?),
-
-        // Touch
-        "touchcancel" | "touchend" | "touchmove" | "touchstart" => Touch(de(data)?),
-
-        // Resize
-        "resize" => Resize(de(data)?),
-
-        // Scroll
-        "scroll" | "scrollend" => Scroll(de(data)?),
-
-        // Visible
-        "visible" => Visible(de(data)?),
-
-        // Wheel
-        "wheel" => Wheel(de(data)?),
-
-        // Media
-        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
-        | "ended" | "interruptbegin" | "interruptend" | "loadeddata" | "loadedmetadata"
-        | "loadstart" | "pause" | "play" | "playing" | "progress" | "ratechange" | "seeked"
-        | "seeking" | "stalled" | "suspend" | "timeupdate" | "volumechange" | "waiting"
-        | "loadend" | "timeout" => Media(de(data)?),
-
-        // Animation
-        "animationstart" | "animationend" | "animationiteration" => Animation(de(data)?),
-
-        // Transition
-        "transitionend" => Transition(de(data)?),
-
-        // Toggle
-        "toggle" => Toggle(de(data)?),
-
-        "load" | "error" => Image(de(data)?),
-
-        // Mounted
-        "mounted" => Mounted,
-
-        // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
-        other => {
-            return Err(serde::de::Error::custom(format!(
-                "Unknown event type: {other}"
-            )))
-        }
-    };
-
-    Ok(data)
 }
 
 #[cfg(feature = "serialize")]
@@ -157,6 +72,7 @@ impl HtmlEvent {
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum EventData {
+    BeforeInput(SerializedBeforeInputData),
     Cancel(SerializedCancelData),
     Mouse(SerializedMouseData),
     Clipboard(SerializedClipboardData),
@@ -183,6 +99,9 @@ pub enum EventData {
 impl EventData {
     pub fn into_any(self) -> Rc<dyn Any> {
         match self {
+            EventData::BeforeInput(data) => {
+                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
+            }
             EventData::Cancel(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
@@ -247,9 +166,39 @@ impl EventData {
 }
 
 #[test]
+fn beforeinput_event_deserializes_from_interpreter_payload() {
+    let raw = r#"
+{
+    "element": 0,
+    "name": "beforeinput",
+    "bubbles": true,
+    "data": {
+        "input_type": "insertText",
+        "data": "x",
+        "is_composing": false,
+        "value": "hello"
+    }
+}
+    "#;
+
+    let event: HtmlEvent = serde_json::from_str(raw).unwrap();
+    assert_eq!(event.name, "beforeinput");
+    assert!(event.bubbles);
+    match event.data {
+        EventData::BeforeInput(data) => {
+            assert_eq!(data.input_type, "insertText");
+            assert_eq!(data.data.as_deref(), Some("x"));
+            assert!(!data.is_composing);
+            assert_eq!(data.value, "hello");
+        }
+        other => panic!("expected EventData::BeforeInput, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_back_and_forth() {
     let data = HtmlEvent {
-        element: ElementId(0),
+        element: ElementId::from_raw(0),
         data: EventData::Mouse(SerializedMouseData::default()),
         name: "click".to_string(),
         bubbles: true,
@@ -293,6 +242,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData {
         event
             .downcast::<SerializedAnimationData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
+    fn convert_before_input_data(&self, event: &PlatformEventData) -> BeforeInputData {
+        event
+            .downcast::<SerializedBeforeInputData>()
             .cloned()
             .unwrap()
             .into()

@@ -1,5 +1,5 @@
-use crate::file_data::HasFileData;
 use crate::FileData;
+use crate::file_data::HasFileData;
 use std::fmt::Debug;
 
 use dioxus_core::Event;
@@ -106,13 +106,7 @@ impl FormData {
                 // we create the serialized variant with no bytes
                 // SerializedFileData, if given a real path, will read the bytes from disk (synchronously)
                 FormValue::File(Some(file_data)) => {
-                    let serialized = SerializedFileData {
-                        path: file_data.path().to_owned(),
-                        size: file_data.size(),
-                        last_modified: file_data.last_modified(),
-                        content_type: file_data.content_type(),
-                        contents: None,
-                    };
+                    let serialized = SerializedFileData::from_file_data(file_data);
                     entry
                         .as_array_mut()
                         .expect("entry should be an array")
@@ -268,17 +262,10 @@ mod serialize {
                     FormValue::File(f) => SerializedFormObject {
                         key: key.clone(),
                         text: None,
-                        file: if let Some(f) = f {
-                            Some(SerializedFileData {
-                                path: f.path(),
-                                size: f.size(),
-                                last_modified: f.last_modified(),
-                                content_type: f.content_type(),
-                                contents: None,
-                            })
-                        } else {
-                            Some(SerializedFileData::empty())
-                        },
+                        file: Some(f.as_ref().map_or_else(
+                            SerializedFileData::empty,
+                            SerializedFileData::from_file_data,
+                        )),
                     },
                 })
                 .collect();
@@ -345,66 +332,4 @@ mod serialize {
             })
         }
     }
-}
-
-impl_event! {
-    FormData;
-
-    /// onchange
-    onchange
-
-    /// The `oninput` event is fired when the value of a `<input>`, `<select>`, or `<textarea>` element is changed.
-    ///
-    /// There are two main approaches to updating your input element:
-    /// 1) Controlled inputs directly update the value of the input element as the user interacts with the element
-    ///
-    /// ```rust
-    /// use dioxus::prelude::*;
-    ///
-    /// fn App() -> Element {
-    ///     let mut value = use_signal(|| "hello world".to_string());
-    ///
-    ///     rsx! {
-    ///         input {
-    ///             // We directly set the value of the input element to our value signal
-    ///             value: "{value}",
-    ///             // The `oninput` event handler will run every time the user changes the value of the input element
-    ///             // We can set the `value` signal to the new value of the input element
-    ///             oninput: move |event| value.set(event.value())
-    ///         }
-    ///         // Since this is a controlled input, we can also update the value of the input element directly
-    ///         button {
-    ///             onclick: move |_| value.write().clear(),
-    ///             "Clear"
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// 2) Uncontrolled inputs just read the value of the input element as it changes
-    ///
-    /// ```rust
-    /// use dioxus::prelude::*;
-    ///
-    /// fn App() -> Element {
-    ///     rsx! {
-    ///         input {
-    ///             // In uncontrolled inputs, we don't set the value of the input element directly
-    ///             // But you can still read the value of the input element
-    ///             oninput: move |event| println!("{}", event.value()),
-    ///         }
-    ///         // Since we don't directly control the value of the input element, we can't easily modify it
-    ///     }
-    /// }
-    /// ```
-    oninput
-
-    /// oninvalid
-    oninvalid
-
-    /// onreset
-    onreset
-
-    /// onsubmit
-    onsubmit
 }

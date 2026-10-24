@@ -1,4 +1,4 @@
-use crate::{write::WritableExt, ReadableExt};
+use crate::{ReadableExt, write::WritableExt};
 use std::hash::Hash;
 
 use dioxus_core::ReactiveContext;

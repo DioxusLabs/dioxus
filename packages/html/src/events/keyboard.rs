@@ -163,7 +163,8 @@ impl From<&KeyboardData> for SerializedKeyboardData {
 #[cfg(feature = "serialize")]
 impl HasKeyboardData for SerializedKeyboardData {
     fn key(&self) -> Key {
-        std::str::FromStr::from_str(&self.key).unwrap_or(Key::Unidentified)
+        std::str::FromStr::from_str(&self.key)
+            .unwrap_or(Key::Named(keyboard_types::NamedKey::Unidentified))
     }
 
     fn code(&self) -> Code {
@@ -224,19 +225,6 @@ impl<'de> serde::Deserialize<'de> for KeyboardData {
             inner: Box::new(data),
         })
     }
-}
-
-impl_event! {
-    KeyboardData;
-
-    /// onkeydown
-    onkeydown
-
-    /// onkeypress
-    onkeypress
-
-    /// onkeyup
-    onkeyup
 }
 
 pub trait HasKeyboardData: ModifiersInteraction + std::any::Any {

@@ -4,8 +4,8 @@ use dioxus::prelude::*;
 use dioxus_core::Element;
 
 pub fn check_app_exits(app: fn() -> Element) {
-    use dioxus_desktop::tao::window::WindowBuilder;
     use dioxus_desktop::Config;
+    use dioxus_desktop::tao::window::WindowBuilder;
     // This is a deadman's switch to ensure that the app exits
     let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_panic_clone = should_panic.clone();

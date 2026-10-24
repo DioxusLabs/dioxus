@@ -1,6 +1,6 @@
 use super::*;
-use crate::{Result, Workspace};
-use anyhow::{bail, Context};
+use crate::{AndroidTools, Result, Workspace};
+use anyhow::{Context, bail};
 use itertools::Itertools;
 
 /// Perform a system analysis to verify the system install is working correctly.
@@ -91,24 +91,24 @@ impl Doctor {
         let mut sdk = "not found".to_string();
         let mut java_home = "not found".to_string();
         let mut emulator = "not found".to_string();
-        if let Some(rf) = crate::build::get_android_tools() {
-            if rf.adb.exists() {
-                adb = rf.adb.display().to_string();
+        if let Some(tools) = AndroidTools::current() {
+            if tools.adb.exists() {
+                adb = tools.adb.display().to_string();
             }
-            if rf.ndk.exists() {
-                ndk = rf.ndk.display().to_string();
+            if tools.ndk.exists() {
+                ndk = tools.ndk.display().to_string();
             }
-            if let Some(jh) = rf.java_home.as_ref() {
+            if let Some(jh) = tools.java_home.as_ref() {
                 java_home = jh.display().to_string();
             }
-            if rf.sdk().exists() {
-                sdk = rf.sdk().display().to_string();
+            if tools.sdk().exists() {
+                sdk = tools.sdk().display().to_string();
             }
-            if let Some(jh) = rf.java_home.as_ref() {
+            if let Some(jh) = tools.java_home.as_ref() {
                 java_home = jh.display().to_string();
             }
-            if rf.emulator().exists() {
-                emulator = rf.emulator().display().to_string();
+            if tools.emulator().exists() {
+                emulator = tools.emulator().display().to_string();
             }
         };
 
@@ -209,7 +209,7 @@ impl Doctor {
  {GLOW_STYLE}Android{GLOW_STYLE:#}: Install Android Studio, NDK, and then set ANDROID_HOME and ANDROID_NDK_HOME
  {GLOW_STYLE}macOS{GLOW_STYLE:#}: all tools should be installed by default
  {GLOW_STYLE}Windows{GLOW_STYLE:#}: install the webview2 binary
- {GLOW_STYLE}Linux{GLOW_STYLE:#}: Install libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+ {GLOW_STYLE}Linux{GLOW_STYLE:#}: Install libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libglib2.0-dev
  {GLOW_STYLE}nix{GLOW_STYLE:#}: Make sure all tools are in your path (codesign, ld, etc.)
 
 {LINK_STYLE}Rust{LINK_STYLE:#}

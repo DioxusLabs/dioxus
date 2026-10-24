@@ -13,15 +13,17 @@ fn main() {
 async fn inner_html(count: usize) -> String {
     let html = document::eval(&format!(
         r#"// Wait until the element is available
-            const interval = setInterval(() => {{
-                const element = document.getElementById('div-{count}');
-                if (element) {{
-                    dioxus.send(element.innerHTML);
-                    clearInterval(interval);
-                }}
-            }}, 100);"#
+            return await new Promise((resolve) => {{
+                const interval = setInterval(() => {{
+                    const element = document.getElementById('div-{count}');
+                    if (element) {{
+                        resolve(element.innerHTML);
+                        clearInterval(interval);
+                    }}
+                }}, 100);
+            }});"#
     ))
-    .recv::<String>()
+    .join::<String>()
     .await
     .unwrap();
 

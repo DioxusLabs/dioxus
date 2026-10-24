@@ -1,4 +1,4 @@
-use crate::{current_scope_id, properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
+use crate::{Runtime, ScopeId, current_scope_id, properties::SuperFrom, runtime::RuntimeGuard};
 use futures_util::FutureExt;
 use generational_box::GenerationalBox;
 use std::{any::Any, cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
@@ -332,6 +332,7 @@ impl<Ret> SpawnIfAsync<(), Ret> for Ret {
 }
 
 // Support for FnMut -> async { unit } for the unit return type
+/// Marker for callbacks that return a future with `()` output.
 #[doc(hidden)]
 pub struct AsyncMarker;
 impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> for F {
@@ -349,6 +350,7 @@ impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> fo
 }
 
 // Support for FnMut -> async { Result(()) } for the unit return type
+/// Marker for callbacks that return a future with [`crate::Result<()>`] output.
 #[doc(hidden)]
 pub struct AsyncResultMarker;
 
@@ -383,17 +385,18 @@ impl SpawnIfAsync<()> for crate::Result<()> {
 }
 
 // We can't directly forward the marker because it would overlap with a bunch of other impls, so we wrap it in another type instead
+/// Wrapper marker used to disambiguate callback conversion impls.
 #[doc(hidden)]
 pub struct MarkerWrapper<T>(PhantomData<T>);
 
 // Closure can be created from FnMut -> async { anything } or FnMut -> Ret
 impl<
-        Function: FnMut(Args) -> Spawn + 'static,
-        Args: 'static,
-        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
-        Ret: 'static,
-        Marker,
-    > SuperFrom<Function, MarkerWrapper<Marker>> for Callback<Args, Ret>
+    Function: FnMut(Args) -> Spawn + 'static,
+    Args: 'static,
+    Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+    Ret: 'static,
+    Marker,
+> SuperFrom<Function, MarkerWrapper<Marker>> for Callback<Args, Ret>
 {
     fn super_from(input: Function) -> Self {
         Callback::new(input)
@@ -401,11 +404,11 @@ impl<
 }
 
 impl<
-        Function: FnMut(Event<T>) -> Spawn + 'static,
-        T: 'static,
-        Spawn: SpawnIfAsync<Marker> + 'static,
-        Marker,
-    > SuperFrom<Function, MarkerWrapper<Marker>> for ListenerCallback<T>
+    Function: FnMut(Event<T>) -> Spawn + 'static,
+    T: 'static,
+    Spawn: SpawnIfAsync<Marker> + 'static,
+    Marker,
+> SuperFrom<Function, MarkerWrapper<Marker>> for ListenerCallback<T>
 {
     fn super_from(input: Function) -> Self {
         ListenerCallback::new(input)
@@ -421,16 +424,17 @@ impl<T: 'static> SuperFrom<Callback<Event<T>>> for ListenerCallback<T> {
     }
 }
 
+/// Marker for callbacks built from closures that take no arguments.
 #[doc(hidden)]
 pub struct UnitClosure<Marker>(PhantomData<Marker>);
 
 // Closure can be created from FnMut -> async { () } or FnMut -> Ret
 impl<
-        Function: FnMut() -> Spawn + 'static,
-        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
-        Ret: 'static,
-        Marker,
-    > SuperFrom<Function, UnitClosure<Marker>> for Callback<(), Ret>
+    Function: FnMut() -> Spawn + 'static,
+    Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+    Ret: 'static,
+    Marker,
+> SuperFrom<Function, UnitClosure<Marker>> for Callback<(), Ret>
 {
     fn super_from(mut input: Function) -> Self {
         Callback::new(move |()| input())
@@ -469,7 +473,7 @@ impl<Args, Ret> Clone for Callback<Args, Ret> {
     }
 }
 
-impl<Args: 'static, Ret: 'static> PartialEq for Callback<Args, Ret> {
+impl<Args, Ret> PartialEq for Callback<Args, Ret> {
     fn eq(&self, other: &Self) -> bool {
         self.callback.ptr_eq(&other.callback) && self.origin == other.origin
     }
@@ -550,7 +554,6 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         }));
     }
 
-    #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
     pub fn __point_to(&mut self, other: &Self) {
         self.callback.point_to(other.callback).unwrap();
@@ -662,7 +665,11 @@ impl<T> ListenerCallback<T> {
     /// calling this method.
     pub fn call(&self, event: Event<dyn Any>) {
         Runtime::current().with_scope_on_stack(self.origin, || {
-            (self.callback.borrow_mut())(event);
+            if let Ok(mut borrow_mut) = self.callback.try_borrow_mut() {
+                borrow_mut(event);
+            } else {
+                tracing::warn!("ListenerCallback was called recursively, ignoring recursive call to avoid re-entrance issues");
+            }
         });
     }
 

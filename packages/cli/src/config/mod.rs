@@ -4,6 +4,7 @@ mod component;
 mod dioxus_config;
 mod inline_config;
 mod manifest;
+mod manifest_mapper;
 mod serve;
 mod web;
 
@@ -12,5 +13,6 @@ pub(crate) use bundle::*;
 pub(crate) use dioxus_config::*;
 pub(crate) use inline_config::*;
 pub(crate) use manifest::*;
+pub(crate) use manifest_mapper::*;
 pub(crate) use serve::*;
 pub(crate) use web::*;

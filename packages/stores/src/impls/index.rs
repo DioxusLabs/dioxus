@@ -6,7 +6,7 @@ use std::{
     ops::{self, Index, IndexMut},
 };
 
-use crate::{scope::SelectorScope, store::Store, ReadStore};
+use crate::{ReadStore, scope::SelectorScope, store::Store};
 use dioxus_signals::{
     AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, UnsyncStorage, Writable,
     WriteLock, WriteSignal,

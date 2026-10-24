@@ -9,7 +9,7 @@
 //! way to start building state management in Dioxus, and it's a great way to start.
 
 use dioxus::events::*;
-use dioxus::html::input_data::keyboard_types::Key;
+use dioxus::html::input_data::keyboard_types::{Key, NamedKey};
 use dioxus::prelude::*;
 
 const TITLE: &str = "Calculator";
@@ -30,7 +30,7 @@ fn main() {
             Config::new().with_window_attributes(
                 WindowAttributes::default()
                     .with_title(TITLE)
-                    .with_inner_size(LogicalSize::new(300.0, 525.0)),
+                    .with_surface_size(LogicalSize::new(300.0, 525.0)),
             )
         }))
         .launch(app);
@@ -49,10 +49,8 @@ fn app() -> Element {
     let mut input_operator = move |key: &str| val.push_str(key);
 
     let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
-        Key::Backspace => {
-            if !val().is_empty() {
-                val.pop();
-            }
+        Key::Named(NamedKey::Backspace) if !val().is_empty() => {
+            val.pop();
         }
         Key::Character(character) => match character.as_str() {
             "+" | "-" | "/" | "*" => input_operator(&character),
@@ -148,6 +146,10 @@ fn app() -> Element {
 }
 
 fn calc_val(val: &str) -> f64 {
+    if val.is_empty() {
+        return 0.0;
+    }
+
     let mut temp = String::new();
     let mut operation = "+".to_string();
 

@@ -1,7 +1,6 @@
 use super::*;
 use crate::document;
-use dioxus_core::{use_hook, VNode};
-use dioxus_html as dioxus_elements;
+use dioxus_core::{VNode, use_hook};
 
 #[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
@@ -95,10 +94,10 @@ pub fn Script(props: ScriptProps) -> Element {
     use_hook(|| {
         let document = document();
         let mut insert_script = document.create_head_component();
-        if let Some(src) = &props.src {
-            if !should_insert_script(src) {
-                insert_script = false;
-            }
+        if let Some(src) = &props.src
+            && !should_insert_script(src)
+        {
+            insert_script = false;
         }
 
         if !insert_script {

@@ -1,19 +1,19 @@
 [package]
 name = "const-serialize"
-version = "0.8.0-alpha.0"
+version = "0.8.0-alpha.3"
 authors = ["Evan Almloff"]
-edition = "2021"
+edition = "2024"
 description = "A serialization framework that works in const contexts"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/dioxuslabs/dioxus"
 homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["const", "serialize"]
-rust-version = "1.83.0"
+rust-version = "1.85.0"
 
 [dependencies]
+dioxus-const-vec = { workspace = true }
 const-serialize-macro = { workspace = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-const-serialize-07 = { package = "const-serialize", version = "=0.7.2", optional = true }
 
 [dev-dependencies]
 rand = { workspace = true }
@@ -21,5 +21,3 @@ rand = { workspace = true }
 [features]
 test-big-endian = []
 serde = ["dep:serde"]
-# Enables serialization of the ConstStr with the older const-serialize-0.7 crate
-const-serialize-07 = ["dep:const-serialize-07"]

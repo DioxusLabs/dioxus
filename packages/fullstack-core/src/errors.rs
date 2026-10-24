@@ -1,7 +1,7 @@
 //! Contains a hydration compatible error boundary context.
 
 use crate::serialize_context;
-use dioxus_core::{spawn_isomorphic, CapturedError, ErrorContext, ReactiveContext};
+use dioxus_core::{CapturedError, ErrorContext, ReactiveContext, spawn_isomorphic};
 use futures_util::StreamExt;
 
 /// Initializes an error boundary context that is compatible with hydration.

@@ -34,7 +34,7 @@ fn main() {
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
         use axum_session_auth::AuthConfig;
         use axum_session_sqlx::SessionSqlitePool;
-        use sqlx::{sqlite::SqlitePoolOptions, Executor};
+        use sqlx::{Executor, sqlite::SqlitePoolOptions};
 
         // Create an in-memory SQLite database and set up our tables
         let db = SqlitePoolOptions::new()

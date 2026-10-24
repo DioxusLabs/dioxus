@@ -2,16 +2,17 @@
 name = "dioxus-desktop"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2021"
+edition = "2024"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
-rust-version = "1.76.0"
+rust-version = "1.85.0"
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-core-macro = { workspace = true }
 dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
@@ -21,11 +22,13 @@ dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
-serde = "1.0.219"
-serde_json = "1.0.140"
+anyhow = { workspace = true }
+image = { workspace = true, features = ["png", "ico"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { workspace = true, default-features = false, features = ["os-webview", "protocol", "drag-drop"] }
+wry = { workspace = true, default-features = false, features = ["os-webview"] }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
   "sync",
@@ -47,7 +50,7 @@ async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
 dioxus-history = { workspace = true }
 base64 = { workspace = true }
-libc = "0.2.174"
+libc = { workspace = true}
 rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
 bytes = { workspace = true }
@@ -57,10 +60,10 @@ webbrowser = { workspace = true }
 signal-hook = "0.3.18"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-wry = { workspace = true, features = ["os-webview", "protocol", "drag-drop", "linux-body"] }
+wry = { workspace = true, features = ["os-webview", "linux-body"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-global-hotkey = "0.7.0"
+global-hotkey = "0.9.0"
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 muda = { workspace = true }
 
@@ -68,8 +71,9 @@ muda = { workspace = true }
 tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
-objc = "0.2.7"
-objc_id = "0.1.1"
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true, features = ["NSThread"] }
+objc2-ui-kit = { workspace = true, features = ["UIView", "UIViewController"] }
 
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
@@ -77,16 +81,15 @@ tungstenite = { workspace = true, features = ["rustls"] }
 jni = "0.21.1"
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
-ndk-context = { version = "0.1.1" }
+manganis = { workspace = true }
 
 # use native tls on other platforms
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.26.1"
-core-foundation = "0.10.1"
-objc = "0.2.7"
+objc2 = { workspace = true }
+objc2-app-kit = { workspace = true, features = ["NSView"] }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
@@ -94,9 +97,11 @@ lazy-js-bundle = { workspace = true }
 [features]
 default = ["tokio_runtime", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
-fullscreen = ["wry/fullscreen"]
+# No-op since wry 0.56, which always enables fullscreen support. Kept for compatibility.
+fullscreen = []
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
-transparent = ["wry/transparent"]
+# No-op since wry 0.56, which always enables transparency support. Kept for compatibility.
+transparent = []
 gnu = []
 
 [package.metadata.docs.rs]
@@ -139,4 +144,9 @@ harness = false
 [[test]]
 name = "check_eval"
 path = "headless_tests/eval.rs"
+harness = false
+
+[[test]]
+name = "check_multiwindow"
+path = "headless_tests/multiwindow.rs"
 harness = false

@@ -40,7 +40,9 @@ fn NavBar() -> Element {
         let navbars_created = NAVBARS_CREATED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         println!("creating navbar #{navbars_created}");
         if navbars_created > 0 {
-            panic!("layouts should not be recreated when switching between two routes under the nav bar");
+            panic!(
+                "layouts should not be recreated when switching between two routes under the nav bar"
+            );
         }
     });
 

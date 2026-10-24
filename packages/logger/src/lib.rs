@@ -1,9 +1,12 @@
 use tracing::{
-    subscriber::{set_global_default, SetGlobalDefaultError},
     Level,
+    subscriber::{SetGlobalDefaultError, set_global_default},
 };
 
 pub use tracing;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 /// Attempt to initialize the subscriber if it doesn't already exist, with default settings.
 ///
@@ -82,14 +85,10 @@ pub fn init(level: Level) -> Result<(), SetGlobalDefaultError> {
 
     #[cfg(target_arch = "wasm32")]
     {
-        use tracing_subscriber::layer::SubscriberExt;
         use tracing_subscriber::Registry;
+        use tracing_subscriber::layer::SubscriberExt;
 
-        let layer_config = tracing_wasm::WASMLayerConfigBuilder::new()
-            .set_max_level(level)
-            .build();
-        let layer = tracing_wasm::WASMLayer::new(layer_config);
-        let reg = Registry::default().with(layer);
+        let reg = Registry::default().with(wasm::WasmLayer::new(level));
 
         set_global_default(reg)
     }

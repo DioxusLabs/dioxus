@@ -156,7 +156,7 @@ pub(crate) const fn write_number<const MAX_SIZE: usize>(
 /// contains both the major type and the additional information which contains
 /// either the number itself or the number of extra bytes the number occupies.
 const fn write_major_type_and_u64<const MAX_SIZE: usize>(
-    vec: ConstVec<u8, MAX_SIZE>,
+    mut vec: ConstVec<u8, MAX_SIZE>,
     major: MajorType,
     number: u64,
 ) -> ConstVec<u8, MAX_SIZE> {
@@ -167,7 +167,8 @@ const fn write_major_type_and_u64<const MAX_SIZE: usize>(
         0..24 => {
             let additional_information = number as u8;
             let byte = major | additional_information;
-            vec.push(byte)
+            vec.push(byte);
+            vec
         }
         // For larger numbers, store the number of extra bytes the number occupies
         24.. => {
@@ -175,10 +176,10 @@ const fn write_major_type_and_u64<const MAX_SIZE: usize>(
             let additional_bytes = 1 << log2_additional_bytes;
             let additional_information = log2_additional_bytes + 24;
             let byte = major | additional_information;
-            let mut vec = vec.push(byte);
+            vec.push(byte);
             let mut byte = 0;
             while byte < additional_bytes {
-                vec = vec.push((number >> ((additional_bytes - byte - 1) * 8)) as u8);
+                vec.push((number >> ((additional_bytes - byte - 1) * 8)) as u8);
                 byte += 1;
             }
             vec
@@ -218,8 +219,9 @@ pub(crate) const fn write_bytes<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     bytes: &[u8],
 ) -> ConstVec<u8, MAX_SIZE> {
-    let vec = write_major_type_and_u64(vec, MajorType::Bytes, bytes.len() as u64);
-    vec.extend(bytes)
+    let mut vec = write_major_type_and_u64(vec, MajorType::Bytes, bytes.len() as u64);
+    vec.extend(bytes);
+    vec
 }
 
 /// Take a string from a buffer and return the string and the remaining buffer.
@@ -247,8 +249,9 @@ pub(crate) const fn write_str<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     string: &str,
 ) -> ConstVec<u8, MAX_SIZE> {
-    let vec = write_major_type_and_u64(vec, MajorType::Text, string.len() as u64);
-    vec.extend(string.as_bytes())
+    let mut vec = write_major_type_and_u64(vec, MajorType::Text, string.len() as u64);
+    vec.extend(string.as_bytes());
+    vec
 }
 
 /// Take the length and header of an array from a buffer and return the length and the remaining buffer.

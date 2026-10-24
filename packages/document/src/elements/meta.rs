@@ -1,7 +1,6 @@
 use super::*;
 use crate::document;
-use dioxus_core::{use_hook, VNode};
-use dioxus_html as dioxus_elements;
+use dioxus_core::{VNode, use_hook};
 
 #[non_exhaustive]
 /// Props for the [`Meta`] component

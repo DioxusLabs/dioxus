@@ -150,7 +150,7 @@ pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
     #[doc(inline)]
-    pub use dioxus_history::{history, History};
+    pub use dioxus_history::{History, history};
 
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
@@ -168,34 +168,44 @@ pub mod prelude {
     pub use dioxus_signals::{self, *};
 
     #[cfg(feature = "signals")]
-    pub use dioxus_stores::{self, store, use_store, GlobalStore, ReadStore, Store, WriteStore};
+    pub use dioxus_stores::{self, GlobalStore, ReadStore, Store, WriteStore, store, use_store};
 
     #[cfg(feature = "macro")]
     #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
     #[allow(deprecated)]
     #[doc(inline)]
-    pub use dioxus_core_macro::{component, rsx, Props};
+    pub use dioxus_core_macro::{Props, component, rsx};
 
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
     pub use dioxus_config_macro::*;
 
+    // The element-vocabulary root: `html::div`, `html::main`, etc. resolve as associated
+    // consts on this type. The crate module is still reachable as the fully-qualified
+    // `dioxus::html` for `dioxus::html::define_elements!` and friends.
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_html as dioxus_elements;
+    pub use dioxus_html::{self, html};
 
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(inline)]
-    pub use dioxus_elements::{Code, Key, Location, Modifiers};
+    pub use dioxus_html::{Code, Key, Location, Modifiers, NamedKey};
 
+    // Element associated-const traits (`html::div`, `html::main`, …) come from the single
+    // generated `prelude` module, not from flattening every per-element module into scope.
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(no_inline)]
-    pub use dioxus_elements::{
-        events::*, extensions::*, global_attributes, keyboard_types, svg_attributes, traits::*,
-        GlobalAttributesExtension, SvgAttributesExtension,
+    pub use dioxus_html::{
+        GlobalAttributesExtension, SvgAttributesExtension, elements::prelude::*, events::*,
+        extensions::*, keyboard_types, traits::*,
     };
+
+    #[cfg(feature = "desktop")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
+    #[doc(inline)]
+    pub use dioxus_desktop::{Window, WindowConfig, WindowProps};
 
     #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
@@ -207,15 +217,15 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     #[doc(inline)]
     pub use dioxus_fullstack::{
-        self as dioxus_fullstack, delete, get, patch, post, put, server, use_loader,
-        use_server_cached, use_server_future, HttpError, OrHttpError, ServerFnError,
-        ServerFnResult, StatusCode,
+        self as dioxus_fullstack, HttpError, OrHttpError, ServerFnError, ServerFnResult,
+        StatusCode, delete, get, patch, post, put, server, use_loader, use_server_cached,
+        use_server_future,
     };
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]
-    pub use dioxus_server::{self, serve, DioxusRouterExt, ServeConfig, ServerFunction};
+    pub use dioxus_server::{self, DioxusRouterExt, ServeConfig, ServerFunction, serve};
 
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
@@ -225,8 +235,8 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     #[doc(inline)]
     pub use dioxus_router::{
-        hooks::*, navigator, use_navigator, GoBackButton, GoForwardButton, Link, NavigationTarget,
-        Outlet, Routable, Router,
+        GoBackButton, GoForwardButton, Link, NavigationTarget, Outlet, Routable, Router, hooks::*,
+        navigator, use_navigator,
     };
 
     #[cfg(feature = "asset")]
@@ -240,10 +250,11 @@ pub mod prelude {
 
     #[doc(inline)]
     pub use dioxus_core::{
-        consume_context, provide_context, spawn, suspend, try_consume_context, use_drop, use_hook,
-        AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
-        EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, Result, ScopeId,
-        SuspenseBoundary, SuspenseContext, VNode, VirtualDom,
+        AnyhowContext, Attribute, Callback, Component, ComponentFunctionExt, Element,
+        ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoDynNode,
+        Portal, PortalProps, RenderError, RenderTargetId, Result, ScopeId, SuspenseBoundary,
+        SuspenseContext, VNode, VirtualDom, consume_context, provide_context, spawn, suspend,
+        try_consume_context, use_drop, use_hook,
     };
 
     #[cfg(feature = "logger")]

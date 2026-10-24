@@ -3,7 +3,7 @@ use crate::WebFileData;
 use dioxus_html::{FileData, FormValue, HasFileData, HasFormData};
 use js_sys::Array;
 use std::any::Any;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
+use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
 use web_sys::{Element, Event, FileReader};
 
 pub(crate) struct WebFormData {
@@ -28,40 +28,7 @@ impl WebFormData {
 
 impl HasFormData for WebFormData {
     fn value(&self) -> String {
-        let target = &self.element;
-        target
-            .dyn_ref()
-            .map(|input: &web_sys::HtmlInputElement| {
-                // todo: special case more input types
-                match input.type_().as_str() {
-                    "checkbox" => {
-                        match input.checked() {
-                            true => "true".to_string(),
-                            false => "false".to_string(),
-                        }
-                    },
-                    _ => {
-                        input.value()
-                    }
-                }
-            })
-            .or_else(|| {
-                target
-                    .dyn_ref()
-                    .map(|input: &web_sys::HtmlTextAreaElement| input.value())
-            })
-            // select elements are NOT input events - because - why woudn't they be??
-            .or_else(|| {
-                target
-                    .dyn_ref()
-                    .map(|input: &web_sys::HtmlSelectElement| input.value())
-            })
-            .or_else(|| {
-                target
-                    .dyn_ref::<web_sys::HtmlElement>()
-                    .unwrap()
-                    .text_content()
-            })
+        super::editable_element_value(&self.element)
             .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener")
     }
 
@@ -73,22 +40,21 @@ impl HasFormData for WebFormData {
             let form_data = web_sys::FormData::new_with_form(form).unwrap();
 
             for entry in form_data.entries().into_iter().flatten() {
-                if let Ok(array) = entry.dyn_into::<Array>() {
-                    if let Some(name) = array.get(0).as_string() {
-                        let value = array.get(1);
-                        if let Some(file) = value.dyn_ref::<web_sys::File>() {
-                            if file.name().is_empty() {
-                                values.push((name, FormValue::File(None)));
-                            } else {
-                                let data =
-                                    WebFileData::new(file.clone(), FileReader::new().unwrap());
-                                let as_file = FileData::new(data);
+                if let Ok(array) = entry.dyn_into::<Array>()
+                    && let Some(name) = array.get(0).as_string()
+                {
+                    let value = array.get(1);
+                    if let Some(file) = value.dyn_ref::<web_sys::File>() {
+                        if file.name().is_empty() {
+                            values.push((name, FormValue::File(None)));
+                        } else {
+                            let data = WebFileData::new(file.clone(), FileReader::new().unwrap());
+                            let as_file = FileData::new(data);
 
-                                values.push((name, FormValue::File(Some(as_file))));
-                            }
-                        } else if let Some(s) = value.as_string() {
-                            values.push((name, FormValue::Text(s)));
+                            values.push((name, FormValue::File(Some(as_file))));
                         }
+                    } else if let Some(s) = value.as_string() {
+                        values.push((name, FormValue::Text(s)));
                     }
                 }
             }

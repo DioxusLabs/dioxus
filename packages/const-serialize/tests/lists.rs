@@ -1,4 +1,4 @@
-use const_serialize::{deserialize_const, serialize_const, ConstVec};
+use const_serialize::{ConstVec, deserialize_const, serialize_const};
 
 #[test]
 fn test_serialize_const_layout_list() {
@@ -28,7 +28,7 @@ fn test_serialize_const_layout_nested_lists() {
 #[test]
 fn test_serialize_list_too_little_data() {
     let mut buf = ConstVec::new();
-    buf = buf.push(1);
+    buf.push(1);
     let buf = buf.as_ref();
     assert_eq!(deserialize_const!([u64; 10], buf), None);
 }

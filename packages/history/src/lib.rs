@@ -9,7 +9,9 @@ pub fn history() -> Rc<dyn History> {
     match dioxus_core::try_consume_context::<Rc<dyn History>>() {
         Some(history) => history,
         None => {
-            tracing::error!("Unable to find a history provider in the renderer. Make sure your renderer supports the Router. Falling back to the in-memory history provider.");
+            tracing::error!(
+                "Unable to find a history provider in the renderer. Make sure your renderer supports the Router. Falling back to the in-memory history provider."
+            );
             provide_root_context(Rc::new(MemoryHistory::default()))
         }
     }

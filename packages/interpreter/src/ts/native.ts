@@ -156,7 +156,7 @@ export class NativeInterpreter extends JSChannel_ {
 
     // make sure we pass the handler to the base interpreter
     const handler: EventListener = (event) =>
-      this.handleEvent(event, event.type, true);
+      this.handleEvent(event, event.type, event.bubbles);
 
     super.initialize(root, handler);
   }
@@ -322,31 +322,6 @@ export class NativeInterpreter extends JSChannel_ {
       window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
       // @ts-ignore
       window.dxDragLastElement = null;
-    }
-  }
-
-  // ignore the fact the base interpreter uses ptr + len but we use array...
-  // @ts-ignore
-  loadChild(array: number[]) {
-    // iterate through each number and get that child
-    let node = this.stack[this.stack.length - 1];
-
-    for (let i = 0; i < array.length; i++) {
-      let end = array[i];
-      for (node = node.firstChild; end > 0; end--) {
-        node = node.nextSibling;
-      }
-    }
-
-    return node;
-  }
-
-  appendChildren(id: NodeId, many: number) {
-    const root = this.nodes[id];
-    const els = this.stack.splice(this.stack.length - many);
-
-    for (let k = 0; k < many; k++) {
-      root.appendChild(els[k]);
     }
   }
 

@@ -1,24 +1,22 @@
-use crate::{literal::HotLiteral, location::DynIdx, HotReloadFormattedSegment, IfmtInput};
+use crate::{HotReloadFormattedSegment, IfmtInput, literal::HotLiteral};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
-use quote::{quote, TokenStreamExt};
+use quote::{TokenStreamExt, quote};
 use syn::Result;
 use syn::{
-    parse::{Parse, ParseStream},
     LitStr,
+    parse::{Parse, ParseStream},
 };
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
     pub input: HotReloadFormattedSegment,
-    pub dyn_idx: DynIdx,
 }
 
 impl Parse for TextNode {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self {
             input: input.parse()?,
-            dyn_idx: DynIdx::default(),
         })
     }
 }
@@ -50,10 +48,7 @@ impl TextNode {
             source: LitStr::new(text, Span::call_site()),
             segments: vec![],
         };
-        Self {
-            input: ifmt.into(),
-            dyn_idx: Default::default(),
-        }
+        Self { input: ifmt.into() }
     }
 
     pub fn is_static(&self) -> bool {

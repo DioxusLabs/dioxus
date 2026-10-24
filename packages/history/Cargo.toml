@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-history"
-edition = "2021"
+edition = "2024"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
 description = "History provider for dioxus"

@@ -1,14 +1,14 @@
 #![forbid(unsafe_code)]
 
+use axum::{BoxError, extract::rejection::BytesRejection, http};
 use axum::{
     body::{Body, Bytes},
     extract::{FromRequest, Request},
-    http::{header::HeaderValue, StatusCode},
+    http::{StatusCode, header::HeaderValue},
     response::{IntoResponse, Response},
 };
-use axum::{extract::rejection::BytesRejection, http, BoxError};
 use derive_more::{Deref, DerefMut, From};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// MessagePack Extractor / Response.
 ///

@@ -3,10 +3,7 @@
 
 use std::mem::MaybeUninit;
 
-mod const_buffers;
-pub use const_buffers::ConstReadBuffer;
 mod cbor;
-mod const_vec;
 mod r#enum;
 pub use r#enum::*;
 mod r#struct;
@@ -21,7 +18,7 @@ mod str;
 pub use str::*;
 
 pub use const_serialize_macro::SerializeConst;
-pub use const_vec::ConstVec;
+pub use dioxus_const_vec::{ConstReadBuffer, ConstVec};
 
 use crate::cbor::{
     str_eq, take_array, take_bytes, take_map, take_number, take_str, write_array, write_bytes,
@@ -74,11 +71,11 @@ const unsafe fn serialize_const_ptr(
     layout: &Layout,
 ) -> ConstVec<u8> {
     match layout {
-        Layout::Enum(layout) => serialize_const_enum(ptr, to, layout),
-        Layout::Struct(layout) => serialize_const_struct(ptr, to, layout),
-        Layout::Array(layout) => serialize_const_array(ptr, to, layout),
-        Layout::List(layout) => serialize_const_list(ptr, to, layout),
-        Layout::Primitive(layout) => serialize_const_primitive(ptr, to, layout),
+        Layout::Enum(layout) => unsafe { serialize_const_enum(ptr, to, layout) },
+        Layout::Struct(layout) => unsafe { serialize_const_struct(ptr, to, layout) },
+        Layout::Array(layout) => unsafe { serialize_const_array(ptr, to, layout) },
+        Layout::List(layout) => unsafe { serialize_const_list(ptr, to, layout) },
+        Layout::Primitive(layout) => unsafe { serialize_const_primitive(ptr, to, layout) },
     }
 }
 

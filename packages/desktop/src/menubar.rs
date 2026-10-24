@@ -5,6 +5,11 @@ pub type DioxusMenu = muda::Menu;
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub type DioxusMenu = ();
 
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub type DioxusMenuIcon = muda::Icon;
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub type DioxusMenuIcon = ();
+
 /// Initializes the menu bar for the window.
 #[allow(unused)]
 pub fn init_menu_bar(menu: &DioxusMenu, window: &Window) {

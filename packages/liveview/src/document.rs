@@ -1,8 +1,8 @@
-use dioxus_core::queue_effect;
 use dioxus_core::ScopeId;
+use dioxus_core::queue_effect;
 use dioxus_document::{
-    create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,
-    ScriptProps, StyleProps,
+    Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
+    create_element_in_head,
 };
 use dioxus_history::History;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};

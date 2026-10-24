@@ -100,6 +100,10 @@ if [ ! -d "$bin_dir" ]; then
 	mkdir -p "$bin_dir"
 fi
 
+if [ ! -d "$cargo_bin_dir" ]; then
+	mkdir -p "$cargo_bin_dir"
+fi
+
 curl --fail --location --progress-bar --output "$exe.zip" "$dx_uri"
 if command -v unzip >/dev/null; then
 	unzip -d "$bin_dir" -o "$exe.zip"

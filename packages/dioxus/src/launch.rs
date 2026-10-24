@@ -112,7 +112,9 @@ impl LaunchBuilder {
         } else if cfg!(feature = "liveview") {
             KnownPlatform::Liveview
         } else {
-            panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.")
+            panic!(
+                "No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API."
+            )
         };
 
         LaunchBuilder {
@@ -304,6 +306,9 @@ impl LaunchBuilder {
         {
             use dioxus_fullstack::{get_server_url, set_server_url};
 
+            #[cfg(not(target_arch = "wasm32"))]
+            dioxus_fullstack::install_default_crypto_provider();
+
             // Make sure to set the server_fn endpoint if the user specified the fullstack feature
             // We only set this on native targets
             #[cfg(any(feature = "desktop", feature = "mobile", feature = "native"))]
@@ -365,9 +370,13 @@ impl LaunchBuilder {
 
         // If we're here, then we have no platform feature enabled and third-party-renderer is enabled
         if cfg!(feature = "third-party-renderer") {
-            panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
+            panic!(
+                "No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate."
+            );
         }
 
-        panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.")
+        panic!(
+            "No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API."
+        )
     }
 }

@@ -4,9 +4,8 @@ use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
-    read_impls, write_impls, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
-    MappedSignal, Memo, Readable, ReadableExt, ReadableRef, Signal, SignalData, Writable,
-    WritableExt,
+    CopyValue, Global, InitializeFromFunction, MappedMutSignal, MappedSignal, Memo, Readable,
+    ReadableExt, ReadableRef, Signal, SignalData, Writable, WritableExt, read_impls, write_impls,
 };
 
 /// A signal that can only be read from.
@@ -83,9 +82,9 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> PartialEq for ReadSignal<T, S> {
 }
 
 impl<
-        T: Default + 'static,
-        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
-    > Default for ReadSignal<T, S>
+    T: Default + 'static,
+    S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
+> Default for ReadSignal<T, S>
 {
     fn default() -> Self {
         Self::new_maybe_sync(Signal::new_maybe_sync(T::default()))
@@ -132,10 +131,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        self.value.try_peek_unchecked()?.try_read_unchecked()
     }
 
     #[track_caller]
@@ -143,10 +139,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_peek_unchecked()
+        self.value.try_peek_unchecked()?.try_peek_unchecked()
     }
 
     fn subscribers(&self) -> Subscribers
@@ -161,9 +154,9 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
 impl<
-        T: 'static,
-        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
-    > From<Signal<T, S>> for ReadSignal<T, S>
+    T: 'static,
+    S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
+> From<Signal<T, S>> for ReadSignal<T, S>
 {
     fn from(value: Signal<T, S>) -> Self {
         Self::new_maybe_sync(value)
@@ -174,10 +167,8 @@ impl<T: PartialEq + 'static> From<Memo<T>> for ReadSignal<T> {
         Self::new(value)
     }
 }
-impl<
-        T: 'static,
-        S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>,
-    > From<CopyValue<T, S>> for ReadSignal<T, S>
+impl<T: 'static, S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>>
+    From<CopyValue<T, S>> for ReadSignal<T, S>
 {
     fn from(value: CopyValue<T, S>) -> Self {
         Self::new_maybe_sync(value)
@@ -367,10 +358,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for WriteSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        self.value.try_peek_unchecked()?.try_read_unchecked()
     }
 
     #[track_caller]
@@ -378,10 +366,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for WriteSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_peek_unchecked()
+        self.value.try_peek_unchecked()?.try_peek_unchecked()
     }
 
     fn subscribers(&self) -> Subscribers
@@ -412,18 +397,16 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Writable for WriteSignal<T, S> {
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
 impl<
-        T: 'static,
-        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
-    > From<Signal<T, S>> for WriteSignal<T, S>
+    T: 'static,
+    S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
+> From<Signal<T, S>> for WriteSignal<T, S>
 {
     fn from(value: Signal<T, S>) -> Self {
         Self::new_maybe_sync(value)
     }
 }
-impl<
-        T: 'static,
-        S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>,
-    > From<CopyValue<T, S>> for WriteSignal<T, S>
+impl<T: 'static, S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>>
+    From<CopyValue<T, S>> for WriteSignal<T, S>
 {
     fn from(value: CopyValue<T, S>) -> Self {
         Self::new_maybe_sync(value)

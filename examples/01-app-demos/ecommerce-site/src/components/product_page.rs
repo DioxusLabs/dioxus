@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use crate::api::{fetch_product, Product};
+use crate::api::{Product, fetch_product};
 use dioxus::prelude::*;
 
 #[component]

@@ -1,23 +1,23 @@
 use crate::Result;
 use crate::{
-    serve::{ansi_buffer::ansi_string_to_line, ServeUpdate, WebServer},
     BuildId, BuildStage, BuilderUpdate, BundleFormat, TraceContent, TraceMsg, TraceSrc,
+    serve::{ServeUpdate, WebServer, ansi_buffer::ansi_string_to_line},
 };
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
+    ExecutableCommand,
     cursor::{Hide, Show},
     event::{
         DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange, Event,
         EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
     },
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
-    ExecutableCommand,
+    terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    TerminalOptions, Viewport,
     prelude::*,
     widgets::{Block, BorderType, Borders, LineGauge, Paragraph},
-    TerminalOptions, Viewport,
 };
 use std::{
     cell::RefCell,
@@ -28,10 +28,10 @@ use std::{
 };
 use tracing::Level;
 
-use super::AppServer;
+use super::{AppServer, HotReloadMode};
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 90;
+const VIEWPORT_MAX_WIDTH: u16 = 92;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 14;
 
@@ -139,11 +139,11 @@ impl Output {
     /// Enable raw mode, but don't let it block forever.
     ///
     /// This lets us check if writing to tty is going to block forever and then recover, allowing
-    /// interopability with programs like `bg`.
+    /// interoperability with programs like `bg`.
     fn enable_raw_mode() -> Result<()> {
         #[cfg(unix)]
         {
-            use tokio::signal::unix::{signal, SignalKind};
+            use tokio::signal::unix::{SignalKind, signal};
 
             // Ignore SIGTSTP, SIGTTIN, and SIGTTOU
             _ = signal(SignalKind::from_raw(20))?; // SIGTSTP
@@ -182,8 +182,8 @@ impl Output {
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
-        use futures_util::future::OptionFuture;
         use futures_util::StreamExt;
+        use futures_util::future::OptionFuture;
 
         if !self.interactive {
             return std::future::pending().await;
@@ -207,7 +207,7 @@ impl Output {
                 Err(ee) => {
                     return ServeUpdate::Exit {
                         error: Some(anyhow::anyhow!(ee)),
-                    }
+                    };
                 }
                 Ok(None) => {}
             }
@@ -250,11 +250,11 @@ impl Output {
 
         match key.code {
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Ok(Some(ServeUpdate::Exit { error: None }))
+                return Ok(Some(ServeUpdate::Exit { error: None }));
             }
             KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
             KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
-            KeyCode::Char('p') => return Ok(Some(ServeUpdate::ToggleShouldRebuild)),
+            KeyCode::Char('p') => return Ok(Some(ServeUpdate::CycleHotreloadMode)),
             KeyCode::Char('v') => {
                 self.verbose = !self.verbose;
                 tracing::info!(
@@ -439,6 +439,7 @@ impl Output {
     /// Render the current state of everything to the console screen
     pub fn render(&mut self, runner: &AppServer, server: &WebServer) {
         if !self.interactive {
+            self.emit_logs_to_tracing();
             return;
         }
 
@@ -653,7 +654,8 @@ impl Output {
                 }))
                 .unfilled_style(Style::default().fg(Color::DarkGray))
                 .label(label.gray())
-                .line_set(symbols::line::THICK)
+                .filled_symbol(symbols::line::THICK.horizontal)
+                .unfilled_symbol(symbols::line::THICK.horizontal)
                 .ratio(if !failed { value } else { 1.0 }),
             gauge_row,
         );
@@ -689,8 +691,10 @@ impl Output {
         if let Some(time_taken) = time_taken {
             if !failed {
                 frame.render_widget(
-                    Line::from(vec![format!("{:.1}s", time_taken.as_secs_f32()).dark_gray()])
-                        .left_aligned(),
+                    Line::from(vec![
+                        format!("{:.1}s", time_taken.as_secs_f32()).dark_gray(),
+                    ])
+                    .left_aligned(),
                     time_frame,
                 );
             }
@@ -698,7 +702,7 @@ impl Output {
     }
 
     fn render_stats(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
-        let [current_platform, app_features, serve_address]: [_; 3] = Layout::vertical([
+        let [current_platform, hotreload_mode, serve_address]: [_; 3] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(1),
@@ -719,7 +723,15 @@ impl Output {
             current_platform,
         );
 
-        self.render_feature_list(frame, app_features, state);
+        let (label, indicator) = match state.runner.hotreload_mode {
+            HotReloadMode::Hotpatch => ("hot-patching".yellow(), " ✓".yellow()),
+            HotReloadMode::RsxOnly => ("rsx and assets".yellow(), " ~".yellow()),
+            HotReloadMode::Disabled => ("disabled".dark_gray(), " ✗".dark_gray()),
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(vec!["Hotreload: ".gray(), label, indicator])),
+            hotreload_mode,
+        );
 
         // todo(jon) should we write https ?
         let address = match state.server.displayed_address() {
@@ -738,15 +750,8 @@ impl Output {
             None => "no server address".dark_gray(),
         };
 
-        frame.render_widget_ref(
-            Paragraph::new(Line::from(vec![
-                if client.build.bundle == BundleFormat::Web {
-                    "Serving at: ".gray()
-                } else {
-                    "Server at: ".gray()
-                },
-                address,
-            ])),
+        frame.render_widget(
+            Paragraph::new(Line::from(vec!["Address:  ".gray(), address])),
             serve_address,
         );
     }
@@ -808,28 +813,10 @@ impl Output {
             ])),
             meta_list[2],
         );
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Hotreload: ".gray(),
-                if !state.runner.automatic_rebuilds {
-                    "disabled".dark_gray()
-                } else if state.runner.use_hotpatch_engine {
-                    "hot-patching".yellow()
-                } else {
-                    "rsx and assets".yellow()
-                },
-            ])),
-            meta_list[3],
-        );
+        self.render_feature_list(frame, meta_list[3], state);
 
-        let server_address = match state.server.server_address() {
-            Some(address) => format!("http://{address}").yellow(),
-            None => "no address".dark_gray(),
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(vec!["Network: ".gray(), server_address])),
-            meta_list[4],
-        );
+        // space
+        frame.render_widget(Paragraph::new(Line::from(vec![" ".gray()])), meta_list[4]);
 
         let links_list: [_; 2] =
             Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(bottom);
@@ -856,7 +843,7 @@ impl Output {
             "",
             "r: rebuild the app",
             "o: open the app",
-            "p: pause rebuilds",
+            "p: cycle hotreload mode",
             "v: toggle verbose logs",
             "t: toggle tracing logs",
             "c: clear the screen",
@@ -1094,11 +1081,31 @@ impl Output {
 
         lines
     }
+
+    /// Drains the current log queue to tracing so they still get printed even if the output is non-interactive
+    fn emit_logs_to_tracing(&mut self) {
+        // In non-interactive mode (CI, piped output), drain pending logs to tracing
+        // so they still appear in stdout/stderr instead of being silently dropped.
+        while let Some(log) = self.pending_logs.pop_back() {
+            let msg = match &log.content {
+                TraceContent::Text(s) => s.as_str(),
+                TraceContent::Cargo(d) => d.message.as_str(),
+            };
+            match log.level {
+                Level::ERROR => tracing::error!("{msg}"),
+                Level::WARN => tracing::warn!("{msg}"),
+                Level::INFO => tracing::info!("{msg}"),
+                Level::DEBUG => tracing::debug!("{msg}"),
+                Level::TRACE => tracing::trace!("{msg}"),
+            }
+        }
+    }
 }
 
 impl std::ops::Drop for Output {
     fn drop(&mut self) {
         if !self.interactive {
+            self.emit_logs_to_tracing();
             return;
         }
 

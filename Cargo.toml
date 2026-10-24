@@ -3,9 +3,11 @@ resolver = "2"
 members = [
     "packages/dioxus",
     "packages/core",
+    "packages/core-template",
+    "packages/oracle",
+    "packages/fuzz",
     "packages/core-types",
     "packages/cli",
-    "packages/cli-opt",
     "packages/cli-config",
     "packages/cli-telemetry",
     "packages/core-macro",
@@ -22,7 +24,6 @@ members = [
     "packages/interpreter",
     "packages/liveview",
     "packages/autofmt",
-    "packages/check",
     "packages/devtools-types",
     "packages/devtools",
     "packages/document",
@@ -39,6 +40,7 @@ members = [
     "packages/signals",
     "packages/stores",
     "packages/stores-macro",
+    "packages/dioxus-const-vec",
     "packages/const-serialize",
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
@@ -65,6 +67,7 @@ members = [
     "packages/playwright-tests/fullstack-spread",
     "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/fullstack-hydration-order",
+    "packages/playwright-tests/markerless-hydration-edges",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
@@ -77,7 +80,6 @@ members = [
     "packages/manganis/manganis",
     "packages/manganis/manganis-core",
     "packages/manganis/manganis-macro",
-    "packages/manganis/manganis-07",
 
     # wasm-split
     "packages/wasm-split/wasm-split",
@@ -112,145 +114,149 @@ members = [
     "examples/10-integrations/pwa",
     "examples/10-integrations/wgpu-texture",
     "examples/10-integrations/native-headless",
-    "examples/10-integrations/native-headless-in-bevy",
-    "examples/10-integrations/bevy",
 ]
+exclude = ["packages/stores/tests/visibility-helper"]
 
 
 [workspace.package]
-version = "0.7.3"
+version = "0.8.0-alpha.3"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
-dioxus = { path = "packages/dioxus", version = "0.7.3" }
-dioxus-core = { path = "packages/core", version = "0.7.3" }
-dioxus-core-types = { path = "packages/core-types", version = "0.7.3" }
-dioxus-core-macro = { path = "packages/core-macro", version = "0.7.3" }
-dioxus-config-macro = { path = "packages/config-macro", version = "0.7.3" }
-dioxus-router = { path = "packages/router", version = "0.7.3" }
-dioxus-router-macro = { path = "packages/router-macro", version = "0.7.3" }
-dioxus-document = { path = "packages/document", version = "0.7.3", default-features = false }
-dioxus-history = { path = "packages/history", version = "0.7.3", default-features = false }
-dioxus-html = { path = "packages/html", version = "0.7.3", default-features = false }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.3" }
-dioxus-hooks = { path = "packages/hooks", version = "0.7.3" }
-dioxus-web = { path = "packages/web", version = "0.7.3", default-features = false }
-dioxus-ssr = { path = "packages/ssr", version = "0.7.3", default-features = false }
-dioxus-desktop = { path = "packages/desktop", version = "0.7.3", default-features = false }
-dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.3" }
-dioxus-liveview = { path = "packages/liveview", version = "0.7.3" }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.7.3" }
-dioxus-check = { path = "packages/check", version = "0.7.3" }
-dioxus-rsx = { path = "packages/rsx", version = "0.7.3" }
-dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.3" }
-dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.3" }
-dioxus-signals = { path = "packages/signals", version = "0.7.3" }
-dioxus-stores = { path = "packages/stores", version = "0.7.3" }
-dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.3" }
-dioxus-devtools = { path = "packages/devtools", version = "0.7.3" }
-dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.3" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.7.3", default-features = false }
-dioxus-fullstack-core = { path = "packages/fullstack-core", version = "0.7.3", default-features = false }
-dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "0.7.3", default-features = false }
-dioxus-server = { path = "packages/fullstack-server", version = "0.7.3" }
-dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.3" }
-dioxus-logger = { path = "packages/logger", version = "0.7.3" }
-dioxus-native = { path = "packages/native", version = "0.7.3" }
-dioxus-native-dom = { path = "packages/native-dom", version = "0.7.3" }
-dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.3" }
-dioxus-config-macros = { path = "packages/config-macros", version = "0.7.3" }
-dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.3" }
-generational-box = { path = "packages/generational-box", version = "0.7.3" }
-lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.3" }
+dioxus = { path = "packages/dioxus", version = "=0.8.0-alpha.3" }
+dioxus-core = { path = "packages/core", version = "=0.8.0-alpha.3" }
+dioxus-core-template = { path = "packages/core-template", version = "=0.8.0-alpha.3" }
+dioxus-renderer-oracle = { path = "packages/oracle", version = "=0.8.0-alpha.3" }
+dioxus-core-types = { path = "packages/core-types", version = "=0.8.0-alpha.3" }
+dioxus-core-macro = { path = "packages/core-macro", version = "=0.8.0-alpha.3" }
+dioxus-config-macro = { path = "packages/config-macro", version = "=0.8.0-alpha.3" }
+dioxus-router = { path = "packages/router", version = "=0.8.0-alpha.3" }
+dioxus-router-macro = { path = "packages/router-macro", version = "=0.8.0-alpha.3" }
+dioxus-document = { path = "packages/document", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-history = { path = "packages/history", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-html = { path = "packages/html", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "=0.8.0-alpha.3" }
+dioxus-hooks = { path = "packages/hooks", version = "=0.8.0-alpha.3" }
+dioxus-web = { path = "packages/web", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-ssr = { path = "packages/ssr", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-desktop = { path = "packages/desktop", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-interpreter-js = { path = "packages/interpreter", version = "=0.8.0-alpha.3" }
+dioxus-liveview = { path = "packages/liveview", version = "=0.8.0-alpha.3" }
+dioxus-autofmt = { path = "packages/autofmt", version = "=0.8.0-alpha.3" }
+dioxus-rsx = { path = "packages/rsx", version = "=0.8.0-alpha.3" }
+dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "=0.8.0-alpha.3" }
+dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "=0.8.0-alpha.3" }
+dioxus-signals = { path = "packages/signals", version = "=0.8.0-alpha.3" }
+dioxus-stores = { path = "packages/stores", version = "=0.8.0-alpha.3" }
+dioxus-stores-macro = { path = "packages/stores-macro", version = "=0.8.0-alpha.3" }
+dioxus-devtools = { path = "packages/devtools", version = "=0.8.0-alpha.3" }
+dioxus-devtools-types = { path = "packages/devtools-types", version = "=0.8.0-alpha.3" }
+dioxus-fullstack = { path = "packages/fullstack", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-fullstack-core = { path = "packages/fullstack-core", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "=0.8.0-alpha.3", default-features = false }
+dioxus-server = { path = "packages/fullstack-server", version = "=0.8.0-alpha.3" }
+dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "=0.8.0-alpha.3" }
+dioxus-logger = { path = "packages/logger", version = "=0.8.0-alpha.3" }
+dioxus-native = { path = "packages/native", version = "=0.8.0-alpha.3" }
+dioxus-native-dom = { path = "packages/native-dom", version = "=0.8.0-alpha.3" }
+dioxus-asset-resolver = { path = "packages/asset-resolver", version = "=0.8.0-alpha.3" }
+dioxus-config-macros = { path = "packages/config-macros", version = "=0.8.0-alpha.3" }
+dioxus-component-manifest = { path = "packages/component-manifest", version = "=0.8.0-alpha.3" }
+generational-box = { path = "packages/generational-box", version = "=0.8.0-alpha.3" }
+lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "=0.8.0-alpha.3" }
 
 # cli
-dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.3" }
-dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.3" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.7.3" }
+dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "=0.8.0-alpha.3" }
+dioxus-cli-config = { path = "packages/cli-config", version = "=0.8.0-alpha.3" }
 
 # subsecond
-subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.7.3" }
-subsecond = { path = "packages/subsecond/subsecond", version = "0.7.3" }
+subsecond-types = { path = "packages/subsecond/subsecond-types", version = "=0.8.0-alpha.3" }
+subsecond = { path = "packages/subsecond/subsecond", version = "=0.8.0-alpha.3" }
 
 # wasm-split
-wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.3" }
-wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.3" }
-wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.3" }
-wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.3" }
+wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "=0.8.0-alpha.3" }
+wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "=0.8.0-alpha.3" }
+wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "=0.8.0-alpha.3" }
+wasm-used = { path = "packages/wasm-split/wasm-used", version = "=0.8.0-alpha.3" }
 
 # our dep-info parsing crate
-depinfo = { path = "packages/depinfo", version = "0.7.3" }
+depinfo = { path = "packages/depinfo", version = "=0.8.0-alpha.3" }
 
 # manganis
-manganis = { path = "packages/manganis/manganis", version = "0.7.3" }
-manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.3" }
-manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.3" }
-manganis-core-07 = { path = "packages/manganis/manganis-07", version = "0.7.2" }
+manganis = { path = "packages/manganis/manganis", version = "=0.8.0-alpha.3" }
+manganis-core = { path = "packages/manganis/manganis-core", version = "=0.8.0-alpha.3" }
+manganis-macro = { path = "packages/manganis/manganis-macro", version = "=0.8.0-alpha.3" }
 
-# const-serialize.
-# these are on "alpha" versions, but really, we are prepping for 0.8 but not committing to it yet
-# once the workspace moves onto 0.8, we can clean this up, moving the const-serialize stuff back to normal versions
-const-serialize = { path = "packages/const-serialize", version = "0.8.0-alpha.0" }
-const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.8.0-alpha.0" }
+# const-serialize
+dioxus-const-vec = { path = "packages/dioxus-const-vec", version = "=0.8.0-alpha.3" }
+const-serialize = { path = "packages/const-serialize", version = "=0.8.0-alpha.3" }
+const-serialize-macro = { path = "packages/const-serialize-macro", version = "=0.8.0-alpha.3" }
 
 warnings = { version = "0.2.1" }
 
-# blitz
-blitz-dom = { version = "0.2.4", default-features = false }
-blitz-net = { version = "0.2" }
-blitz-html = { version = "0.2" }
-blitz-paint = { version = "0.2" }
-blitz-traits = { version = "0.2" }
-blitz-shell = { version = "0.2", default-features = false }
-anyrender = { version = "0.6.2", default-features = false }
-anyrender_vello = { version = "0.6", default-features = false }
-anyrender_vello_cpu = { version = "0.8", default-features = false }
-wgpu_context = { version = "0.1", default-features = false }
-wgpu = { version = "26.0" }
-vello = "0.6"
-bevy = "0.17"
-
+# blitz / native
+blitz-dom = { version = "=0.3.0-beta.4", default-features = false }
+blitz-net = { version = "=0.3.0-beta.4" }
+blitz-html = { version = "=0.3.0-beta.4" }
+blitz-paint = { version = "=0.3.0-beta.4" }
+blitz-traits = { version = "=0.3.0-beta.4" }
+blitz-shell = { version = "=0.3.0-beta.4", default-features = false }
+peniko = { version = "0.6.1", default-features = false }
+anyrender = { version = "0.14.0" }
+anyrender_vello = { version = "0.15.0" }
+anyrender_vello_cpu = { version = "0.18.0" }
+anyrender_vello_hybrid = { version = "0.11.0" }
+anyrender_skia = { version = "0.12.0" }
+wgpu_context = { version = "0.10.0" }
+wgpu = { version = "30.0.1" }
+vello = "0.11"
+winit = { version = "=0.31.0-beta.3" }
+atomic_refcell = "0.1.13"
 
 # a fork of pretty please for tests - let's get off of this if we can!
 prettier-please = { version = "0.3.0", features = ["verbatim"] }
-anyhow = "1.0.98"
-clap = { version = "4.5.40" }
+anyhow = "1.0.102"
+clap = { version = "4.6.0" }
 askama_escape = "0.13.0"
-tracing = "0.1.41"
+tracing = "0.1.44"
 tracing-futures = "0.2.5"
-tracing-subscriber = { version = "0.3.19", default-features = false }
-toml = "0.8"
-tokio = "1.48"
+tracing-subscriber = { version = "0.3.20", default-features = false }
+toml = "1.1.2"
+tokio = "1.52.1"
 tokio-util = { version = "0.7.15" }
 tokio-stream = { version = "0.1.17" }
 slab = "0.4.10"
 slotmap = { version = "1.0.7", features = ["serde"] }
-futures = "0.3.31"
-futures-channel = "0.3.31"
-futures-util = { version = "0.3", default-features = false }
+futures = "0.3.32"
+futures-channel = "0.3.32"
+futures-util = { version = "0.3.32", default-features = false }
 rustc-hash = "2.1.1"
-wasm-bindgen = "0.2.105"
-wasm-bindgen-futures = "0.4.50"
-js-sys = "0.3"
-web-sys = { version = "0.3.77", default-features = false }
+wasm-bindgen = "0.2.127"
+wasm-bindgen-futures = "0.4.77"
+wasm-bindgen-test = "0.3.77"
+js-sys = "0.3.104"
+web-sys = { version = "0.3.104", default-features = false }
 html_parser = "0.7.0"
-thiserror = "2.0.12"
+thiserror = "2.0.18"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
 const_format = "0.2.34"
-cargo_toml = { version = "0.22.1" }
-tauri-utils = { version = "=2.5.0" }
-tauri-macos-sign = { version = "=2.2.0" }
-tauri-bundler = { version = "=2.5.0" }
-lru = "0.16.0"
-async-trait = "0.1.88"
-axum = { version = "0.8.4", default-features = false }
-axum-server = { version = "0.7.3", default-features = false }
-http-body = { version = "1.0" }
+cargo_toml = { version = "1.0.1" }
+icns = "0.4.0"
+image = { version = "0.25.6", default-features = false }
+zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
+sha1 = "0.10.6"
+md5 = "0.8.0"
+rpm = { version = "0.20.0", default-features = false, features = ["gzip-compression"] }
+lru = "0.18.0"
+async-trait = "0.1.89"
+axum = { version = "0.8.9", default-features = false }
+axum-server = { version = "0.8.0", default-features = false }
+http-body = { version = "1.0.1" }
 tower = "0.5.2"
-http = "1.3.1"
+http = "1.4.0"
 notify = { version = "8.1.0" }
-tower-http = "0.6.6"
-hyper = "1.6.0"
+tower-http = "0.6.8"
+hyper = "1.8.0"
 hyper-rustls = { version = "0.27.7", default-features = false, features = [
     "native-tokio",
     "http1",
@@ -259,51 +265,52 @@ hyper-rustls = { version = "0.27.7", default-features = false, features = [
     "logging",
     "ring",
 ] }
-rustls = { version = "0.23.28", default-features = false, features = [
+rustls = { version = "0.23.46", default-features = false, features = [
     "logging",
     "std",
     "tls12",
     "ring",
 ] }
-serde_json = "1.0.140"
-serde = "1.0.219"
-schemars = "1.0"
-syn = "2.0"
-quote = "1.0"
-axum-core = "0.5"
-proc-macro2 = "1.0.101"
-axum_session = "0.16.0"
-axum_session_auth = "0.16.0"
-axum_session_sqlx = "0.5.0"
-axum-extra = "0.10.1"
-reqwest = { version = "0.12.23", default-features = false }
+webpki-roots = "1.0.7"
+serde_json = "1.0.149"
+serde = "1.0.228"
+schemars = "1.2.1"
+syn = "2.0.117"
+quote = "1.0.45"
+axum-core = "0.5.5"
+proc-macro2 = "1.0.106"
+axum_session = "0.20.1"
+axum_session_auth = "0.20.0"
+axum_session_sqlx = "0.10.0"
+axum-extra = "0.12.6"
+reqwest = { version = "0.13.5", default-features = false }
 owo-colors = "4.2.2"
 ciborium = "0.2.2"
 base64 = "0.22.1"
-uuid = "1.17.0"
+uuid = "1.23.1"
 convert_case = "0.8.0"
-tungstenite = { version = "0.27.0" }
-tokio-tungstenite = { version = "0.27.0" }
-gloo-timers = "0.3.0"
+tungstenite = { version = "0.29.0" }
+tokio-tungstenite = { version = "0.29.0", default-features = false }
+gloo-timers = "0.4.0"
 internment = { version = "0.8.6" }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
 env_logger = "0.11.8"
-chrono = { version = "0.4.39" }
+chrono = { version = "0.4.44" }
 rustversion = "1.0.21"
 rand = "0.9"
 longest-increasing-subsequence = "0.1.0"
-trybuild = "1.0"
+trybuild = "1.0.116"
+tempfile = "3.27.0"
 dirs = "6.0.0"
 cargo-config2 = "0.1.34"
 criterion = { version = "0.6" }
 cargo_metadata = "0.19.2"
 parking_lot = "0.12.4"
-tracing-wasm = "0.2.1"
 base16 = "0.2.1"
 digest = "0.10.7"
 sha2 = "0.10.9"
-walrus = { version = "0.23.3", features = ["parallel"] }
-id-arena = "2.2.1"
+walrus = { version = "0.26.5", features = ["parallel"] }
+id-arena = "2.3.0"
 async-compression = { version = "0.4", features = [
     "futures-io",
     "gzip",
@@ -311,61 +318,70 @@ async-compression = { version = "0.4", features = [
 ] }
 getrandom = { version = "0.3.3" }
 async-once-cell = { version = "0.5.4" }
-rayon = "1.10.0"
-wasmparser = "0.235.0"
+rayon = "1.11.0"
+wasmparser = "0.245.1"
 itertools = "0.14.0"
 object = { version = "0.37.1" }
 inventory = { version = "0.3" }
 macro-string = "0.1.4"
 walkdir = "2.5.0"
-url = "2"
+url = "2.5.8"
 data-url = "0.3.2"
 separator = "0.4.1"
 pretty_assertions = "1"
-serde_repr = "0.1"
-hyper-util = "0.1"
+serde_repr = "0.1.19"
+hyper-util = "0.1.18"
 krates = { version = "0.17.5" }
 libloading = "0.8.8"
-libc = "0.2.174"
-memmap2 = "0.9.5"
+libc = "0.2.186"
+memmap2 = "0.9.11"
 memfd = "0.6.4"
 xxhash-rust = { version = "0.8.15", default-features = false }
 serde_qs = "0.15.0"
 multer = "3.1.0"
 const-str = "0.7.0"
-bytes = "1.10"
+bytes = "1.11.1"
 send_wrapper = "0.6.0"
 pin-project = { version = "1.1.10" }
 postcard = { version = "1.1.3", default-features = false }
-serde_urlencoded = "0.7"
-form_urlencoded = "1.2.1"
+serde_urlencoded = "0.7.1"
+form_urlencoded = "1.2.2"
 winnow = "0.7.14"
 
 # desktop
-wry = { version = "0.53.5", default-features = false }
-tao = { version = "0.34.0", features = ["rwh_05"] }
+wry = { version = "0.57.0", default-features = false }
+tao = { version = "0.37.1", features = ["rwh_05"] }
 infer = "0.19.0"
 dunce = "1.0.5"
-percent-encoding = "2.3.1"
-muda = "0.17.0"
-tray-icon = "0.21.0"
-open = "5.3.2"
-webbrowser = "1.0"
+percent-encoding = "2.3.2"
+# `gtk3` is what actually renders menus and tray icons on Linux.
+muda = { version = "0.21.2", default-features = false, features = ["gtk3"] }
+objc2 = { version = "0.6.5", features = ["exception"] }
+objc2-foundation = { version = "0.3.2", default-features = false }
+objc2-ui-kit = { version = "0.3.2", default-features = false }
+objc2-app-kit = { version = "0.3.2", default-features = false }
+tray-icon = { version = "0.26.1", default-features = false, features = ["libappindicator"] }
+open = "5.3.5"
+webbrowser = "1.2.2"
 
 # web
 gloo-dialogs = "0.2.0"
 
 # tui stuff
-ansi-to-tui = "7.0"
+ansi-to-tui = "8.0.1"
 ansi-to-html = "0.2.2"
 path-absolutize = "3.1"
 crossterm = { version = "0.29.0" }
-ratatui = { version = "0.29.0" }
+ratatui = { version = "0.30.2" }
 shell-words = "1.1.0"
 
 # native
-keyboard-types = { version = "0.7", default-features = false }
-winit = { version = "0.30.11", features = ["rwh_06"] }
+keyboard-types = { version = "0.8", default-features = false }
+
+# reduce debug symbols to line tables only - speeds up compiles and shrinks artifacts
+# backtraces still show file:line, but debugger can't inspect variables
+[profile.dev]
+debug = "line-tables-only"
 
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
@@ -388,6 +404,12 @@ incremental = true
 
 # crank up walrus since it's quite slow in dev mode
 [profile.dev.package.walrus]
+opt-level = 3
+
+# Keep debug assertions for fuzzing, but compile the reusable fuzzer crate
+# with release-style optimizations. (The libFuzzer binary `dioxus-fuzz` lives
+# in its own sub-workspace under packages/fuzz/fuzz and sets its own profile.)
+[profile.dev.package.dioxus-vdom-fuzz]
 opt-level = 3
 
 # ensure we have adversarial setup for tls
@@ -432,7 +454,7 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.85.0"
 publish = false
-version = "0.7.0"
+version = "0.7.5"
 
 [dependencies]
 reqwest = { workspace = true, features = ["json"] }
@@ -444,7 +466,7 @@ winit = { workspace = true, optional = true }
 ouroboros = { version = "*", optional = true }
 wasm-splitter = { workspace = true }
 
-sqlx = { version = "0.8.6", features = [
+sqlx = { version = "0.9.0", features = [
     "macros",
     "migrate",
     "postgres",
@@ -453,7 +475,7 @@ sqlx = { version = "0.8.6", features = [
     "tls-native-tls",
     "runtime-tokio",
 ], optional = true }
-wasm-streams = "0.4.2"
+wasm-streams = "0.5.0"
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router", "fullstack"] }
@@ -465,8 +487,8 @@ separator = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
-form_urlencoded = "1.2.1"
-async-std = "1.13.1"
+form_urlencoded = { workspace = true }
+futures-timer = { version = "3.0.4", features = ["wasm-bindgen"] }
 web-time = "1.1.0"
 anyhow = { workspace = true }
 thiserror = { workspace = true }
@@ -479,7 +501,7 @@ pollster = "0.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
-tokio = { version = "1.48", default-features = false, features = [
+tokio = { version = "1.52.1", default-features = false, features = [
     "sync",
     "macros",
     "io-util",
@@ -489,7 +511,7 @@ tokio = { version = "1.48", default-features = false, features = [
 uuid = { workspace = true, features = ["v4", "serde", "js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tokio = { version = "1.48", features = ["full"] }
+tokio = { version = "1.52.1", features = ["full"] }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
@@ -579,6 +601,56 @@ path = "examples/02-building-ui/svg.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "counter"
+path = "examples/02-building-ui/counter.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "conditional_rendering"
+path = "examples/02-building-ui/conditional_rendering.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "lists"
+path = "examples/02-building-ui/lists.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "components"
+path = "examples/02-building-ui/components.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "children"
+path = "examples/02-building-ui/children.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "inputs"
+path = "examples/02-building-ui/inputs.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "forms"
+path = "examples/02-building-ui/forms.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "checkbox_radio"
+path = "examples/02-building-ui/checkbox_radio.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_classes"
+path = "examples/02-building-ui/dynamic_classes.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "event_handler_prop"
+path = "examples/02-building-ui/event_handler_prop.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "css_modules"
 path = "examples/03-assets-styling/css_modules.rs"
 doc-scrape-examples = true
@@ -599,8 +671,38 @@ path = "examples/03-assets-styling/meta.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "meta_elements"
-path = "examples/03-assets-styling/meta_elements.rs"
+name = "stylesheet"
+path = "examples/03-assets-styling/stylesheet.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "document_title"
+path = "examples/03-assets-styling/document_title.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "favicon"
+path = "examples/03-assets-styling/favicon.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "inline_styles"
+path = "examples/03-assets-styling/inline_styles.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_styles"
+path = "examples/03-assets-styling/dynamic_styles.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "fonts"
+path = "examples/03-assets-styling/fonts.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "script"
+path = "examples/03-assets-styling/script.rs"
 doc-scrape-examples = true
 
 [[example]]
@@ -631,6 +733,41 @@ doc-scrape-examples = true
 [[example]]
 name = "errors"
 path = "examples/04-managing-state/error_handling.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "use_effect"
+path = "examples/04-managing-state/use_effect.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "use_memo"
+path = "examples/04-managing-state/use_memo.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "struct_signal"
+path = "examples/04-managing-state/struct_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "vec_signal"
+path = "examples/04-managing-state/vec_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "read_signal"
+path = "examples/04-managing-state/read_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "lifting_state"
+path = "examples/04-managing-state/lifting_state.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_hook"
+path = "examples/04-managing-state/custom_hook.rs"
 doc-scrape-examples = true
 
 [[example]]
@@ -949,6 +1086,11 @@ path = "examples/09-reference/web_component.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "custom_element"
+path = "examples/09-reference/custom_element.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "generic_component"
 path = "examples/09-reference/generic_component.rs"
 doc-scrape-examples = true
@@ -966,6 +1108,11 @@ doc-scrape-examples = true
 [[example]]
 name = "optional_props"
 path = "examples/09-reference/optional_props.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "html_builder"
+path = "examples/09-reference/html_builder.rs"
 doc-scrape-examples = true
 
 [[example]]

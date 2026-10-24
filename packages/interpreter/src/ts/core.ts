@@ -5,6 +5,16 @@ import { setAttributeInner } from "./set_attribute";
 
 export type NodeId = number;
 
+// Element decorated with the listener bookkeeping properties that the
+// interpreter attaches at runtime.
+interface ListenerElement extends Element {
+  listening?: number;
+}
+
+// A stack entry pairs a DOM node with the ElementId it was pushed under, or
+// `null` for nodes pushed positionally (e.g. cloned template children).
+type StackEntry = [Node, NodeId | null];
+
 export class BaseInterpreter {
   // non bubbling events listen at the element the listener was created at
   global: {
@@ -23,10 +33,7 @@ export class BaseInterpreter {
   intersectionObserver: IntersectionObserver;
 
   nodes: Node[];
-  stack: Node[];
-  templates: {
-    [key: number]: Node[];
-  };
+  stack: StackEntry[];
 
   // sledgehammer is generating this...
   m: any;
@@ -39,8 +46,7 @@ export class BaseInterpreter {
     this.root = root;
 
     this.nodes = [root];
-    this.stack = [root];
-    this.templates = {};
+    this.stack = [[root, 0]];
 
     this.handler = handler;
 
@@ -59,7 +65,7 @@ export class BaseInterpreter {
     target.dispatchEvent(event);
   }
 
-  createResizeObserver(element: HTMLElement) {
+  createResizeObserver(element: Element) {
     // Lazily create the resize observer
     if (!this.resizeObserver) {
       this.resizeObserver = new ResizeObserver((entries) => {
@@ -71,7 +77,7 @@ export class BaseInterpreter {
     this.resizeObserver.observe(element);
   }
 
-  removeResizeObserver(element: HTMLElement) {
+  removeResizeObserver(element: Element) {
     if (this.resizeObserver) {
       this.resizeObserver.unobserve(element);
     }
@@ -88,7 +94,7 @@ export class BaseInterpreter {
     target.dispatchEvent(event);
   }
 
-  createIntersectionObserver(element: HTMLElement) {
+  createIntersectionObserver(element: Element) {
     /// Lazily create the intersection observer
     if (!this.intersectionObserver) {
       this.intersectionObserver = new IntersectionObserver((entries) => {
@@ -100,13 +106,13 @@ export class BaseInterpreter {
     this.intersectionObserver.observe(element);
   }
 
-  removeIntersectionObserver(element: HTMLElement) {
+  removeIntersectionObserver(element: Element) {
     if (this.intersectionObserver) {
       this.intersectionObserver.unobserve(element);
     }
   }
 
-  createListener(event_name: string, element: HTMLElement, bubbles: boolean) {
+  createListener(event_name: string, element: Element, bubbles: boolean) {
     if (event_name == "resize") {
       this.createResizeObserver(element);
     } else if (event_name == "visible") {
@@ -129,7 +135,7 @@ export class BaseInterpreter {
     }
   }
 
-  removeListener(element: HTMLElement, event_name: string, bubbles: boolean) {
+  removeListener(element: Element, event_name: string, bubbles: boolean) {
     if (event_name == "resize") {
       this.removeResizeObserver(element);
     } else if (event_name == "visible") {
@@ -146,13 +152,13 @@ export class BaseInterpreter {
     if (this.global[event_name].active === 0) {
       this.root.removeEventListener(
         event_name,
-        this.global[event_name].callback
+        this.global[event_name].callback,
       );
       delete this.global[event_name];
     }
   }
 
-  removeNonBubblingListener(element: HTMLElement, event_name: string) {
+  removeNonBubblingListener(element: Element, event_name: string) {
     const id = element.getAttribute("data-dioxus-id");
     delete this.local[id][event_name];
     if (Object.keys(this.local[id]).length === 0) {
@@ -161,7 +167,7 @@ export class BaseInterpreter {
     element.removeEventListener(event_name, this.handler);
   }
 
-  removeAllNonBubblingListeners(element: HTMLElement) {
+  removeAllNonBubblingListeners(element: Element) {
     const id = element.getAttribute("data-dioxus-id");
     delete this.local[id];
   }
@@ -170,156 +176,213 @@ export class BaseInterpreter {
     return this.nodes[id];
   }
 
+  // Bind an ElementId to a DOM node. Used by the Rust hydration cursor to
+  // record the nodes it matches against the server-rendered DOM.
+  setNode(id: NodeId, node: Node) {
+    this.nodes[id] = node;
+  }
+
+  // Attach an event listener to a previously-bound node. Mirrors
+  // `addTopEventListener`, but addresses the element by id rather than the
+  // working stack, so the Rust hydration cursor can drive it directly.
+  setNodeListener(id: NodeId, event_name: string, bubbles: boolean) {
+    const node = this.nodes[id] as ListenerElement;
+    if (node.listening) node.listening += 1;
+    else node.listening = 1;
+    node.setAttribute("data-dioxus-id", `${id}`);
+    this.createListener(event_name, node, bubbles);
+  }
+
   pushRoot(node: Node) {
-    this.stack.push(node);
+    this.stack.push([node, null]);
   }
 
-  appendChildren(id: NodeId, many: number) {
-    const root = this.nodes[id];
-    const els = this.stack.splice(this.stack.length - many);
-    for (let k = 0; k < many; k++) {
-      root.appendChild(els[k]);
-    }
+  pushId(id: NodeId) {
+    this.stack.push([this.nodes[id], id]);
   }
 
-  loadChild(ptr: number, len: number): Node {
-    // iterate through each number and get that child
-    let node = this.stack[this.stack.length - 1] as Node;
-    let ptr_end = ptr + len;
-
-    for (; ptr < ptr_end; ptr++) {
-      let end = this.m.getUint8(ptr);
-      for (node = node.firstChild; end > 0; end--) {
-        node = node.nextSibling;
-      }
-    }
-
-    return node;
+  popId(id: NodeId) {
+    const entry = this.stack.pop();
+    if (!entry) throw new Error("popId: empty stack");
+    this.nodes[id] = entry[0];
   }
 
-  saveTemplate(nodes: HTMLElement[], tmpl_id: number) {
-    this.templates[tmpl_id] = nodes;
+  setId(id: NodeId) {
+    const top = this.stack[this.stack.length - 1];
+    if (!top) throw new Error("setId: empty stack");
+    this.nodes[id] = top[0];
+    top[1] = id;
   }
 
-  hydrate_node(hydrateNode: HTMLElement, ids: { [key: number]: number }) {
-    const hydration = hydrateNode.getAttribute("data-node-hydration");
-    const split = hydration!.split(",");
-    const id = ids[parseInt(split[0])];
-
-    this.nodes[id] = hydrateNode;
-
-    if (split.length > 1) {
-      // @ts-ignore
-      hydrateNode.listening = split.length - 1;
-      hydrateNode.setAttribute("data-dioxus-id", id.toString());
-      for (let j = 1; j < split.length; j++) {
-        const listener = split[j];
-        const split2 = listener.split(":");
-        const event_name = split2[0];
-        const bubbles = split2[1] === "1";
-        this.createListener(event_name, hydrateNode, bubbles);
-      }
-    }
+  currentTopId(): NodeId {
+    const id = this.stack[this.stack.length - 1][1];
+    if (id == null) throw new Error("currentTopId: top node has no ElementId");
+    return id;
   }
 
-  hydrate(ids: { [key: number]: number }, underNodes: Node[]) {
-    for (let i = 0; i < underNodes.length; i++) {
-      const under = underNodes[i];
-      if (under instanceof HTMLElement) {
-        if (under.getAttribute("data-node-hydration")) {
-          this.hydrate_node(under, ids);
-        }
-        const hydrateNodes = under.querySelectorAll("[data-node-hydration]");
+  child(index: number) {
+    const parent = this.stack[this.stack.length - 1][0];
+    const child = parent.childNodes[index];
+    if (!child) throw new Error("child: index out of bounds");
+    this.stack[this.stack.length - 1] = [child, null];
+  }
 
-        for (let i = 0; i < hydrateNodes.length; i++) {
-          this.hydrate_node(hydrateNodes[i] as HTMLElement, ids);
-        }
-      }
+  pop() {
+    this.stack.pop();
+  }
 
-      const treeWalker = document.createTreeWalker(
-        under,
-        NodeFilter.SHOW_COMMENT
-      );
+  createElementTop(tag: string, ns: string | null) {
+    this.stack.push([
+      ns ? document.createElementNS(ns, tag) : document.createElement(tag),
+      null,
+    ]);
+  }
 
-      let nextSibling = under.nextSibling;
-      // Continue to the next node. Returns false if we should stop traversing because we've reached the end of the children
-      // of the root
-      let continueToNextNode = () => {
-        // stop traversing if there are no more nodes
-        if (!treeWalker.nextNode()) {
-          return false;
-        }
-        // stop traversing if we have reached the next sibling of the root node
-        return treeWalker.currentNode !== nextSibling;
-      };
+  createTextTop(text: string) {
+    this.stack.push([document.createTextNode(text), null]);
+  }
 
-      while (treeWalker.currentNode) {
-        const currentNode = treeWalker.currentNode as ChildNode;
-        if (currentNode.nodeType === Node.COMMENT_NODE) {
-          const id = currentNode.textContent!;
+  cloneTop() {
+    const node = this.stack[this.stack.length - 1][0];
+    this.stack[this.stack.length - 1] = [node.cloneNode(true), null];
+  }
 
-          // First try to hydrate the comment node as a placeholder
-          const placeholderSplit = id.split("placeholder");
+  appendChildrenToTop(many: number) {
+    const parentIdx = this.stack.length - many - 1;
+    const parent = this.stack[parentIdx][0];
+    const items = this.stack.splice(parentIdx + 1, many);
+    this.applyChunk(items, parent, null);
+  }
 
-          if (placeholderSplit.length > 1) {
-            this.nodes[ids[parseInt(placeholderSplit[1])]] = currentNode;
-            if (!continueToNextNode()) {
-              break;
-            }
-            continue;
-          }
+  replaceTopWith(many: number) {
+    const targetIdx = this.stack.length - many - 1;
+    const target = this.stack[targetIdx][0];
+    const items = this.stack.splice(targetIdx + 1, many);
+    this.stack.pop();
+    const real = target as ListenerElement;
+    if (real.listening) this.removeAllNonBubblingListeners(real);
+    const parent = target.parentNode as Node;
+    const next = target.nextSibling;
+    (target as ChildNode).remove();
+    this.applyChunk(items, parent, next);
+  }
 
-          // Then try to hydrate the comment node as a marker for the next text node
-          const textNodeSplit = id.split("node-id");
+  insertAfterTop(many: number) {
+    const anchorIdx = this.stack.length - many - 1;
+    const anchor = this.stack[anchorIdx][0];
+    const items = this.stack.splice(anchorIdx + 1, many);
+    this.applyChunk(items, anchor.parentNode as Node, anchor.nextSibling);
+  }
 
-          if (textNodeSplit.length > 1) {
-            // For most text nodes, this should be text
-            let next = currentNode.nextSibling;
-            // remove the comment node
-            currentNode.remove();
+  insertBeforeTop(many: number) {
+    const anchorIdx = this.stack.length - many - 1;
+    const anchor = this.stack[anchorIdx][0];
+    const items = this.stack.splice(anchorIdx + 1, many);
+    this.applyChunk(items, anchor.parentNode as Node, anchor);
+  }
 
-            let commentAfterText;
-            let textNode;
+  setTextTop(text: string) {
+    this.stack[this.stack.length - 1][0].textContent = text;
+  }
 
-            // If we are hydrating an empty text node, we may see two comment nodes in a row instead of a comment node, text node and then comment node
-            if (next.nodeType === Node.COMMENT_NODE) {
-              const newText = next.parentElement.insertBefore(
-                document.createTextNode(""),
-                next
-              );
-              commentAfterText = next;
-              textNode = newText;
-            } else {
-              // The node after text should be a comment node marking the end of the text node
-              textNode = next;
-              commentAfterText = textNode.nextSibling;
-            }
-            treeWalker.currentNode = commentAfterText;
-            this.nodes[ids[parseInt(textNodeSplit[1])]] = textNode;
-            // Stop traversing if we started on a comment node (which has no children)
-            // or the next sibling stops the walk
-            let exit = currentNode === under || !continueToNextNode();
-            // remove the comment node after the text node
-            commentAfterText.remove();
-            if (exit) {
-              break;
-            }
-            continue;
-          }
-        }
-        if (!continueToNextNode()) {
+  removeTop() {
+    const targetEntry = this.stack.pop();
+    if (!targetEntry) return;
+    const node = targetEntry[0] as ListenerElement;
+    if (node.listening) this.removeAllNonBubblingListeners(node);
+    (node as ChildNode).remove();
+  }
+
+  setTopAttribute(field: string, value: string, ns: string | null) {
+    this.setAttributeInner(
+      this.stack[this.stack.length - 1][0],
+      field,
+      value,
+      ns,
+    );
+  }
+
+  removeTopAttribute(field: string, ns: string | null) {
+    const node = this.stack[this.stack.length - 1][0] as any;
+    if (!ns) {
+      switch (field) {
+        case "value":
+          node.value = "";
+          node.removeAttribute("value");
           break;
-        }
+        case "checked":
+          node.checked = false;
+          break;
+        case "selected":
+          node.selected = false;
+          break;
+        case "dangerous_inner_html":
+          node.innerHTML = "";
+          break;
+        default:
+          node.removeAttribute(field);
+          break;
       }
+    } else if (ns == "style") {
+      node.style.removeProperty(field);
+    } else {
+      node.removeAttributeNS(ns, field);
+    }
+  }
+
+  addTopEventListener(event_name: string, bubbles: boolean) {
+    const node = this.stack[this.stack.length - 1][0] as ListenerElement;
+    const id = this.currentTopId();
+    if (node.listening) node.listening += 1;
+    else node.listening = 1;
+    node.setAttribute("data-dioxus-id", `${id}`);
+    this.createListener(event_name, node, bubbles);
+  }
+
+  addTopForeignEventListener(event_name: string, bubbles: boolean) {
+    const node = this.stack[this.stack.length - 1][0] as ListenerElement;
+    const id = this.currentTopId();
+    if (node.listening) node.listening += 1;
+    else node.listening = 1;
+    node.setAttribute("data-dioxus-id", `${id}`);
+
+    if (event_name === "mounted") {
+      (window as any).ipc.postMessage(
+        this.sendSerializedEvent({
+          name: event_name,
+          element: id,
+          data: null,
+          bubbles,
+        }),
+      );
+    } else {
+      this.createListener(event_name, node, bubbles);
+    }
+  }
+
+  removeTopEventListener(event_name: string, bubbles: boolean) {
+    const node = this.stack[this.stack.length - 1][0] as ListenerElement;
+    node.listening = (node.listening ?? 1) - 1;
+    this.removeListener(node, event_name, bubbles);
+    if (node.listening <= 0) {
+      node.removeAttribute("data-dioxus-id");
+    }
+  }
+
+  // Insert each node in `items` into `parent` before `cursorBefore`, appending
+  // when `cursorBefore` is null. Insertion order is preserved.
+  applyChunk(items: StackEntry[], parent: Node, cursorBefore: Node | null) {
+    for (const [node] of items) {
+      parent.insertBefore(node, cursorBefore);
     }
   }
 
   setAttributeInner(
-    node: HTMLElement,
+    node: Node,
     field: string,
     value: string,
-    ns: string
+    ns: string | null,
   ) {
-    setAttributeInner(node, field, value, ns);
+    setAttributeInner(node as HTMLElement, field, value, ns ?? "");
   }
 }

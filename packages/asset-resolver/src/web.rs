@@ -1,6 +1,6 @@
 use js_sys::{
-    wasm_bindgen::{JsCast, JsValue},
     ArrayBuffer, Uint8Array,
+    wasm_bindgen::{JsCast, JsValue},
 };
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, Response};

@@ -1,19 +1,21 @@
 // RSX and component definition
 pub use dioxus_core;
 pub use dioxus_core::{
-    consume_context, provide_context, spawn, suspend, try_consume_context, use_drop, use_hook,
     AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
     EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary,
-    SuspenseContext, VNode, VirtualDom,
+    SuspenseContext, VNode, VirtualDom, consume_context, provide_context, spawn, suspend,
+    try_consume_context, use_drop, use_hook,
 };
 #[allow(deprecated)]
-pub use dioxus_core_macro::{component, rsx, Props};
-pub use dioxus_html as dioxus_elements;
+pub use dioxus_core_macro::{Props, component, rsx};
+// The element-vocabulary root: `html::div`, `html::main`, etc. resolve as associated
+// consts on this type.
+pub use dioxus_html::{self, html};
+pub use dioxus_html::{Code, Key, Location, Modifiers, NamedKey};
 pub use dioxus_html::{
-    events::*, extensions::*, global_attributes, keyboard_types, svg_attributes, traits::*,
-    GlobalAttributesExtension, SvgAttributesExtension,
+    GlobalAttributesExtension, SvgAttributesExtension, elements::prelude::*, events::*,
+    extensions::*, keyboard_types, traits::*,
 };
-pub use dioxus_html::{Code, Key, Location, Modifiers};
 
 // Assets
 pub use manganis::{self, *};
@@ -21,8 +23,8 @@ pub use manganis::{self, *};
 // Hooks, signals, stores
 pub use dioxus_hooks::*;
 pub use dioxus_signals::{self, *};
-pub use dioxus_stores::{self, store, use_store, GlobalStore, ReadStore, Store, WriteStore};
+pub use dioxus_stores::{self, GlobalStore, ReadStore, Store, WriteStore, store, use_store};
 
 // Document and History
 pub use dioxus_document::{self as document, Meta, Stylesheet, Title};
-pub use dioxus_history::{history, History};
+pub use dioxus_history::{History, history};

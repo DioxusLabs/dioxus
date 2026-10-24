@@ -1,0 +1,5 @@
+error: `#[store]` only supports methods; associated types are not allowed
+  --> tests/ui/fail_store_assoc_type.rs:10:5
+   |
+10 |     type Hidden = i32;
+   |     ^^^^^^^^^^^^^^^^^^

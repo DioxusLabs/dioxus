@@ -1,13 +1,13 @@
-use crate::{asset::AssetParser, resolve_path};
+use crate::{PathResolver, asset::AssetParser};
 use macro_string::MacroString;
 use manganis_core::{create_module_hash, get_class_mappings};
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use syn::{
+    Ident, ItemStruct,
     parse::{Parse, ParseStream},
     spanned::Spanned,
     token::Comma,
-    Ident, ItemStruct,
 };
 
 pub(crate) struct CssModuleAttribute {
@@ -18,7 +18,7 @@ impl Parse for CssModuleAttribute {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Asset path "/path.css"
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
-        let asset = resolve_path(&src, path_expr.span());
+        let asset = PathResolver::new(&src, &path_expr.span()).resolve();
 
         let _comma = input.parse::<Comma>();
 
@@ -112,23 +112,12 @@ pub(crate) fn expand_css_module_struct(
             pub struct __CssIdent { pub inner: &'static str }
 
             use std::ops::Deref;
-            use std::sync::OnceLock;
-            use dioxus::document::{document, LinkProps};
 
             impl Deref for __CssIdent {
                 type Target = str;
 
                 fn deref(&self) -> &Self::Target {
-                    static CELL: OnceLock<()> = OnceLock::new();
-                    CELL.get_or_init(move || {
-                        let doc = document();
-                        doc.create_link(
-                            LinkProps::builder()
-                                .rel(Some("stylesheet".to_string()))
-                                .href(Some(ASSET.to_string()))
-                                .build(),
-                        );
-                    });
+                    dioxus::document::insert_stylesheet(&ASSET.to_string());
 
                     self.inner
                 }

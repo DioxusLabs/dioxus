@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CliSettings, TraceSrc, Workspace};
+use crate::{CliSettings, TraceSrc, Workspace, settings::SupportedEditor};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
@@ -36,8 +36,6 @@ pub(crate) enum Config {
 
 #[derive(Debug, Clone, Copy, Deserialize, Subcommand)]
 pub(crate) enum Setting {
-    /// Set the value of the always-hot-reload setting.
-    AlwaysHotReload { value: BoolValue },
     /// Set the value of the always-open-browser setting.
     AlwaysOpenBrowser { value: BoolValue },
     /// Set the value of the always-on-top desktop setting.
@@ -46,16 +44,18 @@ pub(crate) enum Setting {
     WSLFilePollInterval { value: u16 },
     /// Disable the built-in telemetry for the CLI
     DisableTelemetry { value: BoolValue },
+    /// Set the preferred editor for debug sessions
+    PreferredEditor { value: SupportedEditor },
 }
 
 impl Display for Setting {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AlwaysHotReload { value: _ } => write!(f, "always-hot-reload"),
             Self::AlwaysOpenBrowser { value: _ } => write!(f, "always-open-browser"),
             Self::AlwaysOnTop { value: _ } => write!(f, "always-on-top"),
             Self::WSLFilePollInterval { value: _ } => write!(f, "wsl-file-poll-interval"),
             Self::DisableTelemetry { value: _ } => write!(f, "disable-telemetry"),
+            Self::PreferredEditor { value: _ } => write!(f, "preferred-editor"),
         }
     }
 }
@@ -110,9 +110,6 @@ impl Config {
             Config::Set(setting) => {
                 CliSettings::modify_settings(|settings| match setting {
                     Setting::AlwaysOnTop { value } => settings.always_on_top = Some(value.into()),
-                    Setting::AlwaysHotReload { value } => {
-                        settings.always_hot_reload = Some(value.into())
-                    }
                     Setting::AlwaysOpenBrowser { value } => {
                         settings.always_open_browser = Some(value.into())
                     }
@@ -121,6 +118,9 @@ impl Config {
                     }
                     Setting::DisableTelemetry { value } => {
                         settings.disable_telemetry = Some(value.into());
+                    }
+                    Setting::PreferredEditor { value } => {
+                        settings.preferred_editor = Some(value);
                     }
                 })?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");

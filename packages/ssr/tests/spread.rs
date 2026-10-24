@@ -5,9 +5,11 @@ fn spread() {
     let dom = VirtualDom::prebuilt(app);
     let html = dioxus_ssr::render(&dom);
 
+    // The dynamic-attribute slot is normalized by (name, namespace), so spread
+    // attributes and style declarations are emitted in sorted order.
     assert_eq!(
         html,
-        r#"<audio data-custom-attribute="value" style="width:10px;height:10px;left:1;">1: hello1
+        r#"<audio data-custom-attribute="value" style="height:10px;left:1;width:10px;">1: hello1
 2: hello2</audio>"#
     );
 }

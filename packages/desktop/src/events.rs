@@ -38,6 +38,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .into()
     }
 
+    fn convert_before_input_data(&self, event: &PlatformEventData) -> BeforeInputData {
+        event
+            .downcast::<SerializedBeforeInputData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
     fn convert_cancel_data(&self, event: &PlatformEventData) -> CancelData {
         event
             .downcast::<SerializedCancelData>()

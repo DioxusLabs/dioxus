@@ -2,13 +2,13 @@
 name = "dioxus-signals"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 description = "Reactivie signals for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.79.0"
+rust-version = "1.85.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

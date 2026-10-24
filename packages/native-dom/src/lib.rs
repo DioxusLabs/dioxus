@@ -11,12 +11,16 @@
 
 mod dioxus_document;
 mod events;
+mod mutation_buffer;
 mod mutation_writer;
+mod write_once_attr;
 pub use blitz_dom::DocumentConfig;
 pub use dioxus_document::DioxusDocument;
+pub use events::{NodeHandle, synthetic_click_event, synthetic_form_event};
+pub use write_once_attr::{CustomWidgetAttr, SubDocumentAttr};
 
-use blitz_dom::{ns, LocalName, Namespace, QualName};
-type NodeId = usize;
+pub use blitz_dom::NodeId;
+use blitz_dom::{LocalName, Namespace, QualName, ns};
 
 pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
     QualName {

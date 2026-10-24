@@ -2,12 +2,12 @@
 name = "generational-box"
 authors = ["Evan Almloff"]
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 description = "A box backed by a generational runtime"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 keywords = ["generational", "box", "memory", "allocator"]
-rust-version = "1.83.0"
+rust-version = "1.85.0"
 
 [dependencies]
 parking_lot = { workspace = true }

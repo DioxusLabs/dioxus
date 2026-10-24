@@ -1,16 +1,13 @@
 [package]
 name = "harness-default-to-non-default"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = [] }
 
-
 [features]
 default=["web"]
 web=["dioxus/web"]
-
-    

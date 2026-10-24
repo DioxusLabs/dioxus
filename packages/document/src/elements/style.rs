@@ -1,7 +1,6 @@
 use super::*;
 use crate::document;
-use dioxus_core::{use_hook, VNode};
-use dioxus_html as dioxus_elements;
+use dioxus_core::{VNode, use_hook};
 
 #[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
@@ -80,10 +79,10 @@ pub fn Style(props: StyleProps) -> Element {
     use_hook(|| {
         let document = document();
         let mut insert_style = document.create_head_component();
-        if let Some(href) = &props.href {
-            if !should_insert_style(href) {
-                insert_style = false;
-            }
+        if let Some(href) = &props.href
+            && !should_insert_style(href)
+        {
+            insert_style = false;
         }
         if !insert_style {
             return;

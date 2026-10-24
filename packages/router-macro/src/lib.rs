@@ -7,11 +7,11 @@ use layout::Layout;
 use nest::{Nest, NestId};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use redirect::Redirect;
 use route::{Route, RouteType};
 use segment::RouteSegment;
-use syn::{parse::ParseStream, parse_macro_input, Ident, Token, Type};
+use syn::{Ident, Token, Type, parse::ParseStream, parse_macro_input};
 
 use proc_macro2::TokenStream as TokenStream2;
 
@@ -527,17 +527,17 @@ impl RouteEnum {
 
                 fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
                     let route = s;
-                    let (route, hash) = route.split_once('#').unwrap_or((route, ""));
-                    let (route, query) = route.split_once('?').unwrap_or((route, ""));
+                    let (route, raw_hash) = route.split_once('#').unwrap_or((route, ""));
+                    let (route, raw_query) = route.split_once('?').unwrap_or((route, ""));
                     // Remove any trailing slashes. We parse /route/ and /route in the same way
                     // Note: we don't use trim because it includes more code
                     let route = route.strip_suffix('/').unwrap_or(route);
-                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(query)
+                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(raw_query)
                         .decode_utf8()
-                        .unwrap_or(query.into());
-                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(hash)
+                        .unwrap_or(raw_query.into());
+                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(raw_hash)
                         .decode_utf8()
-                        .unwrap_or(hash.into());
+                        .unwrap_or(raw_hash.into());
                     let mut segments = route.split('/').map(|s| {
                         dioxus_router::exports::percent_encoding::percent_decode_str(s)
                             .decode_utf8()
@@ -584,9 +584,7 @@ impl RouteEnum {
                     let route_str = &route.route;
                     let comment = format!(
                         " An error that can occur when trying to parse the route [`{}::{}`] ('{}').",
-                        self.name,
-                        route_name,
-                        route_str
+                        self.name, route_name, route_str
                     );
 
                     error_variants.push(quote! {

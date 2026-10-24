@@ -1,6 +1,6 @@
 use dioxus_html::{
-    geometry::euclid::{Point2D, Size2D},
     MountedData,
+    geometry::euclid::{Point2D, Size2D},
 };
 use wasm_bindgen::JsCast;
 
@@ -12,8 +12,8 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
-                Output = dioxus_html::MountedResult<dioxus_html::geometry::PixelsVector2D>,
-            >,
+                    Output = dioxus_html::MountedResult<dioxus_html::geometry::PixelsVector2D>,
+                >,
         >,
     > {
         let left = self.event.scroll_left();
@@ -30,8 +30,8 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
-                Output = dioxus_html::MountedResult<dioxus_html::geometry::PixelsSize>,
-            >,
+                    Output = dioxus_html::MountedResult<dioxus_html::geometry::PixelsSize>,
+                >,
         >,
     > {
         let width = self.event.scroll_width();
@@ -48,8 +48,8 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
-                Output = dioxus_html::MountedResult<dioxus_html::geometry::PixelsRect>,
-            >,
+                    Output = dioxus_html::MountedResult<dioxus_html::geometry::PixelsRect>,
+                >,
         >,
     > {
         let rect = self.event.get_bounding_client_rect();

@@ -51,7 +51,7 @@ fn extend_manifest_config_toml(manifest: &mut Manifest, path: &Path) {
         return;
     };
 
-    let Ok(config) = config.parse::<toml::Value>() else {
+    let Ok(config) = config.parse::<toml::Table>() else {
         return;
     };
 
@@ -67,43 +67,43 @@ fn extend_manifest_config_toml(manifest: &mut Manifest, path: &Path) {
 /// Merge the new profiles into the target profiles. Keep the existing values if they exist.
 fn merge_profiles(target: &mut Profiles, new: Profiles) {
     if let Some(new_release) = new.release {
-        if target.release.is_none() {
-            target.release = Some(new_release);
+        if let Some(profile) = target.release.as_mut() {
+            merge_profile(profile, new_release);
         } else {
-            merge_profile(target.release.as_mut().unwrap(), new_release);
+            target.release = Some(new_release);
         }
     }
 
     if let Some(new_dev) = new.dev {
-        if target.dev.is_none() {
-            target.dev = Some(new_dev);
+        if let Some(profile) = target.dev.as_mut() {
+            merge_profile(profile, new_dev);
         } else {
-            merge_profile(target.dev.as_mut().unwrap(), new_dev);
+            target.dev = Some(new_dev);
         }
     }
 
     if let Some(new_test) = new.test {
-        if target.test.is_none() {
-            target.test = Some(new_test);
+        if let Some(profile) = target.test.as_mut() {
+            merge_profile(profile, new_test);
         } else {
-            merge_profile(target.test.as_mut().unwrap(), new_test);
+            target.test = Some(new_test);
         }
     }
 
     if let Some(new_bench) = new.bench {
-        if target.bench.is_none() {
-            target.bench = Some(new_bench);
+        if let Some(profile) = target.bench.as_mut() {
+            merge_profile(profile, new_bench);
         } else {
-            merge_profile(target.bench.as_mut().unwrap(), new_bench);
+            target.bench = Some(new_bench);
         }
     }
 
     #[allow(deprecated)]
     if let Some(new_doc) = new.doc {
-        if target.doc.is_none() {
-            target.doc = Some(new_doc);
+        if let Some(profile) = target.doc.as_mut() {
+            merge_profile(profile, new_doc);
         } else {
-            merge_profile(target.doc.as_mut().unwrap(), new_doc);
+            target.doc = Some(new_doc);
         }
     }
 
@@ -158,4 +158,28 @@ fn merge_profile(target: &mut Profile, new: Profile) {
         target.inherits = new.inherits;
     }
     target.package.extend(new.package);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_toml_profiles_are_merged() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            "[build]\ntarget-dir = \"target\"\n\n[profile.release]\nopt-level = \"s\"\nlto = true\n",
+        )
+        .unwrap();
+
+        let mut manifest =
+            Manifest::from_str("[package]\nname = \"app\"\nversion = \"0.1.0\"\n").unwrap();
+        extend_manifest_config_toml(&mut manifest, &config_path);
+
+        let release = manifest.profile.release.expect("release profile merged");
+        assert_eq!(release.opt_level, Some(toml::Value::String("s".into())));
+        assert!(release.lto.is_some());
+    }
 }

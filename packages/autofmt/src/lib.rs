@@ -99,7 +99,10 @@ pub fn try_fmt_file(
         // Writing *should* not fail but it's possible that it does
         if writer.write_rsx_call(&body).is_err() {
             let span = writer.invalid_exprs.pop().unwrap_or_else(Span::call_site);
-            return Err(syn::Error::new(span, "Failed emit valid rsx - likely due to partially complete expressions in the rsx! macro"));
+            return Err(syn::Error::new(
+                span,
+                "Failed emit valid rsx - likely due to partially complete expressions in the rsx! macro",
+            ));
         }
 
         // writing idents leaves the final line ended at the end of the last ident
@@ -110,13 +113,15 @@ pub fn try_fmt_file(
 
         let span = item.delimiter.span().join();
         let mut formatted = writer.out.buf.split_off(0);
-
         let start = collect_macros::byte_offset(contents, span.start()) + 1;
         let end = collect_macros::byte_offset(contents, span.end()) - 1;
 
         // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
-        let body_is_solo_expr = body.body.roots.len() == 1
-            && matches!(body.body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
+        let body_is_solo_expr = body.body().roots.len() == 1
+            && matches!(
+                body.body().roots[0],
+                BodyNode::RawExpr(_) | BodyNode::Text(_)
+            );
 
         // If it's short, and it's not a single expression, and it's not empty, then we can collapse it
         if formatted.len() <= 80

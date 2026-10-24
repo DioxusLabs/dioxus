@@ -1,4 +1,4 @@
-use crate::{transport::SerializeContextEntry, Transportable};
+use crate::{Transportable, transport::SerializeContextEntry};
 use dioxus_core::use_hook;
 
 /// This allows you to send data from the server to the client *during hydration*.

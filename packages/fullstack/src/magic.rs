@@ -46,7 +46,7 @@ use dioxus_fullstack_core::RequestError;
 use http::StatusCode;
 use send_wrapper::SendWrapper;
 use serde::Serialize;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use std::fmt::Display;
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 
@@ -264,7 +264,7 @@ mod decode_ok {
                     Ok(res) => {
                         let status = res.status();
 
-                        let bytes = res.bytes().await.unwrap();
+                        let bytes = res.bytes().await?;
                         let as_bytes = if bytes.is_empty() {
                             b"null".as_slice()
                         } else {

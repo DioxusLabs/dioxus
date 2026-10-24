@@ -5,9 +5,9 @@
       <!-- <a href="https://dioxuslabs.com">
           <img src="./notes/flat-splash.avif">
       </a> -->
-      <img src="../../notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
-      <img src="../../notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
-      <img src="../../notes/image-splash.avif">
+      <img src="../../../notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
+      <img src="../../../notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
+      <img src="../../../notes/image-splash.avif">
       <br>
     </p>
 </p>
@@ -105,7 +105,7 @@ fn app() -> Element {
 Dioxus 是使用 Rust 构建原生移动应用的最快方式。只需运行 `dx serve --platform android`，你的应用就会几秒钟在模拟器或实机设备上运行，并能够直接调用 JNI 和原生 API。
 
 <div align="center">
-  <img src="../../notes/android_and_ios2.avif" width="500">
+  <img src="../../../notes/android_and_ios2.avif" width="500">
 </div>
 
 ## 为 Web、桌面和移动端打包
@@ -114,7 +114,7 @@ Dioxus 是使用 Rust 构建原生移动应用的最快方式。只需运行 `dx
 在 Web 端，得益于 [`.avif` 生成, `.wasm` 压缩, 代码最小化](https://dioxuslabs.com/learn/0.7/tutorial/assets)等功能， Web 端的构建[体积小于 50kb](https://github.com/ealmloff/tiny-dioxus/) ，桌面/移动端体积小于 5mb。
 
 <div align="center">
-  <img src="../../notes/bundle.gif">
+  <img src="../../../notes/bundle.gif">
 </div>
 
 ## 出色的文档
@@ -123,7 +123,7 @@ Dioxus 是使用 Rust 构建原生移动应用的最快方式。只需运行 `dx
 有趣的是：我们使用 Dioxus 网站来测试 Dioxus 的新功能 - [快来看看吧!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
-  <img src="../../notes/docs.avif">
+  <img src="../../../notes/docs.avif">
 </div>
 
 ## 社区
@@ -131,7 +131,7 @@ Dioxus 是使用 Rust 构建原生移动应用的最快方式。只需运行 `dx
 Dioxus 是一个社区驱动的项目，拥有非常活跃的 [Discord](https://discord.gg/XgGxMSkvUM) 和 [GitHub](https://github.com/DioxusLabs/dioxus/issues) 社区。 我们一直在寻求帮助，乐于回答问题并帮助你入门。[我们的 SDK](https://github.com/DioxusLabs/dioxus-std) 由社区运营，我们甚至有一个 [GitHub 组织](https://github.com/dioxus-community/) 用于那些获得免费升级和支持的最佳 Dioxus crates。
 
 <div align="center">
-  <img src="../../notes/dioxus-community.avif">
+  <img src="../../../notes/dioxus-community.avif">
 </div>
 
 ## 全职核心团队
@@ -228,7 +228,7 @@ Dioxus 强调以下几个关键点，使其与其他框架有所不同：
 - **类 React**: 我们依赖组件、props 和 hooks 等概念来构建 UI，我们的状态管理更接近 Svelte 而非 SolidJS。
 - **HTML 和 CSS**: 我们完全拥抱 HTML 和 CSS，包括其所有特性和怪癖。
 - **渲染器无关**: 得益于[我们快速的虚拟 DOM](https://dioxuslabs.com/blog/templates-diffing)，你可以为任何你想要的平台替换渲染器。
-- **协作性**: 只要有可能，我们就会将像 [Taffy](https://github.com/DioxusLabs/taffy), [manganis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), 和 [blitz](http://github.com/dioxusLabs/blitz) 这样的 crates 分离出来，以便生态系统能够共同成长。
+- **协作性**: 只要有可能，我们就会将像 [Taffy](https://github.com/DioxusLabs/taffy), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), 和 [blitz](http://github.com/dioxusLabs/blitz) 这样的 crates 分离出来，以便生态系统能够共同成长。
 
 ### Dioxus vs Tauri
 

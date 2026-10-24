@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use futures_util::FutureExt;
 use generational_box::{Owner, UnsyncStorage};
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 use slab::Slab;
 use thiserror::Error;

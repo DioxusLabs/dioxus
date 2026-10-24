@@ -2,11 +2,9 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use dioxus_core::{
-    Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, Template, TemplateNode,
-};
+use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, VNodeChild};
 use dioxus_core_macro::*;
-
+use dioxus_html::extensions::*;
 mod link;
 pub use link::*;
 mod stylesheet;
@@ -37,6 +35,7 @@ fn use_update_warning<T: PartialEq + Clone + 'static>(value: &T, name: &'static 
 }
 
 /// An error that can occur when extracting a single text node from a component
+#[derive(Debug)]
 pub enum ExtractSingleTextNodeError<'a> {
     /// The node contained an render error, so we can't extract the text node
     RenderError(&'a RenderError),
@@ -77,28 +76,76 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     // The title's children must be in one of two forms:
     // 1. rsx! { "static text" }
     // 2. rsx! { "title: {dynamic_text}" }
-    match vnode.template {
+    let mut children = vnode.children();
+    let Some(child) = children.next() else {
+        return Err(ExtractSingleTextNodeError::NonTemplate);
+    };
+
+    if children.next().is_some() {
+        return Err(ExtractSingleTextNodeError::NonTemplate);
+    }
+
+    match child {
         // rsx! { "static text" }
-        Template {
-            roots: &[TemplateNode::Text { text }],
-            node_paths: &[],
-            attr_paths: &[],
-            ..
-        } => Ok(text.to_string()),
+        VNodeChild::Text(text) => Ok(text.text().to_string()),
         // rsx! { "title: {dynamic_text}" }
-        Template {
-            roots: &[TemplateNode::Dynamic { id }],
-            node_paths: &[&[0]],
-            attr_paths: &[],
-            ..
-        } => {
-            let node = &vnode.dynamic_nodes[id];
-            match node {
-                DynamicNode::Text(text) => Ok(text.value.clone()),
-                _ => Err(ExtractSingleTextNodeError::NonTextNode),
+        VNodeChild::Dynamic(anchor) => {
+            let mut dynamic_nodes = anchor.nodes();
+            let dynamic_node = dynamic_nodes.next();
+            if dynamic_nodes.next().is_some() {
+                return Err(ExtractSingleTextNodeError::NonTemplate);
+            }
+            match dynamic_node {
+                Some(slot) => match &*slot {
+                    DynamicNode::Text(text) => Ok(text.value.clone()),
+                    _ => Err(ExtractSingleTextNodeError::NonTextNode),
+                },
+                _ => Err(ExtractSingleTextNodeError::NonTemplate),
             }
         }
         _ => Err(ExtractSingleTextNodeError::NonTemplate),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use dioxus_core::{DynamicNode, DynamicValues, VNode, VText};
+    use dioxus_core_template::{TemplateRawTree, TemplateStorage};
+
+    use super::*;
+
+    #[test]
+    fn extracts_static_text() {
+        static TREE: TemplateRawTree = TemplateRawTree::StaticText("static text");
+        static STORAGE: TemplateStorage<2, 1, 1> = TemplateStorage::build_from_tree(&TREE);
+        let children = Ok(VNode::new(
+            STORAGE.as_template(),
+            DynamicValues::from_parts(None, Box::new([]), Box::new([])),
+        ));
+
+        assert_eq!(
+            extract_single_text_node(&children).expect("static text should extract"),
+            "static text"
+        );
+    }
+
+    #[test]
+    fn extracts_formatted_text() {
+        static TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
+        static STORAGE: TemplateStorage<1, 1, 1> = TemplateStorage::build_from_tree(&TREE);
+        let children = Ok(VNode::new(
+            STORAGE.as_template(),
+            DynamicValues::from_parts(
+                None,
+                Box::new([DynamicNode::Text(VText::new("title: dynamic text"))]),
+                Box::new([]),
+            ),
+        ));
+
+        assert_eq!(
+            extract_single_text_node(&children).expect("formatted text should extract"),
+            "title: dynamic text"
+        );
     }
 }
 
@@ -142,7 +189,10 @@ pub(crate) fn extend_attributes(
             dioxus_core::AttributeValue::Int(v) => v.to_string(),
             dioxus_core::AttributeValue::Bool(v) => v.to_string(),
             dioxus_core::AttributeValue::Listener(_) | dioxus_core::AttributeValue::Any(_) => {
-                tracing::error!("document::* elements do not support event listeners or any value attributes. Expected displayable attribute, found {:?}", additional_attribute.value);
+                tracing::error!(
+                    "document::* elements do not support event listeners or any value attributes. Expected displayable attribute, found {:?}",
+                    additional_attribute.value
+                );
                 continue;
             }
             dioxus_core::AttributeValue::None => {

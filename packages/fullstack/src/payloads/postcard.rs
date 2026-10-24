@@ -1,11 +1,11 @@
 use axum::{
     body::Bytes,
-    extract::{rejection::BytesRejection, FromRequest},
-    http::{header, HeaderMap, StatusCode},
+    extract::{FromRequest, rejection::BytesRejection},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use postcard::{from_bytes, to_allocvec};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::future::Future;
 
 /// Postcard Extractor / Response.
@@ -97,10 +97,8 @@ fn postcard_content_type(headers: &HeaderMap) -> bool {
         return false;
     };
 
-    let is_postcard_content_type = mime.type_() == "application"
-        && (mime.subtype() == "postcard" || mime.suffix().is_some_and(|name| name == "postcard"));
-
-    is_postcard_content_type
+    mime.type_() == "application"
+        && (mime.subtype() == "postcard" || mime.suffix().is_some_and(|name| name == "postcard"))
 }
 
 impl<T> IntoResponse for Postcard<T>

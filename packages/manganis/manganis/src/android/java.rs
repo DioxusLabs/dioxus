@@ -1,6 +1,6 @@
 use jni::{
-    objects::{JClass, JObject, JObjectArray, JString, JValue, JValueOwned},
     JNIEnv,
+    objects::{JClass, JObject, JObjectArray, JString, JValue, JValueOwned},
 };
 
 /// Result type for JNI operations

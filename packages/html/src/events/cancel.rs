@@ -79,10 +79,3 @@ pub trait HasCancelData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event! {
-    CancelData;
-
-    /// oncancel
-    oncancel
-}

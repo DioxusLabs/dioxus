@@ -61,41 +61,11 @@ unsafe impl SerializeConst for ConstStr {
     ));
 }
 
-#[cfg(feature = "const-serialize-07")]
-unsafe impl const_serialize_07::SerializeConst for ConstStr {
-    const MEMORY_LAYOUT: const_serialize_07::Layout =
-        const_serialize_07::Layout::Struct(const_serialize_07::StructLayout::new(
-            std::mem::size_of::<Self>(),
-            &[
-                const_serialize_07::StructFieldLayout::new(
-                    std::mem::offset_of!(Self, bytes),
-                    const_serialize_07::Layout::List(const_serialize_07::ListLayout::new(
-                        MAX_STR_SIZE,
-                        &const_serialize_07::Layout::Primitive(
-                            const_serialize_07::PrimitiveLayout::new(std::mem::size_of::<u8>()),
-                        ),
-                    )),
-                ),
-                const_serialize_07::StructFieldLayout::new(
-                    std::mem::offset_of!(Self, len),
-                    const_serialize_07::Layout::Primitive(
-                        const_serialize_07::PrimitiveLayout::new(std::mem::size_of::<u32>()),
-                    ),
-                ),
-            ],
-        ));
-}
-
 impl ConstStr {
     /// Create a new constant string
     pub const fn new(s: &str) -> Self {
         let str_bytes = s.as_bytes();
-        // This is serialized as a constant sized array in const-serialize-07 which requires all memory to be initialized
-        let mut bytes = if cfg!(feature = "const-serialize-07") {
-            [MaybeUninit::new(0); MAX_STR_SIZE]
-        } else {
-            [MaybeUninit::uninit(); MAX_STR_SIZE]
-        };
+        let mut bytes = [MaybeUninit::uninit(); MAX_STR_SIZE];
         let mut i = 0;
         while i < str_bytes.len() {
             bytes[i] = MaybeUninit::new(str_bytes[i]);
@@ -221,10 +191,14 @@ impl ConstStr {
                 // If they do, convert the bytes to strings and return the split strings
                 if in_char_eq {
                     let Ok(before_char_str) = std::str::from_utf8(before_char) else {
-                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                        panic!(
+                            "Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary"
+                        )
                     };
                     let Ok(after_char_str) = std::str::from_utf8(after_char) else {
-                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                        panic!(
+                            "Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary"
+                        )
                     };
                     return Some((Self::new(before_char_str), Self::new(after_char_str)));
                 }
@@ -271,10 +245,14 @@ impl ConstStr {
                 // If they do, convert the bytes to strings and return the split strings
                 if in_char_eq {
                     let Ok(before_char_str) = std::str::from_utf8(before_char) else {
-                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                        panic!(
+                            "Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary"
+                        )
                     };
                     let Ok(after_char_str) = std::str::from_utf8(after_char) else {
-                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                        panic!(
+                            "Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary"
+                        )
                     };
                     return Some((Self::new(before_char_str), Self::new(after_char_str)));
                 }

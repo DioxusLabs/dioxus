@@ -3,9 +3,11 @@
 use std::fmt::Debug;
 
 use dioxus_core::{Attribute, Element, EventHandler, VNode};
-use dioxus_core_macro::{rsx, Props};
+use dioxus_core_macro::{Props, rsx};
 use dioxus_html::{
-    self as dioxus_elements, ModifiersInteraction, MountedEvent, MouseEvent, PointerInteraction,
+    self as dioxus_html, ModifiersInteraction, MountedEvent, MouseEvent, PointerInteraction,
+    elements::{prelude::*, *},
+    extensions::*,
 };
 
 use tracing::error;
@@ -176,13 +178,13 @@ pub fn Link(props: LinkProps) -> Element {
     if let Some(c) = class {
         class_.push_str(&c);
     }
-    if let Some(c) = active_class {
-        if href == current_url {
-            if !class_.is_empty() {
-                class_.push(' ');
-            }
-            class_.push_str(&c);
+    if let Some(c) = active_class
+        && href == current_url
+    {
+        if !class_.is_empty() {
+            class_.push(' ');
         }
+        class_.push_str(&c);
     }
 
     let class = if class_.is_empty() {
@@ -207,7 +209,7 @@ pub fn Link(props: LinkProps) -> Element {
             return;
         }
         // Only handle left clicks
-        if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
+        if event.trigger_button() != Some(dioxus_html::input_data::MouseButton::Primary) {
             return;
         }
 

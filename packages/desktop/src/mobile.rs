@@ -1,21 +1,38 @@
-/// Expose the `Java_dev_dioxus_main_WryActivity_create` function to the JNI layer.
-/// We hardcode these to have a single trampoline for host Java code to call into.
+/// Expose the `Java_dev_dioxus_main_Rust_*` JNI trampolines that wry's Kotlin layer calls into.
+/// We hardcode the package to `dev.dioxus.main` so host Java/Kotlin always has a single set of
+/// symbols to bind against, without having to plumb the top-level package name down into this crate.
 ///
-/// This saves us from having to plumb the top-level package name all the way down into
-/// this file. This is better for modularity (ie just call dioxus' main to run the app) as
-/// well as cache thrashing since this crate doesn't rely on external env vars.
+/// As of wry 0.55 the Kotlin lifecycle methods (create/start/stop/...) live on a `Rust` object
+/// rather than `WryActivity`'s companion object, so the third arg to `tao::android_binding!` is
+/// `Rust` — passing `WryActivity` would emit the wrong JNI symbol names and crash at startup with
+/// `UnsatisfiedLinkError`.
 ///
 /// The CLI is expecting to find `dev.dioxus.main` in the final library. If you find a need to
 /// change this, you'll need to change the CLI as well.
 #[cfg(target_os = "android")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[inline(never)]
 pub extern "C" fn start_app() {
     use crate::Config;
     use dioxus_core::{Element, VirtualDom};
     use std::any::Any;
 
-    tao::android_binding!(dev_dioxus, main, WryActivity, wry::android_setup, root, tao);
+    // `WryActivity.onCreate` (and therefore this setup) runs again on activity re-creation
+    // (rotation, theme changes), so this keeps `manganis::android::with_activity` up to date.
+    // `ndk_context` is left as tao initialized it, with the Application context.
+    unsafe fn android_setup(
+        package: &str,
+        env: ::wry::prelude::JNIEnv<'_>,
+        looper: &::ndk::looper::ThreadLooper,
+        activity: ::wry::prelude::GlobalRef,
+    ) {
+        ::manganis::android::set_activity(activity.clone());
+        unsafe {
+            wry::android_setup(package, env, looper, activity);
+        }
+    }
+
+    tao::android_binding!(dev_dioxus, main, Rust, android_setup, root, tao);
     wry::android_binding!(dev_dioxus, main, wry);
 
     #[cfg(target_os = "android")]

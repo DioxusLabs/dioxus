@@ -28,28 +28,28 @@ use axum::{
 };
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
-use dioxus_core::{use_hook, CapturedError, Result};
+use dioxus_core::{CapturedError, Result, use_hook};
 use dioxus_fullstack_core::{HttpError, RequestError};
-use dioxus_hooks::{use_resource, Resource, UseWaker};
+use dioxus_hooks::{Resource, UseWaker, use_resource};
 use dioxus_hooks::{use_signal, use_waker};
 use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
 use futures::{
-    stream::{SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryFutureExt,
+    stream::{SplitSink, SplitStream},
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{
     marker::PhantomData,
     pin::Pin,
     prelude::rust_2024::Future,
     rc::Rc,
-    task::{ready, Context, Poll},
+    task::{Context, Poll, ready},
 };
 
 #[cfg(feature = "web")]
 use {
     futures_util::lock::Mutex,
-    gloo_net::websocket::{futures::WebSocket as WsWebsocket, Message as WsMessage},
+    gloo_net::websocket::{Message as WsMessage, futures::WebSocket as WsWebsocket},
 };
 
 /// A hook that provides a reactive interface to a WebSocket connection.
@@ -1193,20 +1193,20 @@ mod native {
 
     use super::{CloseCode, Message, WebsocketError};
     use dioxus_fullstack_core::RequestError;
+    use futures_util::{
+        StreamExt,
+        stream::{SplitSink, SplitStream},
+    };
     use reqwest::{
-        header::{HeaderName, HeaderValue},
         Response, StatusCode, Version,
+        header::{HeaderName, HeaderValue},
     };
     use tungstenite::protocol::WebSocketConfig;
 
     pub(crate) struct SplitSocket {
-        pub sender: futures_util::lock::Mutex<
-            async_tungstenite::WebSocketSender<tokio_util::compat::Compat<reqwest::Upgraded>>,
-        >,
+        pub sender: futures_util::lock::Mutex<SplitSink<WebSocketStream, tungstenite::Message>>,
 
-        pub receiver: futures_util::lock::Mutex<
-            async_tungstenite::WebSocketReceiver<tokio_util::compat::Compat<reqwest::Upgraded>>,
-        >,
+        pub receiver: futures_util::lock::Mutex<SplitStream<WebSocketStream>>,
     }
 
     pub async fn send_request(
@@ -1283,8 +1283,7 @@ mod native {
         })
     }
 
-    pub type WebSocketStream =
-        async_tungstenite::WebSocketStream<tokio_util::compat::Compat<reqwest::Upgraded>>;
+    pub type WebSocketStream = tokio_tungstenite::WebSocketStream<reqwest::Upgraded>;
 
     /// Error during `Websocket` handshake.
     #[derive(Debug, thiserror::Error, Clone)]
@@ -1438,23 +1437,18 @@ mod native {
                 }
             }
 
-            use tokio_util::compat::TokioAsyncReadCompatExt;
-
             let inner = WebSocketStream::from_raw_socket(
-                self.response.upgrade().await?.compat(),
+                self.response.upgrade().await?,
                 tungstenite::protocol::Role::Client,
                 web_socket_config,
             )
             .await;
 
-            let split: (
-                async_tungstenite::WebSocketSender<tokio_util::compat::Compat<reqwest::Upgraded>>,
-                async_tungstenite::WebSocketReceiver<tokio_util::compat::Compat<reqwest::Upgraded>>,
-            ) = inner.split();
+            let (sender, receiver) = inner.split();
 
             let split_socket = SplitSocket {
-                sender: futures_util::lock::Mutex::new(split.0),
-                receiver: futures_util::lock::Mutex::new(split.1),
+                sender: futures_util::lock::Mutex::new(sender),
+                receiver: futures_util::lock::Mutex::new(receiver),
             };
 
             Ok((split_socket, protocol))

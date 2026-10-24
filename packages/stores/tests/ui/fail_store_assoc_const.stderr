@@ -1,0 +1,5 @@
+error: `#[store]` only supports methods; associated consts are not allowed
+  --> tests/ui/fail_store_assoc_const.rs:10:5
+   |
+10 |     const SECRET: i32 = 7;
+   |     ^^^^^^^^^^^^^^^^^^^^^^
