@@ -1,5 +1,22 @@
 // A unified interface for setting attributes on a node
 
+// The property names the `style` attribute last declared on a node.
+// Anything else in the block is foreign - a `style`-namespace write
+// (`background: "red"` in rsx), or a declaration inherited from the
+// template this node was cloned from - and must survive an attribute
+// write. Attribute-owned declarations must not.
+const attributeStyles = new WeakMap<HTMLElement, Set<string>>();
+const styleScratch = document.createElement("div");
+
+function attributeStyleNames(css: string): Set<string> {
+  styleScratch.style.cssText = css || "";
+  const names = new Set<string>();
+  for (let i = 0; i < styleScratch.style.length; i++) {
+    names.add(styleScratch.style[i]);
+  }
+  return names;
+}
+
 // this function should try and stay fast, if possible
 export function setAttributeInner(
   node: HTMLElement,
@@ -64,24 +81,30 @@ export function setAttributeInner(
       node.innerHTML = value;
       break;
 
-    case "style":
-      // Save the existing styles
-      const existingStyles: Record<string, string> = {};
-
+    case "style": {
+      // Only declarations this attribute did not write last time are saved;
+      // the first write on a node treats the whole block as foreign, which
+      // is the old behaviour.
+      const previous = attributeStyles.get(node);
+      const foreign: Record<string, string> = {};
       for (let i = 0; i < node.style.length; i++) {
         const prop = node.style[i];
-        existingStyles[prop] = node.style.getPropertyValue(prop);
+        if (previous === undefined || !previous.has(prop)) {
+          foreign[prop] = node.style.getPropertyValue(prop);
+        }
       }
       // Override all styles
       node.setAttribute(field, value);
-      // Restore the old styles
-      for (const prop in existingStyles) {
+      // Restore the foreign styles
+      for (const prop in foreign) {
         // If it wasn't overridden, restore it
         if (!node.style.getPropertyValue(prop)) {
-          node.style.setProperty(prop, existingStyles[prop]);
+          node.style.setProperty(prop, foreign[prop]);
         }
       }
+      attributeStyles.set(node, attributeStyleNames(value));
       break;
+    }
 
     case "multiple":
       setAttributeDefault(node, field, value);
