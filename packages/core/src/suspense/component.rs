@@ -105,9 +105,9 @@ impl<RenderFn, ComponentMarker, __fallback>
 {
     #[allow(clippy::type_complexity)]
     #[doc(hidden)]
-    pub fn children(
+    pub fn children<__Marker>(
         self,
-        children: Element,
+        children: impl SuperInto<Element, __Marker>,
     ) -> SuspenseBoundaryComponentBuilder<RenderFn, ComponentMarker, (__fallback, (Element,))> {
         SuspenseBoundaryComponentBuilder {
             render_fn: self.render_fn,
@@ -175,11 +175,11 @@ impl<__children> SuspenseBoundaryPropsBuilder<((Callback<SuspenseContext, Elemen
 impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, ())> {
     #[allow(clippy::type_complexity)]
     #[doc(hidden)]
-    pub fn children(
+    pub fn children<__Marker>(
         self,
-        children: Element,
+        children: impl SuperInto<Element, __Marker>,
     ) -> SuspenseBoundaryPropsBuilder<(__fallback, (Element,))> {
-        let children = (children,);
+        let children = (SuperInto::super_into(children),);
         let (fallback, _) = self.fields;
         SuspenseBoundaryPropsBuilder {
             owner: self.owner,

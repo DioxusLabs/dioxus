@@ -131,6 +131,61 @@ impl ToTokens for IfChain {
     }
 }
 
+impl IfChain {
+    /// Like [`ToTokens`], but produces a `Vec<Element>` per branch instead of merging each
+    /// branch's body into one nested [`Element`] - see [`TemplateBody::to_vec_tokens`].
+    pub(crate) fn to_vec_tokens(&self) -> TokenStream2 {
+        let mut body = TokenStream2::new();
+        let mut terminated = false;
+
+        let mut elif = Some(self);
+
+        while let Some(chain) = elif {
+            let IfChain {
+                if_token,
+                cond,
+                then_branch,
+                else_if_branch,
+                else_branch,
+                ..
+            } = chain;
+
+            let then_vec = then_branch.to_vec_tokens();
+            body.append_all(quote! {
+                #if_token #cond {
+                    #then_vec
+                }
+            });
+
+            if let Some(next) = else_if_branch {
+                body.append_all(quote! {
+                    else
+                });
+                elif = Some(next);
+            } else if let Some(else_branch) = else_branch {
+                let else_vec = else_branch.to_vec_tokens();
+                body.append_all(quote! {
+                    else {
+                        #else_vec
+                    }
+                });
+                terminated = true;
+                break;
+            } else {
+                elif = None;
+            }
+        }
+
+        if !terminated {
+            body.append_all(quote! {
+                else { ::std::vec::Vec::new() }
+            });
+        }
+
+        body
+    }
+}
+
 #[test]
 fn parses_if_chain() {
     let input = quote! {
