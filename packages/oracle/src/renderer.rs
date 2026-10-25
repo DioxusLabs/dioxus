@@ -1,8 +1,6 @@
-use crate::snapshot::{
-    SnapshotAttr, SnapshotNode, attr_key, attr_to_string, format_snapshot_mismatch,
-};
+use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, format_snapshot_mismatch};
 use crate::vdom_snapshot::{fresh_snapshot, vdom_snapshot};
-use dioxus_core::{AttributeValue, Element, ElementId, VirtualDom, WriteMutations};
+use dioxus_core::{BorrowedAttributeValue, Element, ElementId, VirtualDom, WriteMutations};
 use std::{fmt, mem};
 
 type NodeId = usize;
@@ -33,7 +31,7 @@ trait RealDom {
         node: Self::NodeId,
         name: &str,
         ns: Option<&str>,
-        value: &AttributeValue,
+        value: BorrowedAttributeValue<'_>,
     );
 
     fn set_text(&mut self, node: Self::NodeId, value: &str);
@@ -199,7 +197,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
         self.backend.insert_before(anchor, &nodes);
     }
 
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: BorrowedAttributeValue<'_>) {
         let node = self.state.top().node;
         self.backend.set_attribute(node, name, ns, value);
     }
@@ -647,9 +645,17 @@ impl RealDom for ArenaBackend<'_> {
         node: NodeId,
         name: &str,
         ns: Option<&str>,
-        value: &AttributeValue,
+        value: BorrowedAttributeValue<'_>,
     ) {
-        match attr_to_string(value) {
+        let value = match value {
+            BorrowedAttributeValue::Text(s) => Some(s.to_string()),
+            BorrowedAttributeValue::Bool(b) => Some(b.to_string()),
+            BorrowedAttributeValue::Float(f) => Some(f.to_string()),
+            BorrowedAttributeValue::Int(i) => Some(i.to_string()),
+            BorrowedAttributeValue::None => None,
+            BorrowedAttributeValue::Any(_) => Some("<opaque>".to_string()),
+        };
+        match value {
             Some(value) => {
                 self.arena
                     .set_attr(node, name.to_string(), ns.map(ToString::to_string), value)
@@ -866,7 +872,7 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
         self.inner.insert_before(m);
     }
 
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: BorrowedAttributeValue<'_>) {
         if self.top_source("set_attribute") != StackSource::PrototypeBuild {
             self.summary.set_attrs += 1;
         }
@@ -1261,7 +1267,7 @@ impl WriteMutations for RendererOracle {
         replace_with(m: usize);
         insert_after(m: usize);
         insert_before(m: usize);
-        set_attribute(name: &str, ns: Option<&str>, value: &AttributeValue);
+        set_attribute(name: &str, ns: Option<&str>, value: BorrowedAttributeValue<'_>);
         set_text(value: &str);
         add_event_listener(name: &str);
         remove_event_listener(name: &str);

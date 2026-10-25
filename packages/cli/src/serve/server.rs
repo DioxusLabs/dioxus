@@ -25,7 +25,6 @@ use futures_util::{
     stream::{self, FuturesUnordered},
 };
 use hyper::HeaderMap;
-use rustls::crypto::{CryptoProvider, ring::default_provider};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
@@ -464,13 +463,11 @@ async fn devserver_mainloop(
     }
 
     // If we're using rustls, we need to install the provider, get the cert/key paths, and then set up rustls
-    if let Err(provider) = CryptoProvider::install_default(default_provider()) {
-        bail!("Failed to install default CryptoProvider: {provider:?}");
-    }
+    crate::http_client::install_crypto_provider();
     let (cert_path, key_path) = get_rustls(&https_cfg).await?;
     let rustls = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path).await?;
 
-    axum_server::from_tcp_rustls(listener, rustls)
+    axum_server::from_tcp_rustls(listener, rustls)?
         .serve(router.into_make_service())
         .await?;
 

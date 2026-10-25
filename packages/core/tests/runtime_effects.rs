@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_core::{
-    AttributeValue, ElementId, Runtime, WriteMutations, generation, needs_update, queue_effect,
+    BorrowedAttributeValue, ElementId, Runtime, WriteMutations, generation, needs_update,
+    queue_effect,
 };
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -132,7 +133,13 @@ impl WriteMutations for BufferedRenderer {
 
     fn insert_before(&mut self, _m: usize) {}
 
-    fn set_attribute(&mut self, _name: &str, _ns: Option<&str>, _value: &AttributeValue) {}
+    fn set_attribute(
+        &mut self,
+        _name: &str,
+        _ns: Option<&str>,
+        _value: BorrowedAttributeValue<'_>,
+    ) {
+    }
 
     fn set_text(&mut self, _value: &str) {}
 

@@ -1,11 +1,15 @@
+use anyrender::CompositeAlphaMode;
 use blitz_dom::FontContext;
 use dioxus_core::LaunchConfig;
+use peniko::Color;
 use winit::window::WindowAttributes;
 
 /// Launch-time configuration for a dioxus-native application.
 pub struct Config {
     pub(crate) window_attributes: WindowAttributes,
     pub(crate) font_ctx: Option<FontContext>,
+    pub(crate) alpha_mode: Option<CompositeAlphaMode>,
+    pub(crate) base_color: Option<Color>,
 }
 
 impl LaunchConfig for Config {}
@@ -32,6 +36,8 @@ impl Default for Config {
         Self {
             window_attributes,
             font_ctx: None,
+            alpha_mode: None,
+            base_color: None,
         }
     }
 }
@@ -54,6 +60,22 @@ impl Config {
     /// the common one-font case.
     pub fn with_font_ctx(mut self, font_ctx: FontContext) -> Self {
         self.font_ctx = Some(font_ctx);
+        self
+    }
+
+    /// Set the alpha mode used when compositing the window surface.
+    ///
+    /// This controls how the rendered content is blended with the background,
+    /// e.g. to enable transparent windows. Not all renderers support every
+    /// mode; unsupported modes are ignored by the active renderer.
+    pub fn with_alpha_mode(mut self, alpha_mode: CompositeAlphaMode) -> Self {
+        self.alpha_mode = Some(alpha_mode);
+        self
+    }
+
+    /// Set the base (background) color used to clear each frame.
+    pub fn with_base_color(mut self, base_color: Color) -> Self {
+        self.base_color = Some(base_color);
         self
     }
 }

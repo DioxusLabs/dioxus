@@ -1,7 +1,7 @@
 //! Handle async streams using use_future and awaiting the next value.
 
-use async_std::task::sleep;
 use dioxus::prelude::*;
+use futures_timer::Delay;
 use futures_util::{Stream, StreamExt, future, stream};
 
 fn main() {
@@ -30,7 +30,7 @@ fn app() -> Element {
 fn some_stream() -> std::pin::Pin<Box<dyn Stream<Item = i32>>> {
     Box::pin(
         stream::once(future::ready(0)).chain(stream::iter(1..).then(|second| async move {
-            sleep(std::time::Duration::from_secs(1)).await;
+            Delay::new(std::time::Duration::from_secs(1)).await;
             second
         })),
     )

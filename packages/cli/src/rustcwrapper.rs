@@ -21,6 +21,14 @@ impl WorkspaceRustcArgs {
             rustc_args: Default::default(),
         }
     }
+
+    /// The captured rustc invocation used to replay a workspace crate in a thin build.
+    /// `None` means the fat build never compiled the crate.
+    pub fn replay_args(&self, crate_name: &str) -> Option<&RustcArgs> {
+        self.rustc_args
+            .get(&format!("{crate_name}.lib"))
+            .or_else(|| self.rustc_args.get(&format!("{crate_name}.bin")))
+    }
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -150,10 +158,9 @@ fn has_linking_args() -> bool {
             if let Ok(file_binary) = std::fs::read(path_str) {
                 // Handle both UTF-8 and UTF-16LE encodings for response files.
                 let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
-                    let binary_u16le: Vec<u16> = file_binary
-                        .chunks_exact(2)
-                        .map(|a| u16::from_le_bytes([a[0], a[1]]))
-                        .collect();
+                    let (pairs, _) = file_binary.as_chunks::<2>();
+                    let binary_u16le: Vec<u16> =
+                        pairs.iter().map(|&p| u16::from_le_bytes(p)).collect();
                     String::from_utf16_lossy(&binary_u16le)
                 });
 

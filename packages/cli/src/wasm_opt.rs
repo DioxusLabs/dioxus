@@ -152,7 +152,7 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     };
 
     let url = "https://api.github.com/repos/WebAssembly/binaryen/releases/latest";
-    let client = reqwest::Client::new();
+    let client = crate::http_client::client();
     let response = client
         .get(url)
         .header("User-Agent", "dioxus-cli")
@@ -281,7 +281,12 @@ async fn install_github(install_dir: &Path) -> anyhow::Result<()> {
     tracing::trace!("Downloading wasm-opt from {}", url);
 
     // Download the binaryen release archive into memory
-    let bytes = reqwest::get(url).await?.bytes().await?;
+    let bytes = crate::http_client::client()
+        .get(url)
+        .send()
+        .await?
+        .bytes()
+        .await?;
 
     // We don't need the whole gzip archive, just the wasm-opt binary and the lib folder. We
     // just extract those files from the archive.

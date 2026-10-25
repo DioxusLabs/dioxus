@@ -1,8 +1,10 @@
 //! Integration between Dioxus and Blitz
-use crate::{NodeId, qual_name, trace, write_once_attr::WriteOnceAttr};
-use blitz_dom::{BaseDocument, Document as _, DocumentMutator, PlainDocument, Widget};
+use crate::{
+    NodeId, mutation_buffer::MutationBuffer, qual_name, trace, write_once_attr::WriteOnceAttr,
+};
+use blitz_dom::{BaseDocument, Document, DocumentMutator, Widget};
 use blitz_traits::events::DomEventKind;
-use dioxus_core::{AttributeValue, ElementId, WriteMutations};
+use dioxus_core::{BorrowedAttributeValue, ElementId, WriteMutations};
 use std::str::FromStr as _;
 
 pub(crate) trait RealDom {
@@ -31,7 +33,7 @@ pub(crate) trait RealDom {
         node: Self::NodeId,
         name: &str,
         ns: Option<&str>,
-        value: &AttributeValue,
+        value: BorrowedAttributeValue<'_>,
     );
 
     fn set_text(&mut self, node: Self::NodeId, value: &str);
@@ -197,7 +199,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
         self.backend.insert_before(anchor, &nodes);
     }
 
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: BorrowedAttributeValue<'_>) {
         let node = self.state.top().node;
         self.backend.set_attribute(node, name, ns, value);
     }
@@ -241,6 +243,8 @@ pub struct DioxusState {
     pub(crate) event_handler_counts: [u32; 64],
     /// Mounted events queued as elements are mounted
     pub(crate) queued_mounted_events: Vec<ElementId>,
+    /// Mutations written by the VirtualDom which have not yet been applied to the document
+    pub(crate) buffered_mutations: MutationBuffer,
 }
 
 impl DioxusState {
@@ -250,6 +254,7 @@ impl DioxusState {
             stack: StackState::new(root_id),
             event_handler_counts: [0; 64],
             queued_mounted_events: Vec::new(),
+            buffered_mutations: MutationBuffer::default(),
         }
     }
 
@@ -263,22 +268,24 @@ impl DioxusState {
         self.stack.element_to_node(element_id)
     }
 
-    /// Build a writer that applies dioxus mutations to `doc`, driving the blitz
-    /// backend from the local stack machine.
-    pub(crate) fn writer<'a>(&'a mut self, doc: &'a mut BaseDocument) -> MutationWriter<'a> {
+    /// Apply the buffered dioxus mutations to `doc`, driving the blitz backend
+    /// from the local stack machine.
+    pub(crate) fn apply_buffered_mutations(&mut self, doc: &mut BaseDocument) {
         let Self {
             stack,
             event_handler_counts,
             queued_mounted_events,
+            buffered_mutations,
         } = self;
-        StackWriter::new(
+        let mut writer: MutationWriter<'_> = StackWriter::new(
             stack,
             BlitzBackend {
                 docm: doc.mutate(),
                 event_handler_counts,
                 queued_mounted_events,
             },
-        )
+        );
+        buffered_mutations.replay(&mut writer);
     }
 }
 
@@ -338,12 +345,13 @@ impl RealDom for BlitzBackend<'_> {
 
     fn replace(&mut self, target: NodeId, replacements: &[NodeId]) {
         trace!("replace target:{target} replacements:{replacements:?}");
-        self.docm.replace_node_with(target, replacements);
+        self.docm.insert_nodes_before(target, replacements);
+        self.docm.remove_and_drop_node(target);
     }
 
     fn remove(&mut self, node: NodeId) {
         trace!("remove node:{node}");
-        self.docm.remove_node(node);
+        self.docm.remove_and_drop_node(node);
     }
 
     fn set_attribute(
@@ -351,7 +359,7 @@ impl RealDom for BlitzBackend<'_> {
         node: NodeId,
         name: &str,
         ns: Option<&str>,
-        value: &AttributeValue,
+        value: BorrowedAttributeValue<'_>,
     ) {
         self.set_attribute_impl(node, name, ns, value);
     }
@@ -370,12 +378,13 @@ impl RealDom for BlitzBackend<'_> {
 
         // We're going to actually set the listener here as a placeholder - in JS this would also be a placeholder
         // we might actually just want to attach the attribute to the root element (delegation)
-        let value = AttributeValue::Text("<rust func>".into());
-        self.set_attribute_impl(node, name, None, &value);
+        let value = BorrowedAttributeValue::Text("<rust func>");
+        self.set_attribute_impl(node, name, None, value);
 
         // Also set the data-dioxus-id attribute so we can find the element later
-        let value = AttributeValue::Text(element_id.raw().to_string());
-        self.set_attribute_impl(node, "data-dioxus-id", None, &value);
+        let value = element_id.raw().to_string();
+        let value = BorrowedAttributeValue::Text(&value);
+        self.set_attribute_impl(node, "data-dioxus-id", None, value);
 
         if let Ok(kind) = DomEventKind::from_str(name) {
             let idx = kind.discriminant() as usize;
@@ -397,26 +406,26 @@ impl BlitzBackend<'_> {
         node_id: NodeId,
         local_name: &str,
         ns: Option<&str>,
-        value: &AttributeValue,
+        value: BorrowedAttributeValue<'_>,
     ) {
-        fn is_falsy(val: &AttributeValue) -> bool {
+        fn is_falsy(val: BorrowedAttributeValue<'_>) -> bool {
             match val {
-                AttributeValue::None => true,
-                AttributeValue::Text(val) => val == "false",
-                AttributeValue::Bool(val) => !val,
-                AttributeValue::Int(val) => *val == 0,
-                AttributeValue::Float(val) => *val == 0.0,
-                _ => false,
+                BorrowedAttributeValue::None => true,
+                BorrowedAttributeValue::Text(val) => val == "false",
+                BorrowedAttributeValue::Bool(val) => !val,
+                BorrowedAttributeValue::Int(val) => val == 0,
+                BorrowedAttributeValue::Float(val) => val == 0.0,
+                BorrowedAttributeValue::Any(_) => false,
             }
         }
 
         // Set/unset subdocument for <web-view __webview_document>
         if local_name == "__webview_document" {
             match value {
-                AttributeValue::Any(value) => {
+                BorrowedAttributeValue::Any(value) => {
                     if let Some(value) = value
                         .as_any()
-                        .downcast_ref::<WriteOnceAttr<Box<PlainDocument>>>()
+                        .downcast_ref::<WriteOnceAttr<Box<dyn Document>>>()
                         && let Some(mut sub_document) = value.take()
                     {
                         sub_document
@@ -432,9 +441,9 @@ impl BlitzBackend<'_> {
         // Set/unset custom widget for <object data>
         if local_name == "data" {
             let element_name = self.docm.element_name(node_id).unwrap();
-            if element_name.local.as_ref() == "object" {
+            if element_name.local.as_str() == "object" {
                 match value {
-                    AttributeValue::Any(value) => {
+                    BorrowedAttributeValue::Any(value) => {
                         if let Some(value) = value
                             .as_any()
                             .downcast_ref::<WriteOnceAttr<Box<dyn Widget>>>()
@@ -450,25 +459,25 @@ impl BlitzBackend<'_> {
 
         let falsy = is_falsy(value);
         match value {
-            AttributeValue::None => {
+            BorrowedAttributeValue::None => {
                 set_attribute_inner(&mut self.docm, local_name, ns, None, falsy, node_id)
             }
-            AttributeValue::Text(value) => {
+            BorrowedAttributeValue::Text(value) => {
                 set_attribute_inner(&mut self.docm, local_name, ns, Some(value), falsy, node_id)
             }
-            AttributeValue::Float(value) => {
+            BorrowedAttributeValue::Float(value) => {
                 let value = value.to_string();
                 set_attribute_inner(&mut self.docm, local_name, ns, Some(&value), falsy, node_id);
             }
-            AttributeValue::Int(value) => {
+            BorrowedAttributeValue::Int(value) => {
                 let value = value.to_string();
                 set_attribute_inner(&mut self.docm, local_name, ns, Some(&value), falsy, node_id);
             }
-            AttributeValue::Bool(value) => {
+            BorrowedAttributeValue::Bool(value) => {
                 let value = value.to_string();
                 set_attribute_inner(&mut self.docm, local_name, ns, Some(&value), falsy, node_id);
             }
-            _ => {
+            BorrowedAttributeValue::Any(_) => {
                 // FIXME: support all attribute types
             }
         };
@@ -501,7 +510,7 @@ fn set_attribute_inner(
     match value {
         None => docm.clear_attribute(node_id, name),
         Some(value) => {
-            if local_name == "checked" && is_falsy {
+            if is_falsy && is_bool_attr(local_name) {
                 docm.clear_attribute(node_id, name);
             } else if local_name == "dangerous_inner_html" {
                 docm.set_inner_html(node_id, value);
@@ -509,5 +518,117 @@ fn set_attribute_inner(
                 docm.set_attribute(node_id, name, value);
             }
         }
+    }
+}
+
+/// HTML boolean attributes are "on" whenever they are present, regardless of their value, so a
+/// falsy value (e.g. `disabled: false`) must remove the attribute rather than write `"false"`.
+///
+/// Mirrors `BOOL_ATTRS` in `dioxus-ssr` and `isBoolAttr` in the web interpreter.
+fn is_bool_attr(name: &str) -> bool {
+    matches!(
+        name,
+        "allowfullscreen"
+            | "allowpaymentrequest"
+            | "async"
+            | "autofocus"
+            | "autoplay"
+            | "checked"
+            | "controls"
+            | "default"
+            | "defer"
+            | "disabled"
+            | "formnovalidate"
+            | "hidden"
+            | "inert"
+            | "ismap"
+            | "itemscope"
+            | "loop"
+            | "multiple"
+            | "muted"
+            | "nomodule"
+            | "novalidate"
+            | "open"
+            | "playsinline"
+            | "readonly"
+            | "required"
+            | "reversed"
+            | "selected"
+            | "truespeed"
+            | "webkitdirectory"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{DioxusDocument, DocumentConfig};
+    use blitz_dom::LocalName;
+    use dioxus::prelude::*;
+
+    fn build(app: fn() -> Element) -> DioxusDocument {
+        let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
+        doc.initial_build();
+        doc
+    }
+
+    fn attr(doc: &DioxusDocument, selector: &str, name: &str) -> Option<String> {
+        let inner = doc.inner.borrow();
+        let node_id = inner
+            .query_selector(selector)
+            .unwrap()
+            .unwrap_or_else(|| panic!("no node matches {selector}"));
+        inner
+            .get_node(node_id)
+            .unwrap()
+            .attr(LocalName::from(name))
+            .map(str::to_owned)
+    }
+
+    #[test]
+    fn falsy_boolean_attributes_are_removed() {
+        fn app() -> Element {
+            let off = false;
+            let on = true;
+            rsx! {
+                input {
+                    id: "off",
+                    r#type: "checkbox",
+                    disabled: off,
+                    readonly: off,
+                    required: off,
+                    checked: off,
+                    title: "false",
+                }
+                input { id: "literal", r#type: "checkbox", disabled: false }
+                input { id: "on", r#type: "checkbox", disabled: on, required: on }
+                details { id: "details", open: off }
+                select {
+                    id: "select",
+                    multiple: off,
+                    option { id: "option", selected: off }
+                }
+            }
+        }
+
+        let doc = build(app);
+
+        for name in ["disabled", "readonly", "required", "checked"] {
+            assert_eq!(
+                attr(&doc, "#off", name),
+                None,
+                "`{name}: false` should be absent"
+            );
+        }
+        assert_eq!(attr(&doc, "#literal", "disabled"), None);
+        assert_eq!(attr(&doc, "#details", "open"), None);
+        assert_eq!(attr(&doc, "#select", "multiple"), None);
+        assert_eq!(attr(&doc, "#option", "selected"), None);
+
+        // Truthy boolean attributes are still present.
+        assert_eq!(attr(&doc, "#on", "disabled").as_deref(), Some("true"));
+        assert_eq!(attr(&doc, "#on", "required").as_deref(), Some("true"));
+
+        // Non-boolean attributes keep their falsy-looking value.
+        assert_eq!(attr(&doc, "#off", "title").as_deref(), Some("false"));
     }
 }

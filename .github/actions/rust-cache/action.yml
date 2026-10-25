@@ -1,0 +1,27 @@
+name: Rust cache
+description: >
+  Swatinem/rust-cache on WarpBuild (GitHub's cache service on Windows), saved only from main and
+  without the build artifacts the job did not use.
+inputs:
+  key:
+    description: Extra cache key component (passed to Swatinem/rust-cache)
+    default: ""
+  workspaces:
+    description: Workspace root containing `Cargo.lock` and `target/` (passed to Swatinem/rust-cache)
+    default: "."
+runs:
+  using: composite
+  steps:
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: ${{ inputs.key }}
+        workspaces: ${{ inputs.workspaces }}
+        cache-all-crates: "true"
+        cache-workspace-crates: "true"
+        # warpbuild's bundled `@actions/glob` matches no paths on Windows (Swatinem/rust-cache#355
+        # fixed only the GitHub provider), so Windows caches go to GitHub's cache service instead.
+        cache-provider: ${{ runner.os == 'Windows' && 'github' || 'warpbuild' }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - uses: ./.github/actions/prune-cargo-target
+      with:
+        target-dir: ${{ inputs.workspaces }}/target

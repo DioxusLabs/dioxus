@@ -118,7 +118,7 @@ impl<T> Memo<T> {
     }
 
     /// Rerun the computation and update the value of the memo if the result has changed.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), level = "trace")]
     fn recompute(&self)
     where
         T: PartialEq + 'static,

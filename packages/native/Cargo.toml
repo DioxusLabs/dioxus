@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "woff", "apple-font-embolden"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "woff", "text-transform-icu", "apple-font-embolden"]
 prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
 
 # DOM features
@@ -23,6 +23,8 @@ complex-scripts = ["blitz-dom/complex-scripts"]
 # WOFF/WOFF2 decoder. Default-on so wasm callers (which can't use system fonts)
 # can bundle compressed fonts without extra setup.
 woff = ["blitz-dom/woff"]
+text-transform-icu = ["blitz-dom/text-transform-icu"]
+writing-mode = ["blitz-dom/writing-mode", "dioxus-native-dom/writing-mode"]
 
 # Shell Features
 clipboard = ["blitz-shell/clipboard"]
@@ -34,6 +36,9 @@ data-uri = ["blitz-shell/data-uri"]
 vello = ["dep:anyrender_vello", "dep:wgpu_context"]
 vello-hybrid = ["dep:anyrender_vello_hybrid", "dep:wgpu_context"]
 skia = ["dep:anyrender_skia"]
+skia-pixels = ["skia-raster-base", "anyrender_skia/pixels_window_renderer"]
+skia-softbuffer = ["skia-raster-base", "anyrender_skia/softbuffer_window_renderer"]
+skia-raster-base = ["dep:anyrender_skia"]
 vello-cpu = ["vello-cpu-pixels"]
 vello-cpu-pixels = ["vello-cpu-base", "anyrender_vello_cpu/pixels_window_renderer"]
 vello-cpu-softbuffer = ["vello-cpu-base", "anyrender_vello_cpu/softbuffer_window_renderer"]
@@ -74,6 +79,7 @@ blitz-shell = { workspace = true }
 
 # AnyRender dependencies
 anyrender = { workspace = true }
+peniko = { workspace = true }
 anyrender_vello = { workspace = true, optional = true}
 anyrender_vello_hybrid = { workspace = true, optional = true}
 anyrender_vello_cpu = { workspace = true, optional = true}

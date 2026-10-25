@@ -209,7 +209,7 @@ impl Doctor {
  {GLOW_STYLE}Android{GLOW_STYLE:#}: Install Android Studio, NDK, and then set ANDROID_HOME and ANDROID_NDK_HOME
  {GLOW_STYLE}macOS{GLOW_STYLE:#}: all tools should be installed by default
  {GLOW_STYLE}Windows{GLOW_STYLE:#}: install the webview2 binary
- {GLOW_STYLE}Linux{GLOW_STYLE:#}: Install libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+ {GLOW_STYLE}Linux{GLOW_STYLE:#}: Install libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libglib2.0-dev
  {GLOW_STYLE}nix{GLOW_STYLE:#}: Make sure all tools are in your path (codesign, ld, etc.)
 
 {LINK_STYLE}Rust{LINK_STYLE:#}

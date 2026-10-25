@@ -40,9 +40,10 @@ impl SelfUpdate {
                     .repo_name("dioxus")
                     .bin_name("dx")
                     .current_version(cargo_crate_version!())
+                    .reqwest_client(crate::http_client::blocking_client()?)
                     .build()
                     .unwrap()
-                    .get_latest_releases(cargo_crate_version!())
+                    .get_newer_releases()
                     .context("Failed to fetch latest version")?;
 
                 if res.is_empty() {
@@ -51,21 +52,20 @@ impl SelfUpdate {
                     tracing::info!("Your version {} is out of date!", cargo_crate_version!());
                     tracing::info!(
                         "Available versions: [{}]",
-                        res.iter()
-                            .map(|r| r.version.clone())
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                        res.all().iter().map(|r| r.version()).join(", ")
                     );
                 }
 
                 return Ok(StructuredOutput::Success);
             }
 
+            let http_client = crate::http_client::blocking_client()?;
             let repo = self_update::backends::github::Update::configure()
                 .repo_owner("dioxuslabs")
                 .repo_name("dioxus")
                 .bin_name("dx")
                 .current_version(cargo_crate_version!())
+                .reqwest_client(http_client.clone())
                 .build()
                 .unwrap();
 
@@ -76,17 +76,21 @@ impl SelfUpdate {
                     .context("Failed to fetch release by tag")?,
                 None => repo
                     .get_latest_release()
-                    .context("Failed to fetch latest version")?,
+                    .context("Failed to fetch latest version")?
+                    .into_vec()
+                    .into_iter()
+                    .next()
+                    .context("No release found")?,
             };
 
-            if latest.version == cargo_crate_version!() && !force {
+            if latest.version() == cargo_crate_version!() && !force {
                 tracing::info!("Your version {} is up to date!", cargo_crate_version!());
                 return Ok(StructuredOutput::Success);
             }
 
             tracing::info!("Your version is out of date!");
             tracing::info!("- Yours:  {}", cargo_crate_version!());
-            tracing::info!("- Latest: {}", latest.version);
+            tracing::info!("- Latest: {}", latest.version());
 
             let cur_arch = if cfg!(target_arch = "x86_64") {
                 "x86_64"
@@ -108,15 +112,15 @@ impl SelfUpdate {
 
             let zip_ext = "zip";
 
-            tracing::debug!("Available assets: {:?}", latest.assets);
+            tracing::debug!("Available assets: {:?}", latest.assets());
 
             let asset = latest
-                .assets
+                .assets()
                 .iter()
                 .find(|a| {
-                    a.name.contains(cur_os)
-                        && a.name.contains(cur_arch)
-                        && a.name.ends_with(zip_ext)
+                    a.name().contains(cur_os)
+                        && a.name().contains(cur_arch)
+                        && a.name().ends_with(zip_ext)
                 })
                 .context("No suitable asset found")?;
 
@@ -124,13 +128,13 @@ impl SelfUpdate {
             std::fs::create_dir_all(&install_dir).context("Failed to create install directory")?;
 
             tracing::info!("Downloading update from Github");
-            tracing::debug!("Download URL: {}", asset.download_url);
-            let body = latest.body.unwrap_or_default();
+            tracing::debug!("Download URL: {}", asset.download_url());
+            let body = latest.body().unwrap_or_default();
             let brief = vec![
-                latest.name.to_string(),
+                latest.name().to_string(),
                 "".to_string(),
-                latest.date.to_string(),
-                asset.download_url.to_string(),
+                latest.date().to_string(),
+                asset.download_url().to_string(),
                 "".to_string(),
             ]
             .into_iter()
@@ -141,22 +145,21 @@ impl SelfUpdate {
 
             tracing::info!("{}", brief.trim());
 
-            let archive_path = install_dir.join(&asset.name);
+            let archive_path = install_dir.join(asset.name());
             _ = std::fs::remove_file(&archive_path).ok();
-            let archive_file = std::fs::File::create(&archive_path)?;
-            let download_url = asset.download_url.clone();
-            self_update::Download::from_url(&download_url)
-                .set_header(
-                    hyper::http::header::ACCEPT,
-                    "application/octet-stream".parse().unwrap(),
-                )
-                .download_to(archive_file)
+            let mut archive_file = std::fs::File::create(&archive_path)?;
+            http_client
+                .get(asset.download_url())
+                .header(reqwest::header::ACCEPT, "application/octet-stream")
+                .send()
+                .and_then(|response| response.error_for_status())
+                .and_then(|mut response| response.copy_to(&mut archive_file))
                 .context("Failed to download update")?;
 
             let install_dir = install_dir.join("dx");
             _ = std::fs::remove_dir_all(&install_dir);
-            self_update::Extract::from_source(&archive_path)
-                .extract_into(&install_dir)
+            zip::ZipArchive::new(std::fs::File::open(&archive_path)?)
+                .and_then(|mut archive| archive.extract(&install_dir))
                 .context("Failed to extract update")?;
 
             let exe = if cfg!(target_os = "windows") {
@@ -177,7 +180,7 @@ impl SelfUpdate {
             if self.install {
                 tracing::info!(
                     "Installing dx v{} to {}",
-                    latest.version,
+                    latest.version(),
                     std::env::current_exe()?.display()
                 );
 
@@ -197,7 +200,7 @@ impl SelfUpdate {
                     }
                 }
 
-                self_update::self_replace::self_replace(executable)?;
+                self_replace::self_replace(executable)?;
                 let time_taken = start.elapsed().as_millis();
                 tracing::info!("Done in {} ms! 💫", time_taken)
             } else {
@@ -219,24 +222,29 @@ impl SelfUpdate {
 /// in the future.
 pub fn log_if_cli_could_update() {
     tokio::task::spawn_blocking(|| {
+        let Ok(http_client) = crate::http_client::blocking_client() else {
+            return;
+        };
         let release = self_update::backends::github::Update::configure()
             .repo_owner("dioxuslabs")
             .repo_name("dioxus")
             .bin_name("dx")
             .current_version(cargo_crate_version!())
+            .reqwest_client(http_client)
             .build()
             .unwrap()
-            .get_latest_release();
+            .get_latest_release()
+            .map(|releases| releases.into_vec().into_iter().next());
 
-        if let Ok(release) = release {
+        if let Ok(Some(release)) = release {
             let old = krates::semver::Version::parse(cargo_crate_version!());
-            let new = krates::semver::Version::parse(&release.version);
+            let new = krates::semver::Version::parse(release.version());
 
             if let (Ok(old), Ok(new)) = (old, new) {
                 if old < new {
                     _ = crate::CliSettings::modify_settings(|f| {
                         let ignored = f.ignore_version_update.as_deref().unwrap_or_default();
-                        if release.version != ignored {
+                        if release.version() != ignored {
                             use crate::styles::GLOW_STYLE;
                             tracing::warn!(
                                 "A new dx version is available: {new}! Run {GLOW_STYLE}dx self-update{GLOW_STYLE:#} to update."

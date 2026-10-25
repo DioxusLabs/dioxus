@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
-async-std = "1.13.1"
+futures-timer = { version = "3.0.4", features = ["wasm-bindgen"] }
 serde = { workspace = true }
 
 [features]

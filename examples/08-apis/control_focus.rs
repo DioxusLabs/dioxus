@@ -5,8 +5,8 @@
 
 use std::rc::Rc;
 
-use async_std::task::sleep;
 use dioxus::prelude::*;
+use futures_timer::Delay;
 
 const STYLE: Asset = asset!("/examples/assets/roulette.css");
 
@@ -23,7 +23,7 @@ fn app() -> Element {
         let mut focused = 0;
 
         loop {
-            sleep(std::time::Duration::from_millis(50)).await;
+            Delay::new(std::time::Duration::from_millis(50)).await;
 
             if !running() {
                 continue;

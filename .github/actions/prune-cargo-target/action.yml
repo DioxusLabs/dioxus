@@ -1,0 +1,14 @@
+name: Prune cargo target
+description: >
+  Marks the fingerprints in a restored cargo target dir when the step runs, and deletes every unit
+  whose fingerprint cargo did not read when the job ends. Run it after restoring the cache and
+  before saving it.
+inputs:
+  target-dir:
+    description: The cargo target dir
+    default: target
+runs:
+  using: node24
+  main: mark.js
+  post: prune.js
+  post-if: success()

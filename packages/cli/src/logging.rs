@@ -261,7 +261,7 @@ impl TraceController {
         let reporter = Self::enroll_reporter().ok();
 
         // Create a new telemetry uploader
-        let http_client = reqwest::Client::builder()
+        let http_client = crate::http_client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
             .ok();
@@ -360,6 +360,12 @@ impl TraceController {
         };
 
         ServeUpdate::TracingLog { log }
+    }
+
+    /// Take a log message that is already queued, without waiting. Lets the serve loop drain a burst
+    /// of logs (e.g. cargo's per-crate output) into a single render instead of one render per line.
+    pub(crate) fn try_recv(&self) -> Option<TraceMsg> {
+        self.tui_rx.try_lock().ok()?.try_recv().ok()
     }
 
     /// Uploads telemetry logs from the filesystem to the telemetry endpoint.

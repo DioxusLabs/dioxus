@@ -7,7 +7,7 @@
 //! applications, or focused components, this is a great way to manage state.
 
 use dioxus::html::MouseEvent;
-use dioxus::html::input_data::keyboard_types::Key;
+use dioxus::html::input_data::keyboard_types::{Key, NamedKey};
 use dioxus::prelude::*;
 
 fn main() {
@@ -212,7 +212,7 @@ impl Calculator {
     }
     fn handle_keydown(&mut self, evt: KeyboardEvent) {
         match evt.key() {
-            Key::Backspace => self.backspace(),
+            Key::Named(NamedKey::Backspace) => self.backspace(),
             Key::Character(c) => match c.as_str() {
                 "0" => self.input_digit(0),
                 "1" => self.input_digit(1),

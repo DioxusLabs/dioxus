@@ -83,6 +83,7 @@ impl Create {
             // Cargo never adds name to the path. Name is solely for project name.
             // https://github.com/cargo-generate/cargo-generate/issues/1250
             init: true,
+            no_workspace: true,
             name: self.name,
             silent: self.yes,
             vcs: self.vcs,
@@ -163,6 +164,23 @@ pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
     //    This must be executed first in order to run `cargo fmt` on the new project.
     let is_workspace = metadata.is_some();
     metadata.and_then(|metadata| {
+        // A glob in `members` (e.g. `crates/*`) may already cover the new project.
+        let manifest_path = path.join("Cargo.toml");
+        if metadata
+            .packages
+            .iter()
+            .any(|package| package.manifest_path.as_std_path() == manifest_path)
+        {
+            return None;
+        }
+
+        // A project that is itself a workspace root can't be a member of another workspace.
+        let manifest: toml_edit::DocumentMut =
+            std::fs::read_to_string(&manifest_path).ok()?.parse().ok()?;
+        if manifest.contains_key("workspace") {
+            return None;
+        }
+
         let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
         let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
         let relative_path = path.strip_prefix(metadata.workspace_root).ok()?;
@@ -255,7 +273,7 @@ pub(crate) async fn check_connectivity() -> Result<()> {
     }
 
     use crate::styles::{GLOW_STYLE, LINK_STYLE};
-    let client = reqwest::Client::new();
+    let client = crate::http_client::client();
     for x in 0..=5 {
         tokio::select! {
             res = client.head("https://github.com/DioxusLabs/").header("User-Agent", "dioxus-cli").send() => {

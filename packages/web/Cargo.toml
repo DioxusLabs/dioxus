@@ -39,7 +39,7 @@ serde-wasm-bindgen = { version = "0.6.5", optional = true }
 ciborium = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true, features = ["futures"] }
 send_wrapper = { workspace = true, features = ["futures"] }
-wasm-streams = "0.4.2"
+wasm-streams = "0.5.0"
 
 [dependencies.web-sys]
 workspace = true
@@ -122,7 +122,6 @@ wasm-bindgen-test = { workspace = true }
 dioxus-ssr = { workspace = true, default-features = false }
 gloo-dialogs = { workspace = true }
 dioxus-web = { path = ".", features = ["hydrate"] }
-tracing-wasm = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

@@ -28,7 +28,12 @@ pub use dioxus_native_dom::*;
 
 use assets::DioxusNativeNetProvider;
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
-pub use dioxus_renderer::DioxusNativeWindowRenderer;
+pub use dioxus_renderer::{DioxusNativeWindowRenderer, RendererOptions};
+
+#[doc(inline)]
+pub use anyrender::CompositeAlphaMode;
+#[doc(inline)]
+pub use peniko::Color;
 
 #[cfg(target_os = "android")]
 #[cfg_attr(docsrs, doc(cfg(target_os = "android")))]
@@ -217,14 +222,19 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         },
     );
     #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
-    let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
+    let renderer = DioxusNativeWindowRenderer::with_options(RendererOptions {
+        base_color: config.base_color,
+        alpha_mode: config.alpha_mode,
+        features,
+        limits,
+    });
     #[cfg(not(any(feature = "vello", feature = "vello-hybrid")))]
-    let renderer = DioxusNativeWindowRenderer::new();
-    let config = WindowConfig::with_attributes(
-        Box::new(doc) as _,
-        renderer.clone(),
-        config.window_attributes,
-    );
+    let renderer = DioxusNativeWindowRenderer::with_options(RendererOptions {
+        base_color: config.base_color,
+        alpha_mode: config.alpha_mode,
+    });
+    let config =
+        WindowConfig::with_attributes(Box::new(doc) as _, renderer, config.window_attributes);
 
     // Create application
     let application = DioxusNativeApplication::new(proxy, event_queue, config);

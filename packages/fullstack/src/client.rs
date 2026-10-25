@@ -15,6 +15,33 @@ use url::Url;
 
 pub static GLOBAL_REQUEST_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
+/// Installs _ring_ as the process-wide rustls crypto provider, unless one is already installed.
+///
+/// Fullstack enables reqwest's `rustls-no-provider` feature, so without a process-wide provider
+/// any other `reqwest::Client` built in the app (e.g. `reqwest::get`) would panic.
+#[cfg(not(target_arch = "wasm32"))]
+#[doc(hidden)]
+pub fn install_default_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+/// TLS config for the server function client: _ring_ with the bundled webpki roots, so it works
+/// without platform verifier setup (which Android requires).
+#[cfg(not(target_arch = "wasm32"))]
+fn rustls_client_config() -> rustls::ClientConfig {
+    let roots = rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let mut config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("ring supports the default TLS versions")
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    // Websocket upgrades require HTTP/1.1
+    config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    config
+}
+
 pub type ClientResult = Result<ClientResponse, RequestError>;
 
 pub struct ClientRequest {
@@ -125,7 +152,10 @@ impl ClientRequest {
             static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
                 LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
 
-            client = client.cookie_store(true).cookie_provider(COOKIES.clone());
+            client = client
+                .cookie_store(true)
+                .cookie_provider(COOKIES.clone())
+                .tls_backend_preconfigured(rustls_client_config());
         }
 
         client.build().unwrap()

@@ -306,6 +306,9 @@ impl LaunchBuilder {
         {
             use dioxus_fullstack::{get_server_url, set_server_url};
 
+            #[cfg(not(target_arch = "wasm32"))]
+            dioxus_fullstack::install_default_crypto_provider();
+
             // Make sure to set the server_fn endpoint if the user specified the fullstack feature
             // We only set this on native targets
             #[cfg(any(feature = "desktop", feature = "mobile", feature = "native"))]
