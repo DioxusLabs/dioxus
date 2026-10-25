@@ -182,6 +182,28 @@ test("merge styles", async ({ page }) => {
   await expect(div).toHaveCSS("height", "100px");
 });
 
+test("style attribute update drops declarations", async ({ page }) => {
+  await page.goto("http://localhost:9990");
+  // wait until the div is mounted
+  const div = page.locator("div#style-attribute-div");
+  await div.waitFor({ state: "attached" });
+  const button = page.locator("button.toggle-style-attribute-button");
+
+  // Initially both declarations are present
+  await expect(div).toHaveCSS("color", "rgb(255, 0, 0)");
+  await expect(div).toHaveCSS("background-color", "rgb(0, 0, 255)");
+
+  // Update the style attribute to a value that drops the background declaration
+  // The dropped declaration must actually be removed, not restored (issue #5810)
+  await button.click();
+  await expect(div).toHaveCSS("color", "rgb(255, 0, 0)");
+  await expect(div).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+  // Toggling back must restore the declaration again
+  await button.click();
+  await expect(div).toHaveCSS("background-color", "rgb(0, 0, 255)");
+});
+
 test("select multiple", async ({ page }) => {
   await page.goto("http://localhost:9990");
   // wait until the select element is mounted
