@@ -12,6 +12,12 @@ use std::marker::PhantomData;
 pub trait ViewTemplate {
     /// The static tree for this view type.
     const TEMPLATE_TREE: &'static TemplateRawTree;
+
+    /// Whether this view contributes any runtime dynamic nodes or attributes.
+    ///
+    /// Composite views only call [`View::push`] on parts where this is `true`, so fully static
+    /// subtrees never instantiate `push` at all. Defaults to `true`, which is always sound.
+    const HAS_DYNAMIC: bool = true;
 }
 
 struct StaticViewTemplate<
@@ -31,6 +37,7 @@ impl<V: ViewTemplate, const OPS_CAP: usize, const STRING_CAP: usize, const DYNAM
 
 impl ViewTemplate for () {
     const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::Empty;
+    const HAS_DYNAMIC: bool = false;
 }
 
 /// A typed view that can collect runtime dynamic nodes and attributes.
@@ -54,7 +61,9 @@ impl<V: View> View for KeyedView<V> {
     #[inline]
     fn push(self, dynamic: &mut DynamicValues) {
         dynamic.set_key(self.key);
-        self.view.push(dynamic);
+        if V::HAS_DYNAMIC {
+            self.view.push(dynamic);
+        }
     }
 }
 
@@ -108,10 +117,23 @@ fn into_vnode_with_template<V: View>(view: V, template: &Template) -> VNode {
 /// its const template instead.
 #[cfg(debug_assertions)]
 #[doc(hidden)]
+#[inline]
 pub fn into_vnode_cached<V: View>(view: V, cache: &std::sync::OnceLock<Template>) -> VNode {
-    let template =
-        *cache.get_or_init(|| dioxus_core_template::build_runtime_template(V::TEMPLATE_TREE));
-    into_vnode_with_template(view, &template)
+    let template = cached_runtime_template(cache, V::TEMPLATE_TREE);
+    let mut dynamic = DynamicValues::new();
+    if V::HAS_DYNAMIC {
+        view.push(&mut dynamic);
+    }
+    VNode::new(*template, dynamic)
+}
+
+#[cfg(debug_assertions)]
+#[inline(never)]
+fn cached_runtime_template<'a>(
+    cache: &'a std::sync::OnceLock<Template>,
+    tree: &'static dioxus_core_template::TemplateRawTree,
+) -> &'a Template {
+    cache.get_or_init(|| dioxus_core_template::build_runtime_template(tree))
 }
 
 /// Convert a view into a [`VNode`] using template capacities resolved at the call site.

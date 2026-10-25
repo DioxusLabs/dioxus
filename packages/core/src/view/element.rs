@@ -74,6 +74,7 @@ impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemp
         attrs: Attributes::TEMPLATE_TREE,
         children: Children::TEMPLATE_TREE,
     };
+    const HAS_DYNAMIC: bool = Attributes::HAS_DYNAMIC || Children::HAS_DYNAMIC;
 }
 
 impl<Tag: ElementTag, Attributes: View, Children: View> View
@@ -81,7 +82,11 @@ impl<Tag: ElementTag, Attributes: View, Children: View> View
 {
     #[inline]
     fn push(self, dynamic: &mut DynamicValues) {
-        self.attrs.push(dynamic);
-        self.children.push(dynamic);
+        if Attributes::HAS_DYNAMIC {
+            self.attrs.push(dynamic);
+        }
+        if Children::HAS_DYNAMIC {
+            self.children.push(dynamic);
+        }
     }
 }
