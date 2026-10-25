@@ -889,7 +889,18 @@ async fn notarize(notarize_path: &Path, staple_path: &Path) -> Result<()> {
     tracing::info!("Stapling notarization ticket...");
     let mut staple_cmd = Command::new("xcrun");
     staple_cmd.args(["stapler", "staple"]).arg(staple_path);
-    run_command(&mut staple_cmd, "xcrun stapler staple").await?;
+    for attempt in 1..=3 {
+        match run_command(&mut staple_cmd, "xcrun stapler staple").await {
+            Ok(()) => break,
+            Err(err) => {
+                tracing::warn!("Stapling attempt {attempt}/3 failed: {err}");
+                if attempt == 3 {
+                    return Err(err);
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
 
     tracing::info!("Notarization complete for {}", staple_path.display());
     Ok(())
