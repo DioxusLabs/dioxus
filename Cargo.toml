@@ -288,7 +288,7 @@ owo-colors = "4.2.2"
 ciborium = "0.2.2"
 base64 = "0.22.1"
 uuid = "1.23.1"
-convert_case = "0.8.0"
+convert_case = "0.12.0"
 tungstenite = { version = "0.29.0" }
 tokio-tungstenite = { version = "0.29.0", default-features = false }
 gloo-timers = "0.4.0"

@@ -2227,18 +2227,18 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
 ]
 
 [[package]]
 name = "convert_case"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+checksum = "1af709f1f33454bf52eadfc8c78b3b9ef9cb26fb54d16dc9cd9a7299f899fd1b"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -3137,7 +3137,7 @@ dependencies = [
  "console",
  "console-subscriber",
  "const-serialize",
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "crossterm",
  "ctrlc",
  "depinfo",
@@ -3329,7 +3329,7 @@ dependencies = [
 name = "dioxus-core-macro"
 version = "0.8.0-alpha.3"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "dioxus",
  "dioxus-html",
  "dioxus-rsx",
@@ -3625,7 +3625,7 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "axum",
  "const_format",
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "dioxus",
  "proc-macro2",
  "quote",
@@ -3697,7 +3697,7 @@ dependencies = [
 name = "dioxus-html-internal-macro"
 version = "0.8.0-alpha.3"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -4023,7 +4023,7 @@ dependencies = [
 name = "dioxus-rsx-rosetta"
 version = "0.8.0-alpha.3"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "dioxus-autofmt",
  "dioxus-html",
  "dioxus-rsx",
@@ -4144,7 +4144,7 @@ dependencies = [
 name = "dioxus-stores-macro"
 version = "0.8.0-alpha.3"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "dioxus",
  "dioxus-stores",
  "proc-macro2",
