@@ -561,6 +561,11 @@ path = "examples/01-app-demos/hello_world.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "js_framework_benchmark"
+path = "examples/01-app-demos/js_framework_benchmark.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "counters"
 path = "examples/01-app-demos/counters.rs"
 doc-scrape-examples = true
