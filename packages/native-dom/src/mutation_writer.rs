@@ -5,10 +5,12 @@ use crate::{
 use blitz_dom::{BaseDocument, Document, DocumentMutator, Widget};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{BorrowedAttributeValue, ElementId, WriteMutations};
+use rustc_hash::FxHashMap;
+use std::hash::Hash;
 use std::str::FromStr as _;
 
 pub(crate) trait RealDom {
-    type NodeId: Copy;
+    type NodeId: Copy + Eq + Hash;
 
     fn create_element(&mut self, tag: &str, ns: Option<&str>) -> Self::NodeId;
 
@@ -24,9 +26,18 @@ pub(crate) trait RealDom {
 
     fn insert_before(&mut self, anchor: Self::NodeId, nodes: &[Self::NodeId]);
 
-    fn replace(&mut self, target: Self::NodeId, replacements: &[Self::NodeId]);
+    /// Replace `target` with `replacements` and drop it, calling `on_drop` with
+    /// the id of every dropped node (`target` and all of its descendants).
+    fn replace(
+        &mut self,
+        target: Self::NodeId,
+        replacements: &[Self::NodeId],
+        on_drop: impl FnMut(Self::NodeId),
+    );
 
-    fn remove(&mut self, node: Self::NodeId);
+    /// Remove `node` and drop it, calling `on_drop` with the id of every dropped
+    /// node (`node` and all of its descendants).
+    fn remove(&mut self, node: Self::NodeId, on_drop: impl FnMut(Self::NodeId));
 
     fn set_attribute(
         &mut self,
@@ -52,10 +63,13 @@ struct StackEntry<N> {
 #[derive(Debug)]
 struct StackState<N> {
     stack: Vec<StackEntry<N>>,
+    /// `ElementId -> node`. Only live nodes are mapped: dropping a subtree clears
+    /// the mappings of every node in it, found through `node_to_element`.
     element_to_node: Vec<Option<N>>,
+    node_to_element: FxHashMap<N, ElementId>,
 }
 
-impl<N: Copy> StackState<N> {
+impl<N: Copy + Eq + Hash> StackState<N> {
     fn new(root: N) -> Self {
         Self {
             stack: vec![StackEntry {
@@ -63,6 +77,7 @@ impl<N: Copy> StackState<N> {
                 element_id: Some(ElementId::ROOT),
             }],
             element_to_node: vec![Some(root)],
+            node_to_element: FxHashMap::from_iter([(root, ElementId::ROOT)]),
         }
     }
 
@@ -80,14 +95,19 @@ impl<N: Copy> StackState<N> {
         if self.element_to_node.len() <= index {
             self.element_to_node.resize(index + 1, None);
         }
-        self.element_to_node[index] = Some(node);
+        if let Some(old) = self.element_to_node[index].replace(node)
+            && self.node_to_element.get(&old) == Some(&id)
+        {
+            self.node_to_element.remove(&old);
+        }
+        self.node_to_element.insert(node, id);
     }
 
-    fn clear_mapping(&mut self, entry: StackEntry<N>) {
-        if let Some(id) = entry.element_id
-            && let Some(slot) = self.element_to_node.get_mut(id.raw())
+    fn clear_dropped_mapping(&mut self, node: N) {
+        if let Some(id) = self.node_to_element.remove(&node)
+            && self.element_to_node[id.raw()] == Some(node)
         {
-            *slot = None;
+            self.element_to_node[id.raw()] = None;
         }
     }
 
@@ -182,9 +202,11 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
 
     fn replace_with(&mut self, m: usize) {
         let replacements = self.state.pop_nodes(m);
-        let target = self.state.pop_entry();
-        self.backend.replace(target.node, &replacements);
-        self.state.clear_mapping(target);
+        let target = self.state.pop_entry().node;
+        let state = &mut *self.state;
+        self.backend.replace(target, &replacements, |dropped| {
+            state.clear_dropped_mapping(dropped)
+        });
     }
 
     fn insert_after(&mut self, m: usize) {
@@ -228,9 +250,10 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
     }
 
     fn remove(&mut self) {
-        let entry = self.state.pop_entry();
-        self.backend.remove(entry.node);
-        self.state.clear_mapping(entry);
+        let node = self.state.pop_entry().node;
+        let state = &mut *self.state;
+        self.backend
+            .remove(node, |dropped| state.clear_dropped_mapping(dropped));
     }
 }
 
@@ -343,15 +366,20 @@ impl RealDom for BlitzBackend<'_> {
         self.docm.insert_nodes_before(anchor, nodes);
     }
 
-    fn replace(&mut self, target: NodeId, replacements: &[NodeId]) {
+    fn replace(
+        &mut self,
+        target: NodeId,
+        replacements: &[NodeId],
+        mut on_drop: impl FnMut(NodeId),
+    ) {
         trace!("replace target:{target} replacements:{replacements:?}");
         self.docm.insert_nodes_before(target, replacements);
-        self.docm.remove_and_drop_node(target);
+        self.docm.remove_and_drop_node_with(target, &mut on_drop);
     }
 
-    fn remove(&mut self, node: NodeId) {
+    fn remove(&mut self, node: NodeId, mut on_drop: impl FnMut(NodeId)) {
         trace!("remove node:{node}");
-        self.docm.remove_and_drop_node(node);
+        self.docm.remove_and_drop_node_with(node, &mut on_drop);
     }
 
     fn set_attribute(
@@ -562,8 +590,11 @@ fn is_bool_attr(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::{DioxusDocument, DocumentConfig};
+    use blitz_dom::Document as _;
     use blitz_dom::LocalName;
     use dioxus::prelude::*;
+    use dioxus_core::{ElementId, ScopeId};
+    use std::{cell::Cell, rc::Rc};
 
     fn build(app: fn() -> Element) -> DioxusDocument {
         let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
@@ -630,5 +661,47 @@ mod tests {
 
         // Non-boolean attributes keep their falsy-looking value.
         assert_eq!(attr(&doc, "#off", "title").as_deref(), Some("false"));
+    }
+
+    // Dropping a subtree must clear the `ElementId -> NodeId` mappings of every
+    // node in it, otherwise they dangle onto freed (and later reused) node slots
+    #[test]
+    fn dropped_nodes_are_unmapped() {
+        fn app() -> Element {
+            let generation = consume_context::<Rc<Cell<usize>>>().get();
+            rsx! {
+                if generation.is_multiple_of(2) {
+                    div { id: "even", span { "{generation}" } p { "nested" } }
+                } else {
+                    section { id: "odd", span { "{generation}" } }
+                }
+                ul {
+                    for i in 0..(generation % 5) {
+                        li { key: "{i}", "item {i}" }
+                    }
+                }
+            }
+        }
+
+        let generation: Rc<Cell<usize>> = Rc::new(Cell::new(0));
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&generation));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+
+        for step in 1..20 {
+            generation.set(step);
+            doc.vdom.mark_dirty(ScopeId::APP);
+            doc.poll(None);
+
+            let inner = doc.inner.borrow();
+            for raw in 0..1024 {
+                let element_id = ElementId::from_raw(raw);
+                if let Some(node_id) = doc.vdom_state.try_element_to_node_id(element_id)
+                    && inner.get_node(node_id).is_none()
+                {
+                    panic!("{element_id:?} maps to dropped node {node_id:?} after step {step}");
+                }
+            }
+        }
     }
 }
