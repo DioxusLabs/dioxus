@@ -20,6 +20,7 @@ mod logging;
 mod opt;
 mod platform;
 mod rustcwrapper;
+mod secure_fs;
 mod serve;
 mod settings;
 mod tailwind;

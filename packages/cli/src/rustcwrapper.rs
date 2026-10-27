@@ -132,8 +132,9 @@ fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
                 _ => "bin", // proc-macro, cdylib, etc. — treat as bin
             };
 
-            std::fs::write(
-                args_dir.join(format!("{crate_name}.{suffix}.json")),
+            // The dump is a verbatim copy of the process env, so keep it owner-only.
+            crate::secure_fs::write_private(
+                &args_dir.join(format!("{crate_name}.{suffix}.json")),
                 &serialized_args,
             )
             .expect("Failed to write rustc args to file");

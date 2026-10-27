@@ -263,12 +263,15 @@ impl LinkAction {
 }
 
 /// Persist the env of a linker invocation so the driving `dx` process can replay the link with it.
+///
+/// The dump is written owner-only: it is a verbatim copy of the process env and can contain
+/// secrets, and linking still needs every key, so the file is tightened rather than filtered.
 pub(crate) fn write_link_envs(
     path: &Path,
     envs: impl IntoIterator<Item = (String, String)>,
 ) -> Result<()> {
     let envs: Vec<(String, String)> = envs.into_iter().collect();
-    std::fs::write(path, serde_json::to_string(&envs)?)?;
+    crate::secure_fs::write_private(path, serde_json::to_string(&envs)?)?;
     Ok(())
 }
 
