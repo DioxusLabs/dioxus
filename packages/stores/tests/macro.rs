@@ -576,6 +576,31 @@ mod macro_tests {
         store.increment_count();
     }
 
+    // #[store] methods can return `impl Trait`: the visibility witness bound they carry
+    // must not leak a private trait into the (public) extension trait's interface
+    fn store_impl_returning_impl_trait() {
+        #[derive(Store)]
+        pub struct History {
+            urls: Vec<u32>,
+            current: usize,
+        }
+
+        #[store]
+        impl<Lens> Store<History, Lens> {
+            fn current_url(&self) -> impl Readable<Target = u32> {
+                let current = self.current().cloned();
+                self.urls().get(current).unwrap()
+            }
+        }
+
+        let store = use_store(|| History {
+            urls: vec![1, 2],
+            current: 1,
+        });
+        let url: u32 = store.current_url().cloned();
+        assert_eq!(url, 2);
+    }
+
     // pub(crate) fields on a pub struct go on the crate trait (pub(crate) visibility)
     fn derive_struct_pub_crate_fields() {
         #[derive(Store)]
