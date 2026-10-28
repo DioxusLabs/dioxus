@@ -15,6 +15,7 @@ pub(crate) mod print;
 pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod shell_completions;
+pub(crate) mod tailwind;
 pub(crate) mod target;
 pub(crate) mod translate;
 pub(crate) mod update;
@@ -116,7 +117,7 @@ pub(crate) enum Commands {
     #[clap(name = "self-update")]
     SelfUpdate(update::SelfUpdate),
 
-    /// Run a dioxus build tool. IE `build-assets`, `hotpatch`, etc
+    /// Run a dioxus build tool. IE `assets`, `hotpatch`, `tailwind`, etc
     #[clap(name = "tools")]
     #[clap(subcommand)]
     Tools(BuildTools),
@@ -137,6 +138,10 @@ pub enum BuildTools {
     /// Hotpatch the "tip" of a given "fat" binary. The output here must be from the `dx build` command with "fat" enabled
     #[clap(name = "hotpatch")]
     HotpatchTip(hotpatch::HotpatchTip),
+
+    /// Generate the tailwind CSS for a package without building it.
+    #[clap(name = "tailwind")]
+    BuildTailwind(tailwind::BuildTailwind),
 }
 
 pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {
