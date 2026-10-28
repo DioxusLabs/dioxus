@@ -112,6 +112,24 @@ pub struct Store<T: ?Sized, Lens = WriteSignal<T>> {
     _phantom: PhantomData<Box<T>>,
 }
 
+impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> Store<T, WriteSignal<T, S>> {
+    #[doc(hidden)]
+    pub fn __memoize(&mut self, other: &Self) -> bool {
+        self.selector
+            .memoize(&other.selector, |old, new| old.__point_to(*new))
+            .unwrap()
+    }
+}
+
+impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> Store<T, ReadSignal<T, S>> {
+    #[doc(hidden)]
+    pub fn __memoize(&mut self, other: &Self) -> bool {
+        self.selector
+            .memoize(&other.selector, |old, new| old.point_to(*new))
+            .unwrap()
+    }
+}
+
 impl<T: 'static, S: Storage<T>> Store<T, CopyValue<T, S>> {
     /// Creates a new `Store` that might be sync. This allocates memory in the current scope, so this should only be called
     /// inside of an initialization closure like the closure passed to [`use_hook`].
