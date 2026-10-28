@@ -10,27 +10,30 @@
 
 use std::path::Path;
 
-/// Write `contents` to `path`, then restrict the file to its owner on unix.
+/// Write `contents` to `path` with the file owner-only for the whole write.
 ///
 /// The file is created with mode `0600` where the platform supports it, so there is no window in
 /// which a freshly written env dump is readable by other users. If the file already exists with
-/// looser permissions (both files are pre-created by `prebuild`), its mode is tightened as well.
+/// looser permissions (`prebuild` pre-creates `link_env.json`), `mode` is ignored by the kernel,
+/// so the `chmod` has to happen *before* the bytes go in: tightening afterwards leaves a
+/// pre-created 0644 file readable for as long as the write takes.
 pub(crate) fn write_private(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
     use std::io::Write;
 
     let mut file = create_private(path)?;
+    restrict_to_owner(path);
     file.write_all(contents.as_ref())?;
 
-    // `mode` only applies when the file is created; an existing 0644 file keeps its old mode.
-    restrict_to_owner(path);
     Ok(())
 }
 
 /// Create (or truncate) `path` owner-only, before a single byte is written to it.
 ///
-/// Split out of [`write_private`] so a test can observe the mode of the still-empty file: a
-/// `chmod` after the write would leave the dump readable for as long as the write takes.
-fn create_private(path: &Path) -> std::io::Result<std::fs::File> {
+/// Deliberately does not `chmod`: the `0600` here is the `O_CREAT` mode argument, and keeping the
+/// `chmod` in the callers is what lets a test tell the two apart. A `create_private` that
+/// tightened the file itself would still return a 0600 file with `options.mode` deleted, so
+/// nothing would hold the no-readable-window property in place.
+pub(crate) fn create_private(path: &Path) -> std::io::Result<std::fs::File> {
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
 

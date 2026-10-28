@@ -934,7 +934,11 @@ impl BuildRequest {
         _ = std::fs::create_dir_all(self.rustc_wrapper_args_scope_dir(&ctx.mode)?);
         _ = std::fs::File::create(self.link_err_file());
         _ = std::fs::File::create(self.link_args_file());
-        _ = std::fs::File::create(self.link_env_file());
+        // The env dump is owner-only from the moment it exists, so a pre-created file is never
+        // left readable: `write_private` cannot re-apply `O_CREAT` mode to a file that is already
+        // there, it can only chmod it.
+        _ = crate::secure_fs::create_private(&self.link_env_file());
+        crate::secure_fs::restrict_to_owner(&self.link_env_file());
         _ = std::fs::File::create(self.windows_command_file());
 
         if !matches!(ctx.mode, BuildMode::Thin { .. }) {
