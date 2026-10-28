@@ -175,3 +175,37 @@ fn has_linking_args() -> bool {
 
     false
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn captured_rustc_args_are_written_owner_only() {
+        // `.captured-args/<crate>.json` holds a verbatim `std::env::vars()`, so it can carry the
+        // user's tokens and must not be readable by other local users.
+        let dir = tempfile::tempdir().unwrap();
+        let args_dir = dir.path().join(".captured-args");
+
+        write_rustc_args(
+            &args_dir,
+            &RustcArgs {
+                args: vec![
+                    "rustc".into(),
+                    "--crate-name".into(),
+                    "myapp".into(),
+                    "--crate-type".into(),
+                    "bin".into(),
+                ],
+                envs: vec![("SECRET_TOKEN".into(), "hunter2".into())],
+                cwd: PathBuf::new(),
+            },
+        );
+
+        let path = args_dir.join("myapp.bin.json");
+        assert!(std::fs::read_to_string(&path).unwrap().contains("hunter2"));
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "captured rustc env must be owner-only");
+    }
+}

@@ -18,6 +18,19 @@ use std::path::Path;
 pub(crate) fn write_private(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
     use std::io::Write;
 
+    let mut file = create_private(path)?;
+    file.write_all(contents.as_ref())?;
+
+    // `mode` only applies when the file is created; an existing 0644 file keeps its old mode.
+    restrict_to_owner(path);
+    Ok(())
+}
+
+/// Create (or truncate) `path` owner-only, before a single byte is written to it.
+///
+/// Split out of [`write_private`] so a test can observe the mode of the still-empty file: a
+/// `chmod` after the write would leave the dump readable for as long as the write takes.
+fn create_private(path: &Path) -> std::io::Result<std::fs::File> {
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
 
@@ -27,12 +40,7 @@ pub(crate) fn write_private(path: &Path, contents: impl AsRef<[u8]>) -> std::io:
         options.mode(0o600);
     }
 
-    let mut file = options.open(path)?;
-    file.write_all(contents.as_ref())?;
-
-    // `mode` only applies when the file is created; an existing 0644 file keeps its old mode.
-    restrict_to_owner(path);
-    Ok(())
+    options.open(path)
 }
 
 /// Best-effort `chmod 0600`.
@@ -70,6 +78,20 @@ mod tests {
             "{\"LIB\":\"C:\\\\sdk\\\\lib\"}"
         );
         assert_eq!(mode(&path), 0o600);
+    }
+
+    #[test]
+    fn create_private_is_owner_only_before_anything_is_written() {
+        // The point of creating the file 0600 rather than chmod-ing it afterwards: a dump that is
+        // only tightened at the end of the write is readable for the whole duration of the write.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("env.json");
+
+        let file = create_private(&path).unwrap();
+
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "");
+        drop(file);
     }
 
     #[test]
