@@ -181,9 +181,9 @@ fn custom_elements_get_gated_global_attrs_unless_they_define_the_attr() {
                 tag: "style-panel".to_string(),
                 namespace: None,
                 attrs: vec![SnapshotAttr {
-                    name: "width".to_string(),
-                    namespace: Some("style".to_string()),
-                    value: "12px".to_string(),
+                    name: "style".to_string(),
+                    namespace: None,
+                    value: "width: 12px;".to_string(),
                 }],
                 listeners: Vec::new(),
                 children: Vec::new(),

@@ -48,18 +48,38 @@ fn child_snapshot<'a>(
         VNodeChild::Element(element) => {
             let mut element_attrs = Vec::new();
             let mut listeners = Vec::new();
+            let mut style = String::new();
             for (name, value, namespace) in element.static_attributes() {
-                set_snapshot_attr(
-                    &mut element_attrs,
-                    name.to_string(),
-                    namespace.map(ToString::to_string),
-                    value.to_string(),
-                );
+                if is_style_attribute(name, namespace) {
+                    push_style_declaration(&mut style, name, value, namespace);
+                } else {
+                    set_snapshot_attr(
+                        &mut element_attrs,
+                        name.to_string(),
+                        namespace.map(ToString::to_string),
+                        value.to_string(),
+                    );
+                }
             }
             for anchor in element.dynamic_anchors() {
                 for attr in anchor.attrs().flat_map(|slot| slot.attrs()) {
-                    apply_dynamic_attr(&mut element_attrs, &mut listeners, attr);
+                    if is_style_attribute(attr.name, attr.namespace) {
+                        if let AttributeValue::Text(value) = &attr.value {
+                            push_style_declaration(&mut style, attr.name, value, attr.namespace);
+                        }
+                    } else {
+                        apply_dynamic_attr(&mut element_attrs, &mut listeners, attr);
+                    }
                 }
+            }
+            let style = style.trim();
+            if !style.is_empty() {
+                set_snapshot_attr(
+                    &mut element_attrs,
+                    "style".to_string(),
+                    None,
+                    style.to_string(),
+                );
             }
             let rendered_children = element
                 .children()
@@ -167,5 +187,22 @@ fn set_snapshot_attr(
 fn remove_snapshot_attr(attrs: &mut Vec<SnapshotAttr>, name: &str, namespace: Option<&str>) {
     if let Ok(index) = attrs.binary_search_by(|attr| attr_key(attr).cmp(&(name, namespace))) {
         attrs.remove(index);
+    }
+}
+
+fn is_style_attribute(name: &str, namespace: Option<&str>) -> bool {
+    name == "style" || namespace == Some("style")
+}
+
+fn push_style_declaration(out: &mut String, name: &str, value: &str, namespace: Option<&str>) {
+    if name == "style" {
+        out.push(' ');
+        out.push_str(value);
+    } else if namespace == Some("style") {
+        out.push(' ');
+        out.push_str(name);
+        out.push_str(": ");
+        out.push_str(value);
+        out.push(';');
     }
 }

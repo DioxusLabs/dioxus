@@ -22,7 +22,9 @@ use core::{cmp::Ordering, iter::Peekable};
 use crate::innerlude::MountId;
 use crate::{
     Attribute, AttributeValue, BorrowedAttributeValue, VNode, VirtualDom, WriteMutations,
-    arena::MountedElementId, diff::template::DynamicAnchor, mutations::TargetedLazyScope,
+    arena::MountedElementId,
+    diff::template::{DynamicAnchor, is_style_attribute},
+    mutations::TargetedLazyScope,
 };
 
 /// Attribute identity as seen by renderers. Value changes do not affect the key, but namespace
@@ -76,6 +78,10 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
+        let old_style = old_anchor.merged_style_string();
+        let new_style = new_anchor.merged_style_string();
+        let style_volatile = old_anchor.style_is_volatile() || new_anchor.style_is_volatile();
+
         let AttributeDiffScratch {
             old_ranges,
             old_offsets,
@@ -101,7 +107,22 @@ impl VNode {
         let mut to =
             TargetedLazyScope::new(to, dom.runtime.clone(), move |to| to.push_id(element_id));
         while let Some(delta) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {
+            // Style attributes are merged with the static template styles below and written as a
+            // single `style` attribute. Diffing them individually would re-introduce the
+            // per-property behavior that leaves stale declarations behind.
+            if is_style_attribute(delta.key.0, delta.key.1) {
+                continue;
+            }
             self.diff_dynamic_attribute(old_anchor, delta, target, dom, &mut to);
+        }
+
+        if old_style != new_style || style_volatile {
+            match &new_style {
+                Some(style) => {
+                    to.set_attribute("style", None, BorrowedAttributeValue::Text(style));
+                }
+                None => to.set_attribute("style", None, BorrowedAttributeValue::None),
+            }
         }
     }
 

@@ -7,12 +7,6 @@ export function setAttributeInner(
   value: string,
   ns: string
 ) {
-  // we support a single namespace by default: style
-  if (ns === "style") {
-    node.style.setProperty(field, value);
-    return;
-  }
-
   // If there's a namespace, use setAttributeNS (svg, mathml, etc.)
   if (!!ns) {
     node.setAttributeNS(ns, field, value);
@@ -65,22 +59,8 @@ export function setAttributeInner(
       break;
 
     case "style":
-      // Save the existing styles
-      const existingStyles: Record<string, string> = {};
-
-      for (let i = 0; i < node.style.length; i++) {
-        const prop = node.style[i];
-        existingStyles[prop] = node.style.getPropertyValue(prop);
-      }
       // Override all styles
       node.setAttribute(field, value);
-      // Restore the old styles
-      for (const prop in existingStyles) {
-        // If it wasn't overridden, restore it
-        if (!node.style.getPropertyValue(prop)) {
-          node.style.setProperty(prop, existingStyles[prop]);
-        }
-      }
       break;
 
     case "multiple":

@@ -7,7 +7,7 @@ use crate::{
         attributes::{AttrDiffTarget, AttributeDiffScratch},
         context::{DiffFrame, DiffState},
         placement::{ElementEdge, InsertionSite, insertion_site_at, insertion_site_for_slot},
-        template::{DynamicAnchor, DynamicNodeSlot},
+        template::{DynamicAnchor, DynamicNodeSlot, is_style_attribute, push_style_declaration},
     },
     innerlude::MountId,
     mutations::{remove_id, with_consumed_id, with_id},
@@ -918,9 +918,19 @@ impl VNode {
         to: &mut dyn WriteMutations,
     ) {
         let id = dom.unchecked_mounted_anchor_node(mount, anchor.anchor_index());
+        let style = anchor
+            .has_dynamic_style()
+            .then(|| anchor.merged_style_string())
+            .flatten();
         with_id(to, id.element_id(), |to| {
             for attr in anchor.attrs().flat_map(|slot| slot.attrs()) {
+                if is_style_attribute(attr.name, attr.namespace) {
+                    continue;
+                }
                 Self::write_attribute_to_current(attr, id, mount, dom, to);
+            }
+            if let Some(style) = &style {
+                to.set_attribute("style", None, crate::BorrowedAttributeValue::Text(style));
             }
         });
     }
@@ -1017,9 +1027,20 @@ fn create_static_prototype(node: StaticTemplateNode<'_>, to: &mut dyn WriteMutat
         StaticTemplateNode::Element(element) => {
             to.create_element(element.tag(), element.namespace());
 
+            let mut style = String::new();
             for attr in element.attributes() {
-                let value = crate::BorrowedAttributeValue::Text(attr.value);
-                to.set_attribute(attr.name, attr.namespace, value);
+                if is_style_attribute(attr.name, attr.namespace) {
+                    push_style_declaration(&mut style, attr.name, attr.value, attr.namespace);
+                } else {
+                    let value = crate::BorrowedAttributeValue::Text(attr.value);
+                    to.set_attribute(attr.name, attr.namespace, value);
+                }
+            }
+
+            let style = style.trim();
+            if !style.is_empty() {
+                let value = crate::BorrowedAttributeValue::Text(style);
+                to.set_attribute("style", None, value);
             }
 
             let mut children = 0;

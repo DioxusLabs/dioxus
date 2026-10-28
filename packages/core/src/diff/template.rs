@@ -1,4 +1,4 @@
-use crate::{Attribute, DynamicNode, VNode};
+use crate::{Attribute, AttributeValue, DynamicNode, VNode};
 use dioxus_core_template::{
     StaticTemplateElement, StaticTemplateNode, StaticTemplateNodeIter, StaticTemplateText,
     TemplateAnchor, TemplatePath, TemplateSlotTarget,
@@ -590,6 +590,80 @@ impl<'a> DynamicAnchor<'a> {
             .static_element(element_op)
             .expect("dynamic attr anchor must reference a static element op")
             .attribute_value(key)
+    }
+
+    fn static_element(self) -> Option<StaticTemplateElement<'a>> {
+        let element_op = self.template_anchor().parent_element_op_index()?;
+        self.vnode.template().static_element(element_op)
+    }
+
+    /// Whether this anchor owns any dynamic style attribute.
+    pub(super) fn has_dynamic_style(self) -> bool {
+        self.attrs().any(|slot| {
+            slot.attrs()
+                .iter()
+                .any(|attr| is_style_attribute(attr.name, attr.namespace))
+        })
+    }
+
+    /// Whether any dynamic style attribute on this anchor is volatile.
+    pub(super) fn style_is_volatile(self) -> bool {
+        self.attrs().any(|slot| {
+            slot.attrs()
+                .iter()
+                .any(|attr| attr.volatile && is_style_attribute(attr.name, attr.namespace))
+        })
+    }
+
+    /// The merged inline style for the element owning this anchor.
+    ///
+    /// Static template styles are combined with every dynamic style slot so the renderer can
+    /// replace the `style` attribute as a whole. Returning `None` means the element has no style
+    /// declarations at all.
+    pub(super) fn merged_style_string(self) -> Option<String> {
+        let mut style = String::new();
+        if let Some(element) = self.static_element() {
+            push_static_style(&mut style, element);
+        }
+        for slot in self.attrs() {
+            for attr in slot.attrs() {
+                if let AttributeValue::Text(value) = &attr.value {
+                    push_style_declaration(&mut style, attr.name, value, attr.namespace);
+                }
+            }
+        }
+        let style = style.trim();
+        (!style.is_empty()).then(|| style.to_string())
+    }
+}
+
+/// Returns true for attributes that contribute to the inline `style` attribute.
+pub(super) fn is_style_attribute(name: &str, namespace: Option<&str>) -> bool {
+    name == "style" || namespace == Some("style")
+}
+
+/// Append a single style declaration to `out`.
+pub(super) fn push_style_declaration(
+    out: &mut String,
+    name: &str,
+    value: &str,
+    namespace: Option<&str>,
+) {
+    if name == "style" {
+        out.push(' ');
+        out.push_str(value);
+    } else if namespace == Some("style") {
+        out.push(' ');
+        out.push_str(name);
+        out.push_str(": ");
+        out.push_str(value);
+        out.push(';');
+    }
+}
+
+fn push_static_style(out: &mut String, element: StaticTemplateElement<'_>) {
+    for attr in element.attributes() {
+        push_style_declaration(out, attr.name, attr.value, attr.namespace);
     }
 }
 
