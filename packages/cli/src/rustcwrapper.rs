@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     env::{args, vars},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::ExitCode,
 };
 
@@ -103,7 +103,7 @@ pub fn run_rustc() -> ExitCode {
     std::process::exit(status.code().unwrap_or(1)); // Exit with 1 if process was killed by signal
 }
 
-fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
+fn write_rustc_args(args_dir: &Path, rustc_args: &RustcArgs) {
     // Extract the crate name from the args to use as the filename.
     // Skip non-sensical args when a build is completely fresh (rustc is invoked with --crate-name ___)
     let crate_name = rustc_args
@@ -114,7 +114,7 @@ fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
 
     if let Some(crate_name) = crate_name {
         if crate_name != "___" {
-            std::fs::create_dir_all(args_dir)
+            create_private_dir_all(args_dir)
                 .expect("Failed to create args directory for rustc wrapper");
 
             let crate_type = rustc_args
@@ -136,13 +136,51 @@ fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
                 _ => "bin", // proc-macro, cdylib, etc. — treat as bin
             };
 
-            std::fs::write(
-                args_dir.join(format!("{crate_name}.{suffix}.json")),
+            write_private_file(
+                &args_dir.join(format!("{crate_name}.{suffix}.json")),
                 &serialized_args,
             )
             .expect("Failed to write rustc args to file");
         }
     }
+}
+
+/// Create `dir` and any missing parents, then restrict `dir` itself to its owner.
+#[cfg(unix)]
+pub(crate) fn create_private_dir_all(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(dir)?;
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+pub(crate) fn create_private_dir_all(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)
+}
+
+/// Write `contents` to `path`, creating or truncating it, and restrict it to its owner.
+///
+/// `mode` only applies when the file is created, so an existing file keeps its old mode
+/// after truncation and needs `set_permissions` too.
+#[cfg(unix)]
+pub(crate) fn write_private_file(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+    use std::{
+        io::Write,
+        os::unix::fs::{OpenOptionsExt, PermissionsExt},
+    };
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    file.write_all(contents.as_ref())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn write_private_file(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+    std::fs::write(path, contents)
 }
 
 /// Check if the arguments indicate a linking step, including those in command files.
@@ -176,4 +214,68 @@ fn has_linking_args() -> bool {
     }
 
     false
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn mode(path: &Path) -> u32 {
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn write_private_file_tightens_existing_0644_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("probe.bin.json");
+        std::fs::write(&path, "old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_private_file(&path, "new").unwrap();
+
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+    }
+
+    #[test]
+    fn write_private_file_creates_empty_file_as_0600() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("link_args.json");
+
+        write_private_file(&path, "").unwrap();
+
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(std::fs::read(&path).unwrap(), b"");
+    }
+
+    #[test]
+    fn write_private_file_errors_when_parent_is_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing").join("link_args.json");
+
+        assert!(write_private_file(&path, "").is_err());
+    }
+
+    #[test]
+    fn create_private_dir_all_tightens_existing_0755_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let existing = dir.path().join("scope");
+        std::fs::create_dir(&existing).unwrap();
+        std::fs::set_permissions(&existing, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        create_private_dir_all(&existing).unwrap();
+
+        assert_eq!(mode(&existing), 0o700);
+    }
+
+    #[test]
+    fn create_private_dir_all_creates_nested_dir_as_0700() {
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join(".captured-args").join("scope");
+
+        create_private_dir_all(&nested).unwrap();
+
+        assert_eq!(mode(&nested), 0o700);
+    }
 }
