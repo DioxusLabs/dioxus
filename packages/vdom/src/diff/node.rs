@@ -415,7 +415,9 @@ impl VNode {
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
-        self.replace_inner(mount, new, parent, &mut state, false)
+        let created = self.replace_inner(mount, new, parent, &mut state, false);
+        state.dom.copy_render_parent_slot(mount, created.mount);
+        created
     }
 
     pub(crate) fn replace_inner(
