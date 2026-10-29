@@ -132,8 +132,8 @@ attribute_group! {
     map_global_attributes;
     map_html_global_attributes_to_rsx;
 
-    #[deprecated(note = "This attribute does nothing. For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead. For liveview, you can use `\"onclick\": (evt) => evt.prevent_default()` to prevent the default action for this element.")]
-    /// This attribute has been deprecated in favor of [`dioxus_core::Event::prevent_default`]
+    #[deprecated(note = "This attribute does nothing. For most renderers, you should prefer calling [`dioxus_vdom::Event::prevent_default`] on the event instead. For liveview, you can use `\"onclick\": (evt) => evt.prevent_default()` to prevent the default action for this element.")]
+    /// This attribute has been deprecated in favor of [`dioxus_vdom::Event::prevent_default`]
     prevent_default: "dioxus-prevent-default";
 
 
@@ -1668,7 +1668,7 @@ attribute_group! {
     /// which does not support the prevent default method on events.
     ///
     ///
-    /// For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead.
+    /// For most renderers, you should prefer calling [`dioxus_vdom::Event::prevent_default`] on the event instead.
     ///
     ///
     /// For more information, see the MDN docs:
@@ -2437,14 +2437,14 @@ pub trait GlobalAttributesElement {}
 pub trait SvgAttributesElement {}
 
 impl<Tag, Attributes, Children> GlobalAttributesExtension
-    for dioxus_core::view::ElementBuilder<Tag, Attributes, Children>
+    for dioxus_vdom::view::ElementBuilder<Tag, Attributes, Children>
 where
     Tag: GlobalAttributesElement,
 {
 }
 
 impl<Tag, Attributes, Children> SvgAttributesExtension
-    for dioxus_core::view::ElementBuilder<Tag, Attributes, Children>
+    for dioxus_vdom::view::ElementBuilder<Tag, Attributes, Children>
 where
     Tag: SvgAttributesElement,
 {

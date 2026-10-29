@@ -135,7 +135,7 @@ Generated output structure:
 
 ### Template Structure
 ```rust
-dioxus_core::Element::Ok({
+dioxus_vdom::Element::Ok({
     #[cfg(debug_assertions)]
     fn __original_template() -> &'static HotReloadedTemplate { ... }
 

@@ -17,6 +17,6 @@ pub use dioxus_stores_macro::{Store, store};
 /// Re-exports for the store derive macro
 #[doc(hidden)]
 pub mod macro_helpers {
-    pub use dioxus_core;
     pub use dioxus_signals;
+    pub use dioxus_vdom;
 }

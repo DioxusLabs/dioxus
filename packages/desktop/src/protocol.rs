@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use crate::{assets::*, webview::WebviewEdits};
 use crate::{document::NATIVE_EVAL_JS, file_upload::FileDialogRequest};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::AnyhowContext;
 use dioxus_html::{SerializedFileData, SerializedFormObject};
 use dioxus_interpreter_js::NATIVE_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
+use dioxus_vdom::AnyhowContext;
 use wry::{
     RequestAsyncResponder,
     http::{Request, Response, status::StatusCode},
@@ -183,7 +183,7 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
 fn file_dialog_responder_sync(
     request: wry::http::Request<Vec<u8>>,
     responder: wry::RequestAsyncResponder,
-) -> dioxus_core::Result<()> {
+) -> dioxus_vdom::Result<()> {
     // Handle the file dialog request
     // We can't use the body, just the headers
     let header = request
@@ -216,7 +216,7 @@ fn respond_to_file_dialog(
     mut file_dialog: FileDialogRequest,
     file_list: Vec<PathBuf>,
     responder: wry::RequestAsyncResponder,
-) -> dioxus_core::Result<()> {
+) -> dioxus_vdom::Result<()> {
     // Get the position of the entry we're updating, so we can insert new entries in the same place
     // If we can't find it, just append to the end. This is usually due to the input not being in a form element.
     let position_of_entry = file_dialog

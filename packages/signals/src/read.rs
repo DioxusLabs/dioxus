@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{MappedSignal, ReadSignal, ext_methods};
-use dioxus_core::Subscribers;
+use dioxus_vdom::Subscribers;
 use generational_box::{AnyStorage, UnsyncStorage};
 
 /// A reference to a value that can be read from.

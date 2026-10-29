@@ -2,11 +2,11 @@
 
 use crate::{UseWaker, use_callback, use_signal, use_waker};
 
-use dioxus_core::{
+use dioxus_signals::*;
+use dioxus_vdom::{
     Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError, Subscribers,
     SuspendedFuture, Task, spawn, use_hook,
 };
-use dioxus_signals::*;
 use futures_util::{
     FutureExt, StreamExt,
     future::{self},
@@ -520,7 +520,7 @@ impl<T> IntoAttributeValue for Resource<T>
 where
     T: Clone + IntoAttributeValue,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
+    fn into_value(self) -> dioxus_vdom::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
@@ -529,7 +529,7 @@ impl<T> IntoDynNode for Resource<T>
 where
     T: Clone + IntoDynNode,
 {
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+    fn into_dyn_node(self) -> dioxus_vdom::DynamicNode {
         self().into_dyn_node()
     }
 }

@@ -69,7 +69,7 @@ pub use winit::dpi::{LogicalSize, PhysicalSize};
 pub use winit::window::WindowAttributes;
 
 use blitz_shell::{BlitzShellEvent, BlitzShellProxy, WindowConfig, create_default_event_loop};
-use dioxus_core::{ComponentFunction, Element, VirtualDom, consume_context, use_hook};
+use dioxus_vdom::{ComponentFunction, Element, VirtualDom, consume_context, use_hook};
 use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;
 use std::sync::Arc;

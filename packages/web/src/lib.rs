@@ -6,7 +6,7 @@
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
-use dioxus_core::{ScopeId, VirtualDom};
+use dioxus_vdom::{ScopeId, VirtualDom};
 use dom::WebsysDom;
 use futures_util::{FutureExt, StreamExt, pin_mut, select};
 
@@ -56,7 +56,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     #[cfg(feature = "document")]
     if let Some(history) = web_config.history.clone() {
-        virtual_dom.in_scope(ScopeId::ROOT, || dioxus_core::provide_context(history));
+        virtual_dom.in_scope(ScopeId::ROOT, || dioxus_vdom::provide_context(history));
     }
 
     #[cfg(feature = "document")]
@@ -135,7 +135,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             server_data.in_context(|| {
                 virtual_dom.in_scope(ScopeId::ROOT, || {
                     // Provide a hydration compatible create error boundary method
-                    dioxus_core::provide_create_error_boundary(
+                    dioxus_vdom::provide_create_error_boundary(
                         dioxus_fullstack_core::init_error_boundary,
                     );
                     #[cfg(feature = "document")]

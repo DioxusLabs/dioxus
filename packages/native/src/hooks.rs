@@ -1,6 +1,6 @@
 use crate::event_handlers::{WindowEventHandlers, WinitEventHandlerId};
 
-use dioxus_core::{Runtime, consume_context, current_scope_id, use_hook_with_cleanup};
+use dioxus_vdom::{Runtime, consume_context, current_scope_id, use_hook_with_cleanup};
 use std::rc::Rc;
 use winit::{
     event::{ElementState, WindowEvent},

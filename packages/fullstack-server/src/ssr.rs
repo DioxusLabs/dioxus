@@ -6,15 +6,15 @@ use crate::isrg::{
 use crate::streaming::{Mount, StreamingRenderer};
 use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
-use dioxus_core::{
-    DynamicNode, DynamicNodeSlot, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext,
-    VirtualDom, consume_context, has_context, try_consume_context,
-};
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
+use dioxus_vdom::{
+    DynamicNode, DynamicNodeSlot, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext,
+    VirtualDom, consume_context, has_context, try_consume_context,
+};
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
 use http::{HeaderMap, StatusCode, request::Parts};
@@ -196,7 +196,7 @@ impl SsrRendererPool {
                 provide_fullstack_history_context(history);
 
                 // Provide a hydration compatible error boundary that serializes errors for the client
-                dioxus_core::provide_create_error_boundary(
+                dioxus_vdom::provide_create_error_boundary(
                     dioxus_fullstack_core::init_error_boundary,
                 );
             });
@@ -503,7 +503,7 @@ impl SsrRendererPool {
         // Add an error boundary to the scope. We serialize the suspense error boundary separately so we can use
         // the normal in memory ErrorContext here
         Runtime::current().in_scope(suspense_scope, || {
-            dioxus_core::provide_context(ErrorContext::new(None))
+            dioxus_vdom::provide_context(ErrorContext::new(None))
         });
     }
 
@@ -630,7 +630,7 @@ impl SsrRendererPool {
     ) -> Result<(), IncrementalRendererError> {
         let title = {
             let document: Option<Rc<ServerDocument>> =
-                virtual_dom.in_scope(ScopeId::ROOT, dioxus_core::try_consume_context);
+                virtual_dom.in_scope(ScopeId::ROOT, dioxus_vdom::try_consume_context);
             // Collect any head content from the document provider and inject that into the head
             document.and_then(|document| document.title())
         };

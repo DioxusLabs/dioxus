@@ -15,7 +15,7 @@ readme = "../manganis/README.md"
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 const-serialize = { package = "const-serialize", path = "../../const-serialize", version = "0.8.0-alpha.3", features = ["serde"] }
-dioxus-core-types = { workspace = true, optional = true }
+dioxus-base-types = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
 winnow = { workspace = true }
 
@@ -23,4 +23,4 @@ winnow = { workspace = true }
 manganis = { workspace = true }
 
 [features]
-dioxus = ["dep:dioxus-core-types", "dep:dioxus-cli-config"]
+dioxus = ["dep:dioxus-base-types", "dep:dioxus-cli-config"]

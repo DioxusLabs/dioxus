@@ -1,6 +1,6 @@
 use crate::{use_callback, use_signal};
-use dioxus_core::{Callback, CapturedError, Result, Task, use_hook};
 use dioxus_signals::{ReadSignal, ReadableBoxExt, ReadableExt, Signal, WritableExt};
+use dioxus_vdom::{Callback, CapturedError, Result, Task, use_hook};
 use futures_channel::oneshot::Receiver;
 use futures_util::{FutureExt, future::Shared};
 use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll};
@@ -91,7 +91,7 @@ where
 
         // Spawn a new task, and *then* fire off the async
         let result = user_fn.call(input);
-        let new_task = dioxus_core::spawn(async move {
+        let new_task = dioxus_vdom::spawn(async move {
             // Set the state to pending
             state.set(ActionState::Pending);
 

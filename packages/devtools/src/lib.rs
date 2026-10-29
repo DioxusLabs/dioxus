@@ -1,6 +1,6 @@
-use dioxus_core::internal::HotReloadedTemplate;
-use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_signals::{GlobalKey, Signal, WritableExt};
+use dioxus_vdom::internal::HotReloadedTemplate;
+use dioxus_vdom::{ScopeId, VirtualDom};
 
 pub use dioxus_devtools_types::*;
 pub use subsecond;

@@ -1,9 +1,9 @@
-use dioxus_core::{Element, VNode};
-use dioxus_core_macro::{Props, rsx};
 use dioxus_html::{
     elements::{prelude::*, *},
     extensions::*,
 };
+use dioxus_vdom::{Element, VNode};
+use dioxus_vdom_macro::{Props, rsx};
 
 use tracing::error;
 

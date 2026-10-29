@@ -26,7 +26,7 @@ dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-document = { workspace = true }
 dioxus-history = { workspace = true }
 rustc-hash = { workspace = true }
-dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-vdom = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-devtools = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true }

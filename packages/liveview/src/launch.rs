@@ -1,4 +1,4 @@
-use dioxus_core::*;
+use dioxus_vdom::*;
 use std::any::Any;
 
 pub type Config = crate::Config<axum::Router>;

@@ -10,7 +10,7 @@ pub struct WinitEventHandlerId(pub(crate) u64);
 impl WinitEventHandlerId {
     /// Unregister this event handler from the window
     pub fn remove(&self) {
-        let handlers: Rc<WindowEventHandlers> = dioxus_core::consume_context();
+        let handlers: Rc<WindowEventHandlers> = dioxus_vdom::consume_context();
         handlers.remove(*self);
     }
 }

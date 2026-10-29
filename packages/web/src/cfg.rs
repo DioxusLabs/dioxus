@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use dioxus_core::LaunchConfig;
+use dioxus_vdom::LaunchConfig;
 use wasm_bindgen::JsCast as _;
 
 ///  Configuration for the WebSys renderer for the Dioxus VirtualDOM.

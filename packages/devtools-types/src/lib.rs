@@ -1,4 +1,4 @@
-use dioxus_core::internal::HotReloadTemplateWithLocation;
+use dioxus_vdom::internal::HotReloadTemplateWithLocation;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use subsecond_types::JumpTable;

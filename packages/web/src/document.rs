@@ -1,10 +1,10 @@
-use dioxus_core::ScopeId;
-use dioxus_core::queue_effect;
-use dioxus_core::{Runtime, provide_context};
 use dioxus_document::{
     Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
 };
 use dioxus_history::History;
+use dioxus_vdom::ScopeId;
+use dioxus_vdom::queue_effect;
+use dioxus_vdom::{Runtime, provide_context};
 use futures_util::FutureExt;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
@@ -68,7 +68,7 @@ extern "C" {
 }
 
 fn init_document_with(document: impl FnOnce(), history: impl FnOnce()) {
-    use dioxus_core::has_context;
+    use dioxus_vdom::has_context;
     Runtime::current().in_scope(ScopeId::ROOT, || {
         if has_context::<Rc<dyn Document>>().is_none() {
             document();
@@ -79,7 +79,7 @@ fn init_document_with(document: impl FnOnce(), history: impl FnOnce()) {
     })
 }
 
-/// Provides the Document through [`dioxus_core::provide_context`].
+/// Provides the Document through [`dioxus_vdom::provide_context`].
 pub fn init_document() {
     // If hydrate is enabled, we add the FullstackWebDocument with the initial hydration data
     #[cfg(not(feature = "hydrate"))]

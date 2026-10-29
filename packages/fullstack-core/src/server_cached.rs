@@ -1,5 +1,5 @@
 use crate::{Transportable, transport::SerializeContextEntry};
-use dioxus_core::use_hook;
+use dioxus_vdom::use_hook;
 
 /// This allows you to send data from the server to the client *during hydration*.
 /// - When compiled as server, the closure is ran and the resulting data is serialized on the server and sent to the client.

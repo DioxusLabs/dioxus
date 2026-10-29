@@ -1,6 +1,6 @@
 use std::{any::Any, ops::Deref};
 
-use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers};
+use dioxus_vdom::{IntoAttributeValue, IntoDynNode, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
@@ -97,7 +97,7 @@ impl<T, S: BoxedSignalStorage<T>> IntoAttributeValue for ReadSignal<T, S>
 where
     T: Clone + IntoAttributeValue + 'static,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
+    fn into_value(self) -> dioxus_vdom::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
@@ -107,7 +107,7 @@ where
     T: Clone + IntoDynNode + 'static,
     S: BoxedSignalStorage<T>,
 {
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+    fn into_dyn_node(self) -> dioxus_vdom::DynamicNode {
         self.with(|f| f.clone().into_dyn_node())
     }
 }
@@ -324,7 +324,7 @@ where
     T: Clone + IntoAttributeValue + 'static,
     S: BoxedSignalStorage<T>,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
+    fn into_value(self) -> dioxus_vdom::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
@@ -334,7 +334,7 @@ where
     T: Clone + IntoDynNode + 'static,
     S: BoxedSignalStorage<T>,
 {
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+    fn into_dyn_node(self) -> dioxus_vdom::DynamicNode {
         self.with(|f| f.clone().into_dyn_node())
     }
 }

@@ -46,7 +46,7 @@ fn Blog(id: u32) -> Element {
     match id {
         1 => rsx! { div { "Blog post 1" } },
         2 => rsx! { div { "Blog post 2" } },
-        3 => dioxus_core::bail!("An error occurred while loading the blog post!"),
+        3 => dioxus_vdom::bail!("An error occurred while loading the blog post!"),
         _ => HttpError::not_found("Blog post not found")?,
     }
 }

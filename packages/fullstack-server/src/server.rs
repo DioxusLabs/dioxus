@@ -9,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::*,
 };
-use dioxus_core::{ComponentFunction, VirtualDom};
+use dioxus_vdom::{ComponentFunction, VirtualDom};
 use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

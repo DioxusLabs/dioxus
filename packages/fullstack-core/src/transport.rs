@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 
 use base64::Engine;
-use dioxus_core::CapturedError;
+use dioxus_vdom::CapturedError;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
@@ -174,8 +174,8 @@ pub fn serialize_context() -> HydrationContext {
     #[cfg(not(feature = "web"))]
     {
         // On the server each scope creates the context lazily
-        dioxus_core::has_context()
-            .unwrap_or_else(|| dioxus_core::provide_context(HydrationContext::default()))
+        dioxus_vdom::has_context()
+            .unwrap_or_else(|| dioxus_vdom::provide_context(HydrationContext::default()))
     }
 }
 
@@ -429,15 +429,15 @@ pub fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
 
 /// A `Transportable` type can be safely transported from the server to the client, and be used for
 /// hydration. Not all types can sensibly be transported, but many can. This trait makes it possible
-/// to customize how types are transported which helps for non-serializable types like `dioxus_core::CapturedError`.
+/// to customize how types are transported which helps for non-serializable types like `dioxus_vdom::CapturedError`.
 ///
 /// By default, all types that implement `Serialize` and `DeserializeOwned` are transportable.
 ///
-/// You can also implement `Transportable` for `Result<T, dioxus_core::CapturedError>` where `T` is
+/// You can also implement `Transportable` for `Result<T, dioxus_vdom::CapturedError>` where `T` is
 /// `Serialize` and `DeserializeOwned` to allow transporting results that may contain errors.
 ///
-/// Note that transporting a `Result<T, dioxus_core::CapturedError>` will lose various aspects of the original
-/// `dioxus_core::CapturedError` such as backtraces and source errors, but will preserve the error message.
+/// Note that transporting a `Result<T, dioxus_vdom::CapturedError>` will lose various aspects of the original
+/// `dioxus_vdom::CapturedError` such as backtraces and source errors, but will preserve the error message.
 pub trait Transportable<M = ()>: 'static {
     /// Serialize the type to a byte vector for transport
     fn transport_to_bytes(&self) -> Vec<u8>;
@@ -525,6 +525,6 @@ impl Transportable<TransportCapturedError> for CapturedError {
         Self: Sized,
     {
         let err: TransportError = ciborium::from_reader(Cursor::new(bytes))?;
-        Ok(dioxus_core::CapturedError::msg::<String>(err.error))
+        Ok(dioxus_vdom::CapturedError::msg::<String>(err.error))
     }
 }

@@ -339,7 +339,7 @@ impl DefineElements {
             pub struct HtmlCtx;
 
             #[cfg(feature = "hot-reload-context")]
-            impl ::dioxus_core_types::HotReloadingContext for HtmlCtx {
+            impl ::dioxus_base_types::HotReloadingContext for HtmlCtx {
                 fn map_attribute(
                     element: &str,
                     attribute: &str,

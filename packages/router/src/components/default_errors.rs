@@ -1,9 +1,9 @@
-use dioxus_core::Element;
-use dioxus_core_macro::rsx;
 use dioxus_html::{
     elements::{prelude::*, *},
     extensions::*,
 };
+use dioxus_vdom::Element;
+use dioxus_vdom_macro::rsx;
 
 #[allow(deprecated)]
 use crate::hooks::use_router;

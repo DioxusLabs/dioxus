@@ -4,11 +4,11 @@
 use std::{fmt::Debug, hash::Hash};
 
 use crate::subscriptions::{PathKey, StoreSubscriptions, TinyVec};
-use dioxus_core::Subscribers;
 use dioxus_signals::{
     BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableRef, Writable, WritableExt,
     WritableRef,
 };
+use dioxus_vdom::Subscribers;
 
 /// SelectorScope is the primitive that backs the store system.
 ///

@@ -27,7 +27,7 @@ impl ToTokens for TextNode {
 
         if txt.is_static() {
             tokens.append_all(quote! {
-                dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string()))
+                dioxus_vdom::DynamicNode::Text(dioxus_vdom::VText::new(#txt.to_string()))
             })
         } else {
             // todo:
@@ -36,7 +36,7 @@ impl ToTokens for TextNode {
             let as_lit = HotLiteral::Fmted(txt.clone());
 
             tokens.append_all(quote! {
-                dioxus_core::DynamicNode::Text(dioxus_core::VText::new( #as_lit ))
+                dioxus_vdom::DynamicNode::Text(dioxus_vdom::VText::new( #as_lit ))
             })
         }
     }

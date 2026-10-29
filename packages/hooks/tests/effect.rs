@@ -5,8 +5,8 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use dioxus::prelude::*;
-use dioxus_core::ElementId;
 use dioxus_signals::*;
+use dioxus_vdom::ElementId;
 
 #[tokio::test]
 async fn effects_rerun() {
@@ -30,7 +30,7 @@ async fn effects_rerun() {
                     println!("Signal: {:?}", signal);
 
                     // Stop the wait for work manually
-                    dioxus_core::needs_update();
+                    dioxus_vdom::needs_update();
                 }
             });
             signal += 1;

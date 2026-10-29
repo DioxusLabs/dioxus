@@ -1,10 +1,10 @@
-use dioxus_core::ScopeId;
-use dioxus_core::queue_effect;
 use dioxus_document::{
     Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
     create_element_in_head,
 };
 use dioxus_history::History;
+use dioxus_vdom::ScopeId;
+use dioxus_vdom::queue_effect;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use std::rc::Rc;
 
@@ -64,9 +64,9 @@ impl Evaluator for LiveviewEvaluator {
     }
 }
 
-/// Provides the LiveviewDocument through [`dioxus_core::Runtime::provide_context`].
+/// Provides the LiveviewDocument through [`dioxus_vdom::Runtime::provide_context`].
 pub fn init_document() {
-    let rt = dioxus_core::Runtime::current();
+    let rt = dioxus_vdom::Runtime::current();
     let query = rt.consume_context::<QueryEngine>(ScopeId::ROOT).unwrap();
     let provider: Rc<dyn Document> = Rc::new(LiveviewDocument {
         query: query.clone(),

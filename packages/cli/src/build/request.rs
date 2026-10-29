@@ -1097,7 +1097,7 @@ impl BuildRequest {
 
                     // These outputs look something like:
                     //
-                    // { "artifact":"target/debug/deps/libdioxus_core-4f2a0b3c1e5f8b7c.rlib", "emit":"link" }
+                    // { "artifact":"target/debug/deps/libdioxus_vdom-4f2a0b3c1e5f8b7c.rlib", "emit":"link" }
                     //
                     // There are other outputs like depinfo that we might be interested in the future.
                     if let Ok(artifact) = serde_json::from_str::<RustcArtifact>(&line) {

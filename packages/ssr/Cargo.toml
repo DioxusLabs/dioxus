@@ -9,8 +9,8 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 keywords = ["dom", "ui", "gui", "react", "ssr"]
 
 [dependencies]
-dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-core-types = { workspace = true }
+dioxus-vdom = { workspace = true, features = ["serialize"] }
+dioxus-base-types = { workspace = true }
 askama_escape = { workspace = true }
 rustc-hash = { workspace = true }
 

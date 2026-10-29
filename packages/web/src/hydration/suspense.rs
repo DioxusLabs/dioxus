@@ -1,5 +1,5 @@
 use crate::dom::WebsysDom;
-use dioxus_core::{DynamicNode, MountedVNode, ScopeId, ScopeState, SuspenseContext, VirtualDom};
+use dioxus_vdom::{DynamicNode, MountedVNode, ScopeId, ScopeState, SuspenseContext, VirtualDom};
 use std::fmt::Write;
 
 #[derive(Debug)]

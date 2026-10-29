@@ -170,7 +170,7 @@ impl Attribute {
 
                     quote! {
                         Box::new([
-                            dioxus_core::Attribute::new(
+                            dioxus_vdom::Attribute::new(
                                 #attribute,
                                 #value,
                                 #ns,
@@ -196,7 +196,7 @@ impl Attribute {
                         AttributeName::BuiltIn(name) => {
                             let method = event_handler_method(name, &self.value);
                             quote_spanned! { span =>
-                                ::std::vec::Vec::<dioxus_core::Attribute>::new()
+                                ::std::vec::Vec::<dioxus_vdom::Attribute>::new()
                                     .#method(#tokens)
                                     .into_boxed_slice()
                             }

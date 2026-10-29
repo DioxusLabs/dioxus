@@ -10,8 +10,8 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "web", "wasm"]
 
 [dependencies]
-dioxus-core = { workspace = true }
-dioxus-core-types = { workspace = true }
+dioxus-vdom = { workspace = true }
+dioxus-base-types = { workspace = true }
 dioxus-cli-config = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
@@ -111,7 +111,7 @@ devtools = [
   "web-sys/Location",
   "dep:serde_json",
   "dep:serde",
-  "dioxus-core/serialize",
+  "dioxus-vdom/serialize",
   "dep:gloo-timers"
 ]
 document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]

@@ -49,7 +49,7 @@ fn Blog(id: u32) -> Element {
             FullstackContext::commit_http_status(StatusCode::CREATED, None);
             rsx! { div { "Blog post 2" } }
         }
-        3 => dioxus_core::bail!("An error occurred while loading the blog post!"),
+        3 => dioxus_vdom::bail!("An error occurred while loading the blog post!"),
         _ => HttpError::not_found("Blog post not found")?,
     }
 }

@@ -6,7 +6,7 @@ use crate::{
     ipc::UserWindowEvent,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
 };
-use dioxus_core::{Callback, RenderTargetId};
+use dioxus_vdom::{Callback, RenderTargetId};
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
@@ -34,7 +34,7 @@ use tao::platform::ios::WindowExtIOS;
 ///
 /// This function will panic if it is called outside of the context of a Dioxus App.
 pub fn window() -> DesktopContext {
-    dioxus_core::consume_context()
+    dioxus_vdom::consume_context()
 }
 
 /// Get an imperative handle to the desktop application without using a hook.
@@ -45,7 +45,7 @@ pub fn window() -> DesktopContext {
 ///
 /// This function will panic if it is called outside of the context of a Dioxus App.
 pub fn app() -> Rc<DesktopAppContext> {
-    dioxus_core::consume_context()
+    dioxus_vdom::consume_context()
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.
