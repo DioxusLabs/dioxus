@@ -11,21 +11,13 @@ keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 rust-version = "1.85.0"
 
 [dependencies]
-dioxus-vdom = { workspace = true }
-dioxus-config-macros = { workspace = true }
-dioxus-html = { workspace = true, optional = true }
-dioxus-document = { workspace = true, optional = true }
+dioxus-core = { workspace = true }
 dioxus-history = { workspace = true, optional = true }
-dioxus-vdom-macro = { workspace = true, optional = true }
 dioxus-config-macro = { workspace = true, optional = true }
-dioxus-stores = { workspace = true, optional = true }
-dioxus-hooks = { workspace = true, optional = true }
-dioxus-signals = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, default-features = false, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
-dioxus-ssr = { workspace = true, optional = true }
 dioxus-native = { workspace = true, optional = true }
 dioxus-server = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, default-features = true, optional = true }
@@ -34,7 +26,6 @@ dioxus-asset-resolver = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
-wasm-splitter = { workspace = true, optional = true }
 subsecond = { workspace = true }
 
 serde = { workspace = true, optional = true }
@@ -62,20 +53,19 @@ lib = [
 ]
 # The minimal set of features required to use dioxus renderers for minimal binary size
 minimal = ["macro", "html", "signals", "hooks", "launch"]
-signals = ["dep:dioxus-signals", "dep:dioxus-stores"]
-macro = ["dep:dioxus-vdom-macro"]
-html = ["dep:dioxus-html"]
-hooks = ["dep:dioxus-hooks"]
+signals = ["dioxus-core/signals", "dioxus-core/stores"]
+macro = ["dioxus-core/macro"]
+html = ["dioxus-core/html"]
+hooks = ["dioxus-core/hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
 mounted = ["dioxus-web?/mounted"]
 asset = ["dep:manganis", "dep:dioxus-asset-resolver"]
-document = ["dioxus-web?/document", "dep:dioxus-document", "dep:dioxus-history"]
+document = ["dioxus-web?/document", "dioxus-core/document", "dep:dioxus-history"]
 logger = ["dep:dioxus-logger"]
 cli-config = ["dep:dioxus-cli-config"]
 warnings = ["dep:warnings"]
 wasm-split = [
-  "dep:wasm-splitter",
-  "dioxus-config-macros/wasm-split",
+  "dioxus-core/wasm-split",
 ] # note: to turn on the router splitter, you need to manually enable wasm-split on the router
 
 launch = ["dep:dioxus-config-macro"]
@@ -103,7 +93,7 @@ web = [
   "dioxus-cli-config?/web",
   "dioxus-asset-resolver?/web",
 ]
-ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
+ssr = ["dioxus-core/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
 native = ["dep:dioxus-native", "dioxus-config-macro/native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
 server = [

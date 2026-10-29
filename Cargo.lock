@@ -3043,25 +3043,17 @@ dependencies = [
  "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-config-macro",
- "dioxus-config-macros",
+ "dioxus-core",
  "dioxus-desktop",
  "dioxus-devtools",
- "dioxus-document",
  "dioxus-fullstack",
  "dioxus-fullstack-macro",
  "dioxus-history",
- "dioxus-hooks",
- "dioxus-html",
  "dioxus-liveview",
  "dioxus-logger",
  "dioxus-native",
  "dioxus-router",
  "dioxus-server",
- "dioxus-signals",
- "dioxus-ssr",
- "dioxus-stores",
- "dioxus-vdom",
- "dioxus-vdom-macro",
  "dioxus-web",
  "env_logger",
  "futures-util",
@@ -3073,7 +3065,6 @@ dependencies = [
  "tokio",
  "tracing",
  "warnings",
- "wasm-splitter",
 ]
 
 [[package]]
@@ -3291,6 +3282,22 @@ version = "0.8.0-alpha.3"
 [[package]]
 name = "dioxus-const-vec"
 version = "0.8.0-alpha.3"
+
+[[package]]
+name = "dioxus-core"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "dioxus-config-macros",
+ "dioxus-document",
+ "dioxus-hooks",
+ "dioxus-html",
+ "dioxus-signals",
+ "dioxus-ssr",
+ "dioxus-stores",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
+ "wasm-splitter",
+]
 
 [[package]]
 name = "dioxus-desktop"
@@ -3622,7 +3629,6 @@ dependencies = [
  "js-sys",
  "keyboard-types",
  "lazy-js-bundle",
- "manganis",
  "rustversion",
  "serde",
  "serde_json",
