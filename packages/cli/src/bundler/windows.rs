@@ -37,8 +37,9 @@ impl BundleContext<'_> {
         let output_dir = self.project_out_directory().join("msi");
         std::fs::create_dir_all(&output_dir).context("Failed to create MSI output directory")?;
 
-        let wix_settings = self.windows().wix.unwrap_or_default();
+        let wix_settings = self.wix();
         let windows_settings = self.windows();
+        let fips_compliant = wix_settings.fips_compliant.unwrap_or_default();
 
         let wix_dir = self
             .tools
@@ -110,11 +111,11 @@ impl BundleContext<'_> {
         );
         data.insert(
             "install_scope".to_string(),
-            serde_json::Value::String(wix_settings.install_scope.as_wix_attr().to_string()),
+            JsonValue::String(wix_settings.install_scope.as_wix_attr().to_string()),
         );
         data.insert(
             "install_scope_per_user".to_string(),
-            serde_json::Value::Bool(matches!(
+            JsonValue::Bool(matches!(
                 wix_settings.install_scope,
                 WixInstallScope::PerUser
             )),
@@ -152,7 +153,7 @@ impl BundleContext<'_> {
         );
         data.insert(
             "fips_compliant".to_string(),
-            serde_json::Value::Bool(wix_settings.fips_compliant),
+            serde_json::Value::Bool(fips_compliant),
         );
 
         if let Some(icon_path) = &windows_settings.icon_path {
@@ -260,7 +261,7 @@ impl BundleContext<'_> {
             .arg(&wixobj_path)
             .arg(&wxs_path);
 
-        if wix_settings.fips_compliant {
+        if fips_compliant {
             candle_cmd.arg("-fips");
         }
 

@@ -2978,16 +2978,6 @@
         },
         "webview_install_mode": {
           "$ref": "#/$defs/WebviewInstallMode"
-        },
-        "wix": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WixSettings"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       }
     },
@@ -3162,6 +3152,10 @@
             "type": "string"
           }
         },
+        "install_scope": {
+          "description": "MSI install scope. Defaults to `PerUser` (`%LOCALAPPDATA%\\Programs`, no\nelevation). `PerMachine` installs under `ProgramFiles` and requires\nelevation.\n\nThis value must stay the same across updates because Windows Installer\ncannot perform a major upgrade across per-user and per-machine scopes.",
+          "$ref": "#/$defs/WixInstallScope"
+        },
         "language": {
           "description": "Languages and their locale paths.",
           "type": "array",
@@ -3233,117 +3227,6 @@
         "PerMachine",
         "PerUser"
       ]
-    },
-    "WixSettings": {
-      "type": "object",
-      "properties": {
-        "banner_path": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "component_group_refs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "component_refs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "dialog_image_path": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "enable_elevated_update_task": {
-          "type": "boolean"
-        },
-        "feature_group_refs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "feature_refs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "fips_compliant": {
-          "type": "boolean"
-        },
-        "fragment_paths": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "install_scope": {
-          "description": "MSI install scope. Defaults to `PerUser` (`%LOCALAPPDATA%\\Programs`, no\nelevation). `PerMachine` installs under `ProgramFiles` and requires\nelevation.\n\nThis value must stay the same across updates because Windows Installer\ncannot perform a major upgrade across per-user and per-machine scopes.",
-          "$ref": "#/$defs/WixInstallScope"
-        },
-        "language": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "string"
-              },
-              {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            ]
-          }
-        },
-        "license": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "merge_refs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "skip_webview_install": {
-          "type": "boolean"
-        },
-        "template": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "upgrade_code": {
-          "description": "A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**,\notherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.\n\nBy default, this code is generated as a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace.\n\nIt is recommended that you set this value in your Dioxus.toml to avoid accidental changes in your upgrade code\nwhenever you want to change your product name.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "version": {
-          "description": "MSI installer version in the format `major.minor.patch.build` (build is optional).\n\nBecause a valid version is required for MSI installer, it will be derived from the package version if this field is not set.\n\nThe first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255.\nThe third and fourth fields have a maximum value of 65,535.\n\nSee <https://learn.microsoft.com/en-us/windows/win32/msi/productversion> for more info.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
     }
   }
 }

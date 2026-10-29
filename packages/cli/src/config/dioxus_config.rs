@@ -184,13 +184,13 @@ mod tests {
     #[test]
     fn wix_install_scope_parses() {
         let source = r#"
-            [bundle.windows.wix]
+            [windows.wix]
             install_scope = "PerMachine"
         "#;
 
         let config: DioxusConfig = toml::from_str(source).expect("parse config");
         assert_eq!(
-            config.bundle.windows.unwrap().wix.unwrap().install_scope,
+            config.windows.wix.expect("WiX settings").install_scope,
             super::WixInstallScope::PerMachine
         );
     }
@@ -198,12 +198,12 @@ mod tests {
     #[test]
     fn wix_install_scope_defaults_to_per_user() {
         let source = r#"
-            [bundle.windows.wix]
+            [windows.wix]
         "#;
 
         let config: DioxusConfig = toml::from_str(source).expect("parse config");
         assert_eq!(
-            config.bundle.windows.unwrap().wix.unwrap().install_scope,
+            config.windows.wix.expect("WiX settings").install_scope,
             super::WixInstallScope::PerUser
         );
     }
