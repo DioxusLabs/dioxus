@@ -1744,9 +1744,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.17.2"
+version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d4ba6e40bd1184518716a6e1a781bf9160e286d219ccdb8ab2612e74cfe4789"
+checksum = "9ba9e9ec16c447027685b1f897b720e18e9a8afd00bd7332c483537e38086c9f"
 dependencies = [
  "smallvec",
 ]
@@ -8285,13 +8285,13 @@ dependencies = [
 
 [[package]]
 name = "krates"
-version = "0.17.5"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd5bdd9794c39f6eb77da784fdcd065cc730a95fd0ca7d88ec945ed26c3c5109"
+checksum = "f8fd33eabd6efa4e9f9963c0bd6e4cc2f229fe8acad52eaeb5d7d61134545fcf"
 dependencies = [
  "camino",
- "cfg-expr 0.17.2",
- "petgraph 0.6.5",
+ "cfg-expr 0.20.10",
+ "petgraph 0.8.3",
  "semver",
  "serde",
  "serde_json",
@@ -10445,21 +10445,22 @@ dependencies = [
 
 [[package]]
 name = "petgraph"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
-dependencies = [
- "fixedbitset 0.4.2",
- "indexmap",
-]
-
-[[package]]
-name = "petgraph"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset 0.5.7",
+ "indexmap",
+]
+
+[[package]]
+name = "petgraph"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
+dependencies = [
+ "fixedbitset 0.5.7",
+ "hashbrown 0.15.5",
  "indexmap",
 ]
 

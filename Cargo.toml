@@ -334,7 +334,7 @@ separator = "0.4.1"
 pretty_assertions = "1"
 serde_repr = "0.1.19"
 hyper-util = "0.1.18"
-krates = { version = "0.17.5" }
+krates = { version = "0.22.0" }
 libloading = "0.8.8"
 libc = "0.2.186"
 memmap2 = "0.9.11"
