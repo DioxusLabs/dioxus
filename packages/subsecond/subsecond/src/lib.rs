@@ -400,7 +400,10 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// Note that Subsecond does not track this state over time, so it's up to the runtime integration
     /// to track this state and diff it.
     pub fn ptr_address(&self) -> HotFnPtr {
-        if size_of::<F>() == size_of::<fn() -> ()>() {
+        // Same rule as `try_call`: only a fn pointer the jump table knows is addressed by its
+        // own bits. A pointer-sized closure's bits are captured data; it is addressed by its
+        // `call_it`, which is also the pointer `try_call_with_ptr` expects back.
+        if size_of::<F>() == size_of::<fn() -> ()>() && self.bits_are_a_patched_fn() {
             let ptr: usize = unsafe { std::mem::transmute_copy(&self.inner) };
             return HotFnPtr(ptr as u64);
         }
@@ -480,7 +483,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             // Try to handle known function pointers. This is *really really* unsafe, but due to how
             // rust trait objects work, it's impossible to make an arbitrary usize-sized type implement Fn()
             // since that would require a vtable pointer, pushing out the bounds of the pointer size.
-            if size_of::<F>() == size_of::<fn() -> ()>() {
+            if size_of::<F>() == size_of::<fn() -> ()>() && self.bits_are_a_patched_fn() {
                 return Ok(self.inner.call_as_ptr(args));
             }
 
@@ -973,3 +976,60 @@ impl_hot_function!(
     (Fn8Marker, A, B, C, D, E, F, G, H),
     (Fn9Marker, A, B, C, D, E, F, G, H, I)
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use subsecond_types::AddressMap;
+
+    /// The address subsecond looks up in the jump table for `F`.
+    fn call_it_address<F: HotFunction<(), Fn0Marker>>(_: &F) -> u64 {
+        <F as HotFunction<(), Fn0Marker>>::call_it as *const () as u64
+    }
+
+    /// Stands in for a patched closure body: same calling convention as `call_it`
+    /// (`fn(&F, ()) -> i32`), different result.
+    fn patched_body(_closure: &(), _args: ()) -> i32 {
+        99
+    }
+
+    #[test]
+    fn a_closure_capturing_one_reference_takes_its_patch() {
+        let x = 5_i32;
+        let closure = || x + 1;
+        assert_eq!(
+            size_of_val(&closure),
+            size_of::<fn()>(),
+            "the closure is pointer-sized"
+        );
+        let call_it = call_it_address(&closure);
+        let mut hot = HotFn::current(closure);
+        assert_eq!(hot.call(()), 6, "no patch yet: the closure's own body");
+
+        // A patch that replaces the closure's body.
+        let mut map = AddressMap::default();
+        map.insert(call_it, patched_body as *const () as u64);
+        unsafe {
+            commit_patch(JumpTable {
+                lib: PathBuf::new(),
+                map,
+                aslr_reference: 0,
+                new_base_address: 0,
+                ifunc_count: 0,
+            })
+        };
+
+        assert_eq!(hot.call(()), 99, "try_call runs the patched body");
+        let ptr = hot.ptr_address();
+        assert_eq!(
+            ptr.0, patched_body as *const () as u64,
+            "ptr_address is the patched body, not the captured reference"
+        );
+        assert_eq!(
+            unsafe { hot.try_call_with_ptr(ptr, ()) }.ok(),
+            Some(99),
+            "try_call_with_ptr runs the patched body"
+        );
+    }
+}
