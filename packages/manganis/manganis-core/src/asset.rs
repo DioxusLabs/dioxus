@@ -157,10 +157,15 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
+        let bundled = self.bundled();
+        if bundled.bundled_path() == BundledAsset::PLACEHOLDER_HASH {
+            return PathBuf::from(bundled.absolute_source_path());
+        }
+
         #[cfg(feature = "dioxus")]
         // If the asset is relative, we resolve the asset at the current directory
         if !dioxus_base_types::is_bundled_app() {
-            return PathBuf::from(self.bundled().absolute_source_path.as_str());
+            return PathBuf::from(bundled.absolute_source_path());
         }
 
         #[cfg(feature = "dioxus")]
@@ -180,8 +185,47 @@ impl Asset {
 
         // Otherwise presumably we're bundled and we can use the bundled path
         bundle_root.join(PathBuf::from(
-            self.bundled().bundled_path.as_str().trim_start_matches('/'),
+            bundled.bundled_path().trim_start_matches('/'),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use const_serialize::{ConstVec, serialize_const};
+
+    const OPTIONS: AssetOptions = AssetOptions::builder().into_asset_options();
+    static UNPROCESSED: ConstVec<u8> = serialize_const(
+        &BundledAsset::new("/source/style.css", BundledAsset::PLACEHOLDER_HASH, OPTIONS),
+        ConstVec::new(),
+    );
+    static PROCESSED: ConstVec<u8> = serialize_const(
+        &BundledAsset::new("/source/style.css", "/style-hash.css", OPTIONS),
+        ConstVec::new(),
+    );
+
+    #[test]
+    fn resolve_unprocessed_asset() {
+        let asset = Asset::new(|| UNPROCESSED.as_slice());
+        assert_eq!(asset.resolve(), PathBuf::from("/source/style.css"));
+    }
+
+    #[test]
+    fn resolve_processed_asset() {
+        let asset = Asset::new(|| PROCESSED.as_slice());
+        #[cfg(feature = "dioxus")]
+        if !dioxus_base_types::is_bundled_app() {
+            assert_eq!(asset.resolve(), PathBuf::from("/source/style.css"));
+            return;
+        }
+        #[cfg(feature = "dioxus")]
+        let root = dioxus_cli_config::base_path()
+            .map(|path| format!("/{}/assets", path.trim_matches('/')))
+            .unwrap_or_else(|| "/assets".to_string());
+        #[cfg(not(feature = "dioxus"))]
+        let root = "/assets";
+        assert_eq!(asset.resolve(), PathBuf::from(root).join("style-hash.css"));
     }
 }
 

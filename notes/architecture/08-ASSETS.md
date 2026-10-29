@@ -193,6 +193,8 @@ For each processed asset:
 
 ### Runtime Resolution
 
+Assets not post-processed by `dx` retain the placeholder bundled path and resolve to their absolute source path, including when a cargo-built binary is run directly.
+
 **Development Mode** (`!is_bundled_app()`):
 ```
 Asset::resolve()
