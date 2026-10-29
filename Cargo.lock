@@ -3895,7 +3895,6 @@ dependencies = [
  "criterion",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-fullstack-core",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",

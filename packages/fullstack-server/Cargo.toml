@@ -20,7 +20,7 @@ dioxus-history = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
 dioxus-logger = { workspace = true }
-dioxus-router = { workspace = true, features = ["streaming"], optional = true }
+dioxus-router = { workspace = true, optional = true }
 dioxus-fullstack-core = { workspace = true, features = ["server"] }
 dioxus-vdom = { workspace = true }
 dioxus-vdom-macro = { workspace = true }

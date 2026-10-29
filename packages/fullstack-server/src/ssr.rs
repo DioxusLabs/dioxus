@@ -195,6 +195,11 @@ impl SsrRendererPool {
                 // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
                 provide_fullstack_history_context(history);
 
+                #[cfg(feature = "router")]
+                dioxus_vdom::provide_context(dioxus_router::OnInitialRouteResolved::new(
+                    dioxus_fullstack_core::commit_initial_chunk,
+                ));
+
                 // Provide a hydration compatible error boundary that serializes errors for the client
                 dioxus_vdom::provide_create_error_boundary(
                     dioxus_fullstack_core::init_error_boundary,
