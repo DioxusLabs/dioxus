@@ -19,7 +19,7 @@ Entry point: `main.rs` with async tokio runtime and `TraceController` for error 
 - `Doctor` - Diagnose environment
 - `Components` - Component registry
 - `SelfUpdate` - Update CLI
-- `Tools` - Internal tools (build-assets, hotpatch)
+- `Tools` - Internal tools (assets, hotpatch, tailwind)
 
 ## Platform Support
 
