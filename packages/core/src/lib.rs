@@ -1,5 +1,9 @@
 //! Core building blocks for Dioxus user interfaces.
 //!
+//! The crate published as `dioxus-core` through 0.7 was the VirtualDOM
+//! implementation, which is now published as `dioxus-vdom`. Starting with 0.8,
+//! `dioxus-core` is this facade over the Dioxus Core layer.
+//!
 //! By default the prelude includes macros, signals, hooks, stores, HTML, and
 //! document APIs. The `ssr` and `wasm-split` features are opt-in. Disable default
 //! features to use only the virtual DOM and explicitly select the APIs needed.

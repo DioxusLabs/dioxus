@@ -22,3 +22,23 @@ fn splitter_is_available_at_root_and_in_prelude() {
         std::any::TypeId::of::<wasm_split::LazyLoader<(), ()>>()
     );
 }
+
+#[cfg(all(
+    feature = "wasm-split",
+    feature = "macro",
+    feature = "hooks",
+    feature = "html"
+))]
+mod lazy_component {
+    use dioxus_core::prelude::*;
+
+    #[component(lazy)]
+    fn LazyGreeting(name: String) -> Element {
+        rsx! { div { "Hello {name}" } }
+    }
+
+    #[test]
+    fn lazy_component_compiles() {
+        let _ = LazyGreeting;
+    }
+}
