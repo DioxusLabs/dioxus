@@ -979,6 +979,13 @@ impl<'a> Writer<'a> {
 
         let mut out = String::new();
 
+        // When prettyplease splits one source line over several lines (for example
+        // `.pick_file().await;` into `.pick_file()` and `.await;`), the following pretty
+        // lines are matched against the rest of that source line instead of consuming
+        // further source lines, which would desync the two and corrupt the output.
+        let mut split_remainder = String::new();
+        let mut split_comment: Option<String> = None;
+
         if src_lines.peek().is_none() {
             out = pretty;
         } else {
@@ -1026,6 +1033,32 @@ impl<'a> Writer<'a> {
                     continue;
                 }
 
+                // Continuation of a source line that was split by prettyplease
+                if !split_remainder.is_empty() {
+                    if let Some(pos) = split_remainder.find(&compacted) {
+                        split_remainder = split_remainder[pos + compacted.len()..].to_string();
+                        if !out.is_empty() {
+                            out.push('\n');
+                        }
+                        out.push_str(line);
+                        if split_remainder.is_empty()
+                            && let Some(comment) = split_comment.take()
+                        {
+                            out.push_str(" // ");
+                            out.push_str(&comment);
+                        }
+                        continue;
+                    }
+
+                    // Not a continuation after all: the inline comment belongs to the
+                    // last line written
+                    split_remainder.clear();
+                    if let Some(comment) = split_comment.take() {
+                        out.push_str(" // ");
+                        out.push_str(&comment);
+                    }
+                }
+
                 if !out.is_empty() {
                     out.push('\n');
                 }
@@ -1034,6 +1067,7 @@ impl<'a> Writer<'a> {
                 let mut pending_comments = Vec::new();
                 let mut had_empty = false;
                 let mut multiline: Option<Vec<&str>> = None;
+                let mut matched = false;
 
                 while let Some(src) = src_lines.peek() {
                     let src_trimmed = src.trim();
@@ -1054,11 +1088,18 @@ impl<'a> Writer<'a> {
 
                     // Exact match
                     if src_compacted.contains(&compacted) {
+                        matched = true;
                         break;
                     }
 
                     // Multi-line method chain (e.g., foo\n  .bar()\n  .baz())
-                    if !src_compacted.is_empty() && compacted.starts_with(&src_compacted) {
+                    // A chain never starts with a closing delimiter: those lines are
+                    // delimiters that prettyplease joined (e.g. `}\n)\n}` into `})}`)
+                    let is_closing = matches!(src_trimmed.chars().next(), Some(')' | '}' | ']'));
+                    if !src_compacted.is_empty()
+                        && !is_closing
+                        && compacted.starts_with(&src_compacted)
+                    {
                         let is_call = src_trimmed.ends_with('(')
                             || src_trimmed.ends_with(',')
                             || src_trimmed.ends_with('{');
@@ -1159,14 +1200,42 @@ impl<'a> Writer<'a> {
                 } else {
                     // Single line - output pretty line and capture inline comments
                     out.push_str(line);
-                    if let Some(src_line) = src_lines.next()
-                        && let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line))
-                        && let Some(c) = cap.get(1)
-                    {
-                        out.push_str(" // ");
-                        out.push_str(c.as_str().replace("//", "").trim());
+                    if let Some(src_line) = src_lines.next() {
+                        let comment = COMMENT_REGEX.with(|r| r.captures(src_line));
+                        let comment = comment.as_ref().and_then(|cap| cap.get(1));
+                        let code = match comment {
+                            Some(c) => &src_line[..c.start()],
+                            None => src_line,
+                        };
+                        let comment =
+                            comment.map(|c| c.as_str().replace("//", "").trim().to_string());
+
+                        // Keep the rest of a matched source line that prettyplease split
+                        // over several lines, so the following pretty lines are matched
+                        // against it
+                        let src_compacted = code.replace(" ", "").replace(",", "");
+                        if matched
+                            && !compacted.is_empty()
+                            && let Some(pos) = src_compacted.find(&compacted)
+                        {
+                            split_remainder = src_compacted[pos + compacted.len()..].to_string();
+                        }
+
+                        if let Some(comment) = comment {
+                            if split_remainder.is_empty() {
+                                out.push_str(" // ");
+                                out.push_str(&comment);
+                            } else {
+                                split_comment = Some(comment);
+                            }
+                        }
                     }
                 }
+            }
+
+            if let Some(comment) = split_comment.take() {
+                out.push_str(" // ");
+                out.push_str(&comment);
             }
         }
 
