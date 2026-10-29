@@ -25,15 +25,15 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-pub use dioxus_vdom;
+pub use dioxus_core::dioxus_vdom;
 #[doc(inline)]
-pub use dioxus_vdom::{CapturedError, Ok, Result};
+pub use dioxus_core::dioxus_vdom::{CapturedError, Ok, Result};
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 mod launch;
 
-pub use dioxus_vdom as core;
+pub use dioxus_core::core;
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
@@ -41,25 +41,25 @@ pub use crate::launch::*;
 
 #[cfg(feature = "hooks")]
 #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
-pub use dioxus_hooks as hooks;
+pub use dioxus_core::hooks;
 
 #[cfg(feature = "signals")]
 #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
-pub use dioxus_signals as signals;
+pub use dioxus_core::signals;
 
 #[cfg(feature = "signals")]
 #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
-pub use dioxus_stores as stores;
+pub use dioxus_core::stores;
 
 pub mod events {
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_html::events::*;
+    pub use dioxus_core::html::events::*;
 }
 
 #[cfg(feature = "document")]
 #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
-pub use dioxus_document as document;
+pub use dioxus_core::document;
 
 #[cfg(feature = "document")]
 #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
@@ -67,11 +67,11 @@ pub use dioxus_history as history;
 
 #[cfg(feature = "html")]
 #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-pub use dioxus_html as html;
+pub use dioxus_core::html;
 
 #[cfg(feature = "macro")]
 #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
-pub use dioxus_vdom_macro as core_macro;
+pub use dioxus_core::core_macro;
 
 #[cfg(feature = "logger")]
 #[cfg_attr(docsrs, doc(cfg(feature = "logger")))]
@@ -122,7 +122,7 @@ pub use dioxus_liveview as liveview;
 
 #[cfg(feature = "ssr")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
-pub use dioxus_ssr as ssr;
+pub use dioxus_core::ssr;
 
 #[cfg(feature = "warnings")]
 #[cfg_attr(docsrs, doc(cfg(feature = "warnings")))]
@@ -142,10 +142,7 @@ pub use subsecond;
 pub use dioxus_asset_resolver as asset_resolver;
 
 pub mod prelude {
-    #[cfg(feature = "document")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
-    #[doc(inline)]
-    pub use dioxus_document::{self as document, Meta, Stylesheet, Title};
+    pub use dioxus_core::prelude::*;
 
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
@@ -157,50 +154,9 @@ pub mod prelude {
     #[doc(inline)]
     pub use crate::launch::*;
 
-    #[cfg(feature = "hooks")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
-    #[doc(inline)]
-    pub use crate::hooks::*;
-
-    #[cfg(feature = "signals")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
-    #[doc(inline)]
-    pub use dioxus_signals::{self, *};
-
-    #[cfg(feature = "signals")]
-    pub use dioxus_stores::{self, GlobalStore, ReadStore, Store, WriteStore, store, use_store};
-
-    #[cfg(feature = "macro")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
-    #[allow(deprecated)]
-    #[doc(inline)]
-    pub use dioxus_vdom_macro::{Props, component, rsx};
-
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
     pub use dioxus_config_macro::*;
-
-    // The element-vocabulary root: `html::div`, `html::main`, etc. resolve as associated
-    // consts on this type. The crate module is still reachable as the fully-qualified
-    // `dioxus::html` for `dioxus::html::define_elements!` and friends.
-    #[cfg(feature = "html")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_html::{self, html};
-
-    #[cfg(feature = "html")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    #[doc(inline)]
-    pub use dioxus_html::{Code, Key, Location, Modifiers, NamedKey};
-
-    // Element associated-const traits (`html::div`, `html::main`, …) come from the single
-    // generated `prelude` module, not from flattening every per-element module into scope.
-    #[cfg(feature = "html")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    #[doc(no_inline)]
-    pub use dioxus_html::{
-        GlobalAttributesExtension, SvgAttributesExtension, elements::prelude::*, events::*,
-        extensions::*, keyboard_types, traits::*,
-    };
 
     #[cfg(feature = "desktop")]
     #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
@@ -210,8 +166,6 @@ pub mod prelude {
     #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
     pub use dioxus_devtools;
-
-    pub use dioxus_vdom;
 
     #[cfg(feature = "fullstack")]
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
@@ -247,15 +201,6 @@ pub mod prelude {
     #[cfg(feature = "wasm-split")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
     pub use wasm_splitter as wasm_split;
-
-    #[doc(inline)]
-    pub use dioxus_vdom::{
-        AnyhowContext, Attribute, Callback, Component, ComponentFunctionExt, Element,
-        ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoDynNode,
-        Portal, PortalProps, RenderError, RenderTargetId, Result, ScopeId, SuspenseBoundary,
-        SuspenseContext, VNode, VirtualDom, consume_context, provide_context, spawn, suspend,
-        try_consume_context, use_drop, use_hook,
-    };
 
     #[cfg(feature = "logger")]
     pub use dioxus_logger::tracing::{debug, error, info, trace, warn};

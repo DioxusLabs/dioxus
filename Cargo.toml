@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "packages/dioxus",
+    "packages/core",
     "packages/vdom",
     "packages/vdom-template",
     "packages/oracle",
@@ -124,6 +125,7 @@ version = "0.8.0-alpha.3"
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "=0.8.0-alpha.3" }
+dioxus-core = { path = "packages/core", version = "=0.8.0-alpha.3", default-features = false }
 dioxus-vdom = { path = "packages/vdom", version = "=0.8.0-alpha.3" }
 dioxus-vdom-template = { path = "packages/vdom-template", version = "=0.8.0-alpha.3" }
 dioxus-renderer-oracle = { path = "packages/oracle", version = "=0.8.0-alpha.3" }
