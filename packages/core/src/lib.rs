@@ -1,8 +1,8 @@
 //! Core building blocks for Dioxus user interfaces.
 //!
 //! By default the prelude includes macros, signals, hooks, stores, HTML, and
-//! document APIs. The `ssr` feature is opt-in. Disable default features to use
-//! only the virtual DOM and explicitly select the APIs needed.
+//! document APIs. The `ssr` and `wasm-split` features are opt-in. Disable default
+//! features to use only the virtual DOM and explicitly select the APIs needed.
 //!
 //! ```
 //! # #[cfg(all(feature = "macro", feature = "signals", feature = "hooks", feature = "stores", feature = "html"))]
@@ -22,6 +22,7 @@
 //! # }
 //! ```
 
+pub use dioxus_config_macros as config_macros;
 pub use dioxus_vdom;
 pub use dioxus_vdom as core;
 pub use dioxus_vdom_macro as core_macro;
@@ -38,6 +39,8 @@ pub use dioxus_signals as signals;
 pub use dioxus_ssr as ssr;
 #[cfg(feature = "stores")]
 pub use dioxus_stores as stores;
+#[cfg(feature = "wasm-split")]
+pub use wasm_splitter as wasm_split;
 
 pub mod prelude {
     pub use dioxus_vdom;
@@ -69,4 +72,6 @@ pub mod prelude {
     #[cfg(feature = "macro")]
     #[allow(deprecated)]
     pub use dioxus_vdom_macro::{Props, component, rsx};
+    #[cfg(feature = "wasm-split")]
+    pub use wasm_splitter as wasm_split;
 }

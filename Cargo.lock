@@ -3043,7 +3043,6 @@ dependencies = [
  "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-config-macro",
- "dioxus-config-macros",
  "dioxus-core",
  "dioxus-desktop",
  "dioxus-devtools",
@@ -3066,7 +3065,6 @@ dependencies = [
  "tokio",
  "tracing",
  "warnings",
- "wasm-splitter",
 ]
 
 [[package]]
@@ -3289,6 +3287,7 @@ version = "0.8.0-alpha.3"
 name = "dioxus-core"
 version = "0.8.0-alpha.3"
 dependencies = [
+ "dioxus-config-macros",
  "dioxus-document",
  "dioxus-hooks",
  "dioxus-html",
@@ -3297,6 +3296,7 @@ dependencies = [
  "dioxus-stores",
  "dioxus-vdom",
  "dioxus-vdom-macro",
+ "wasm-splitter",
 ]
 
 [[package]]

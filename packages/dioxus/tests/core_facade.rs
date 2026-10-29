@@ -9,6 +9,22 @@ fn vdom_paths_are_preserved() {
     let _: Option<Element> = None;
     #[cfg(feature = "html")]
     let _: Option<dioxus::events::MouseEvent> = None;
+    let selected = dioxus::config_macros::maybe_wasm_split! {
+        if wasm_split { 1 } else { 2 }
+    };
+    assert_eq!(
+        selected,
+        if cfg!(all(feature = "wasm-split", target_arch = "wasm32")) {
+            1
+        } else {
+            2
+        }
+    );
+    #[cfg(feature = "wasm-split")]
+    assert_eq!(
+        std::any::TypeId::of::<dioxus::wasm_split::LazyLoader<(), ()>>(),
+        std::any::TypeId::of::<wasm_split::LazyLoader<(), ()>>()
+    );
     #[cfg(all(
         feature = "macro",
         feature = "signals",

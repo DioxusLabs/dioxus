@@ -128,11 +128,11 @@ pub use dioxus_core::ssr;
 #[cfg_attr(docsrs, doc(cfg(feature = "warnings")))]
 pub use warnings;
 
-pub use dioxus_config_macros as config_macros;
+pub use dioxus_core::config_macros;
 
 #[cfg(feature = "wasm-split")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
-pub use wasm_splitter as wasm_split;
+pub use dioxus_core::wasm_split;
 
 pub use subsecond;
 
@@ -197,10 +197,6 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
     #[doc(inline)]
     pub use manganis::{self, *};
-
-    #[cfg(feature = "wasm-split")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
-    pub use wasm_splitter as wasm_split;
 
     #[cfg(feature = "logger")]
     pub use dioxus_logger::tracing::{debug, error, info, trace, warn};
