@@ -16,7 +16,7 @@ dioxus-cli-config = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
-dioxus-devtools = { workspace = true }
+dioxus-devtools = { workspace = true, optional = true }
 dioxus-signals = { workspace = true }
 dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
@@ -112,7 +112,8 @@ devtools = [
   "dep:serde_json",
   "dep:serde",
   "dioxus-vdom/serialize",
-  "dep:gloo-timers"
+  "dep:gloo-timers",
+  "dep:dioxus-devtools",
 ]
 document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 
