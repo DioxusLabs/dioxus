@@ -229,6 +229,30 @@ fn bundle_root() -> PathBuf {
     bundle_root
 }
 
+impl From<Asset> for String {
+    fn from(value: Asset) -> Self {
+        value.to_string()
+    }
+}
+impl From<Asset> for Option<String> {
+    fn from(value: Asset) -> Self {
+        Some(value.to_string())
+    }
+}
+
+impl std::fmt::Display for Asset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.resolve().display())
+    }
+}
+
+#[cfg(feature = "dioxus")]
+impl dioxus_base_types::DioxusFormattable for Asset {
+    fn format(&self) -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Owned(self.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,29 +301,5 @@ mod tests {
         #[cfg(not(feature = "dioxus"))]
         let root = "/assets";
         assert_eq!(asset.resolve(), PathBuf::from(root).join("style-hash.css"));
-    }
-}
-
-impl From<Asset> for String {
-    fn from(value: Asset) -> Self {
-        value.to_string()
-    }
-}
-impl From<Asset> for Option<String> {
-    fn from(value: Asset) -> Self {
-        Some(value.to_string())
-    }
-}
-
-impl std::fmt::Display for Asset {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.resolve().display())
-    }
-}
-
-#[cfg(feature = "dioxus")]
-impl dioxus_base_types::DioxusFormattable for Asset {
-    fn format(&self) -> std::borrow::Cow<'static, str> {
-        std::borrow::Cow::Owned(self.to_string())
     }
 }

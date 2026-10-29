@@ -140,46 +140,6 @@ fn get_embedded(path: &str) -> Option<&'static [u8]> {
     manganis_core::embedded_asset(&decoded)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use manganis::{
-        Asset, AssetOptions, BundledAsset,
-        macro_helpers::{ConstVec, serialize_asset},
-    };
-
-    static DATA: ConstVec<u8, 4096> = serialize_asset(&BundledAsset::new(
-        "/source/style sheet.css",
-        BundledAsset::PLACEHOLDER_HASH,
-        AssetOptions::builder().into_asset_options(),
-    ));
-
-    #[test]
-    fn serves_embedded_assets() {
-        let asset = Asset::new_with_embedded(|| DATA.as_slice(), Some(b"body {}"));
-        let path = asset.to_string().replace(' ', "%20");
-        let response = serve_asset(&path).unwrap();
-        assert_eq!(response.body(), b"body {}");
-        assert_eq!(
-            response.headers()["Content-Type"],
-            "text/css; charset=utf-8"
-        );
-        assert_eq!(resolve_native_asset(&path).unwrap(), b"body {}");
-        assert!(matches!(
-            resolve_native_asset_path(&path),
-            Err(AssetPathError::CannotRepresentAsPath)
-        ));
-        assert!(matches!(
-            resolve_native_asset_path("/missing-embedded-test.css"),
-            Err(AssetPathError::NotFound)
-        ));
-        assert_eq!(
-            serve_asset("/missing-embedded-test.css").unwrap().status(),
-            StatusCode::NOT_FOUND
-        );
-    }
-}
-
 /// Serve an asset from the filesystem or a custom asset handler.
 ///
 /// This method properly accesses the asset directory based on the platform and serves the asset
@@ -351,5 +311,45 @@ pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
 
         let mut asset = asset_manager.open(&cstr)?;
         Some(asset.buffer().unwrap().to_vec())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manganis::{
+        Asset, AssetOptions, BundledAsset,
+        macro_helpers::{ConstVec, serialize_asset},
+    };
+
+    static DATA: ConstVec<u8, 4096> = serialize_asset(&BundledAsset::new(
+        "/source/style sheet.css",
+        BundledAsset::PLACEHOLDER_HASH,
+        AssetOptions::builder().into_asset_options(),
+    ));
+
+    #[test]
+    fn serves_embedded_assets() {
+        let asset = Asset::new_with_embedded(|| DATA.as_slice(), Some(b"body {}"));
+        let path = asset.to_string().replace(' ', "%20");
+        let response = serve_asset(&path).unwrap();
+        assert_eq!(response.body(), b"body {}");
+        assert_eq!(
+            response.headers()["Content-Type"],
+            "text/css; charset=utf-8"
+        );
+        assert_eq!(resolve_native_asset(&path).unwrap(), b"body {}");
+        assert!(matches!(
+            resolve_native_asset_path(&path),
+            Err(AssetPathError::CannotRepresentAsPath)
+        ));
+        assert!(matches!(
+            resolve_native_asset_path("/missing-embedded-test.css"),
+            Err(AssetPathError::NotFound)
+        ));
+        assert_eq!(
+            serve_asset("/missing-embedded-test.css").unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
     }
 }
