@@ -379,6 +379,18 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
         self.try_call(args).unwrap()
     }
 
+    /// Whether the callable's bits, read as a function pointer, are a key of the jump table.
+    /// Only meaningful when `F` is pointer-sized.
+    fn bits_are_a_patched_fn(&self) -> bool {
+        let Some(jump_table) = (unsafe { get_jump_table() }) else {
+            return false;
+        };
+        let bits: usize = unsafe { std::mem::transmute_copy(&self.inner) };
+        #[cfg(all(target_pointer_width = "64", target_os = "android"))]
+        let bits = bits & 0x00FF_FFFF_FFFF_FFFF;
+        jump_table.map.contains_key(&(bits as u64))
+    }
+
     /// Get the address of the function in memory which might be different than the original.
     ///
     /// This is useful for implementing a memoization strategy to safely preserve state across
@@ -417,7 +429,11 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             // Try to handle known function pointers. This is *really really* unsafe, but due to how
             // rust trait objects work, it's impossible to make an arbitrary usize-sized type implement Fn()
             // since that would require a vtable pointer, pushing out the bounds of the pointer size.
-            if size_of::<F>() == size_of::<fn() -> ()>() {
+            // A closure that captures exactly one pointer-sized value (e.g. one reference) has the
+            // same size. Its bits are then captured data, never a key of the jump table, so only take
+            // the fn-pointer path when they are one; otherwise the closure takes the `call_it` path
+            // below, where its patched body is found.
+            if size_of::<F>() == size_of::<fn() -> ()>() && self.bits_are_a_patched_fn() {
                 return Ok(self.inner.call_as_ptr(args));
             }
 
