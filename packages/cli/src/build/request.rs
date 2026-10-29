@@ -1912,6 +1912,10 @@ impl BuildRequest {
     ) -> Result<Vec<(Cow<'static, str>, OsString)>> {
         let mut env_vars = vec![];
 
+        if std::env::var_os("MANGANIS_EMBED_ASSETS").is_none() {
+            env_vars.push(("MANGANIS_EMBED_ASSETS".into(), "0".into()));
+        }
+
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
         if self.bundle == BundleFormat::Android {
             env_vars.extend(self.android_env_vars()?);

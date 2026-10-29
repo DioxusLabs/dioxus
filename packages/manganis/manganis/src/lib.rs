@@ -20,6 +20,7 @@ pub use manganis_core::{
     ImageFormat,
     ImageSize,
     JsAssetOptions,
+    embedded_asset,
 };
 
 // Re-export metadata types for FFI and sidecar macros

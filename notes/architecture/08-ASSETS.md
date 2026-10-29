@@ -193,6 +193,8 @@ For each processed asset:
 
 ### Runtime Resolution
 
+Assets not post-processed by `dx` retain the placeholder bundled path. File assets are embedded by default in release builds and served from a virtual path by native resolvers; otherwise they resolve to their absolute source path. `MANGANIS_EMBED_ASSETS=1` or `true` enables embedding, and `0` or `false` disables it. The CLI disables embedding by default; folders are not embedded.
+
 **Development Mode** (`!is_bundled_app()`):
 ```
 Asset::resolve()

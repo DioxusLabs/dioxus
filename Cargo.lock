@@ -3086,6 +3086,8 @@ dependencies = [
  "infer",
  "jni 0.21.1",
  "js-sys",
+ "manganis",
+ "manganis-core",
  "ndk",
  "ndk-context",
  "ndk-sys",

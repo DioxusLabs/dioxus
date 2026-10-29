@@ -19,6 +19,7 @@ percent-encoding = { workspace = true, optional = true }
 infer = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt"], optional = true }
+manganis-core = { workspace = true, optional = true }
 
 # browser resolver dependencies
 web-sys = { workspace = true, features = ['Headers', 'Request', 'RequestInit', 'Response', 'Window'], optional = true }
@@ -34,8 +35,9 @@ ndk-context = { version = "0.1.1" }
 [dev-dependencies]
 dioxus = { workspace = true }
 serde_json = { workspace = true }
+manganis = { workspace = true }
 
 [features]
 default = []
 web = ["dep:web-sys", "dep:js-sys", "dep:wasm-bindgen-futures"]
-native = ["dep:http", "dep:percent-encoding", "dep:infer", "dep:dioxus-cli-config", "dep:tokio"]
+native = ["dep:http", "dep:percent-encoding", "dep:infer", "dep:dioxus-cli-config", "dep:tokio", "dep:manganis-core"]
