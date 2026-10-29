@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{Result, write_private_file};
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString, path::PathBuf, process::ExitCode};
@@ -142,7 +142,7 @@ impl LinkAction {
 
         // Write the linker args to a file for the main process to read
         // todo: we might need to encode these as escaped shell words in case newlines are passed
-        std::fs::write(&self.link_args_file, args.join("\n"))?;
+        write_private_file(&self.link_args_file, args.join("\n"))?;
 
         // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
         // any post-processing steps that rustc does.

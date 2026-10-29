@@ -197,6 +197,7 @@ use super::HotpatchModuleCache;
 use crate::{
     AndroidTools, BuildContext, BuildId, BundleFormat, DX_RUSTC_WRAPPER_ENV_VAR, DioxusConfig,
     LinkAction, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
+    create_private_dir_all, write_private_file,
 };
 use crate::{
     WorkspaceRustcArgs,
@@ -930,10 +931,10 @@ impl BuildRequest {
         // Create the session cache directory
         let cache_dir = self.session_cache_dir();
         _ = std::fs::create_dir_all(&cache_dir);
-        _ = std::fs::create_dir_all(self.rustc_wrapper_args_dir());
-        _ = std::fs::create_dir_all(self.rustc_wrapper_args_scope_dir(&ctx.mode)?);
+        _ = create_private_dir_all(&self.rustc_wrapper_args_dir());
+        _ = create_private_dir_all(&self.rustc_wrapper_args_scope_dir(&ctx.mode)?);
         _ = std::fs::File::create(self.link_err_file());
-        _ = std::fs::File::create(self.link_args_file());
+        _ = write_private_file(&self.link_args_file(), "");
         _ = std::fs::File::create(self.windows_command_file());
 
         if !matches!(ctx.mode, BuildMode::Thin { .. }) {
@@ -1251,7 +1252,7 @@ impl BuildRequest {
         }
 
         // Always make sure the rustc arg dir is ready to receive rustc_wrapper emits
-        _ = std::fs::create_dir_all(&self.rustc_wrapper_args_scope_dir(&ctx.mode)?)
+        _ = create_private_dir_all(&self.rustc_wrapper_args_scope_dir(&ctx.mode)?)
             .context("Failed to create rustc wrapper args scope dir");
 
         // Only remove args in fat mode
