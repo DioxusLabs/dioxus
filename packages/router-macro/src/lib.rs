@@ -26,18 +26,6 @@ mod route;
 mod route_tree;
 mod segment;
 
-fn dioxus_root() -> proc_macro2::TokenStream {
-    use proc_macro_crate::{FoundCrate, crate_name};
-    match crate_name("dioxus") {
-        Ok(FoundCrate::Itself) => quote::quote!(::dioxus),
-        Ok(FoundCrate::Name(name)) => {
-            let name = quote::format_ident!("{}", name);
-            quote::quote!(::#name)
-        }
-        Err(_) => quote::quote!(::dioxus),
-    }
-}
-
 /// Derives the Routable trait for an enum of routes
 ///
 /// Each variant must:
@@ -797,5 +785,17 @@ impl<'a> From<&'a RouteSegment> for SegmentType {
             RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
             RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
         }
+    }
+}
+
+fn dioxus_root() -> proc_macro2::TokenStream {
+    use proc_macro_crate::{FoundCrate, crate_name};
+    match crate_name("dioxus") {
+        Ok(FoundCrate::Itself) => quote::quote!(::dioxus),
+        Ok(FoundCrate::Name(name)) => {
+            let name = quote::format_ident!("{}", name);
+            quote::quote!(::#name)
+        }
+        Err(_) => quote::quote!(::dioxus),
     }
 }

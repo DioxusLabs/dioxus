@@ -11,18 +11,6 @@ mod component;
 mod props;
 mod utils;
 
-fn dioxus_root() -> proc_macro2::TokenStream {
-    use proc_macro_crate::{FoundCrate, crate_name};
-    match crate_name("dioxus") {
-        Ok(FoundCrate::Itself) => quote::quote!(::dioxus),
-        Ok(FoundCrate::Name(name)) => {
-            let name = quote::format_ident!("{}", name);
-            quote::quote!(::#name)
-        }
-        Err(_) => quote::quote!(::dioxus),
-    }
-}
-
 use dioxus_rsx as rsx;
 
 #[doc = include_str!("../docs/props.md")]
@@ -51,4 +39,16 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
         .with_options(parse_macro_input!(_args as ComponentMacroOptions))
         .into_token_stream()
         .into()
+}
+
+fn dioxus_root() -> proc_macro2::TokenStream {
+    use proc_macro_crate::{FoundCrate, crate_name};
+    match crate_name("dioxus") {
+        Ok(FoundCrate::Itself) => quote::quote!(::dioxus),
+        Ok(FoundCrate::Name(name)) => {
+            let name = quote::format_ident!("{}", name);
+            quote::quote!(::#name)
+        }
+        Err(_) => quote::quote!(::dioxus),
+    }
 }
