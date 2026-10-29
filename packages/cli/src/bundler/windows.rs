@@ -69,6 +69,12 @@ impl BundleContext<'_> {
             let input = format!("{}.exe.app.{}", product_name, arch_str);
             Uuid::new_v5(&Uuid::NAMESPACE_DNS, input.as_bytes())
         });
+        let publisher = self
+            .publisher()
+            .map(|s| s.to_string())
+            .or_else(|| self.authors_comma_separated())
+            .unwrap_or_else(|| product_name.clone());
+        let per_user_registry_key = format!(r"Software\{publisher}\{product_name}");
 
         let staging_dir = output_dir.join("_staging");
         if staging_dir.exists() {
@@ -78,6 +84,12 @@ impl BundleContext<'_> {
 
         let main_binary_src = self.main_binary_path();
         let main_binary_name = format!("{}.exe", self.main_binary_name());
+        let main_component_guid = wix_component_guid(
+            &upgrade_code,
+            &per_user_registry_key,
+            "file",
+            Path::new(&main_binary_name),
+        );
         let main_binary_dest = staging_dir.join(&main_binary_name);
         std::fs::copy(&main_binary_src, &main_binary_dest).with_context(|| {
             format!(
@@ -90,7 +102,12 @@ impl BundleContext<'_> {
         self.copy_resources(&staging_dir)?;
         self.copy_external_binaries(&staging_dir)?;
         let staged_files = collect_staged_files(&staging_dir, Some(&main_binary_dest))?;
-        let (install_tree, component_refs_xml) = render_wix_install_tree(&staged_files);
+        let (install_tree, component_refs_xml) = render_wix_install_tree(
+            &staged_files,
+            wix_settings.install_scope,
+            &upgrade_code,
+            &per_user_registry_key,
+        );
 
         let mut data = BTreeMap::new();
         data.insert(
@@ -121,6 +138,17 @@ impl BundleContext<'_> {
             )),
         );
         data.insert(
+            "main_component_guid".to_string(),
+            JsonValue::String(match wix_settings.install_scope {
+                WixInstallScope::PerMachine => "*".to_string(),
+                WixInstallScope::PerUser => main_component_guid.to_string(),
+            }),
+        );
+        data.insert(
+            "per_user_registry_key".to_string(),
+            JsonValue::String(per_user_registry_key),
+        );
+        data.insert(
             "main_binary_name".to_string(),
             serde_json::Value::String(main_binary_name.clone()),
         );
@@ -137,11 +165,6 @@ impl BundleContext<'_> {
             serde_json::Value::String(self.bundle_identifier()),
         );
 
-        let publisher = self
-            .publisher()
-            .map(|s| s.to_string())
-            .or_else(|| self.authors_comma_separated())
-            .unwrap_or_else(|| product_name.clone());
         data.insert(
             "publisher".to_string(),
             serde_json::Value::String(publisher),
@@ -762,62 +785,132 @@ fn collect_staged_files(staging_dir: &Path, skip_file: Option<&Path>) -> Result<
 }
 
 /// Render the staged file tree into WiX `<Directory>` / `<Component>` XML fragments.
-fn render_wix_install_tree(staged_files: &[StagedFile]) -> (String, String) {
+fn render_wix_install_tree(
+    staged_files: &[StagedFile],
+    install_scope: WixInstallScope,
+    upgrade_code: &Uuid,
+    registry_key: &str,
+) -> (String, String) {
     let mut tree = WixDirTree::default();
     for file in staged_files {
         tree.insert(file.clone());
     }
 
-    let mut next_id = 0usize;
-    let mut component_refs = String::new();
-    let install_tree = render_wix_dir_contents(&tree, 20, &mut next_id, &mut component_refs);
-    (install_tree, component_refs)
+    let mut renderer = WixInstallTreeRenderer {
+        install_scope,
+        upgrade_code,
+        registry_key,
+        next_id: 0,
+        component_refs: String::new(),
+    };
+    let install_tree = renderer.render_dir_contents(&tree, Path::new(""), 20);
+    (install_tree, renderer.component_refs)
 }
 
-fn render_wix_dir_contents(
-    tree: &WixDirTree,
-    indent: usize,
-    next_id: &mut usize,
-    component_refs: &mut String,
-) -> String {
-    let mut xml = String::new();
-    let pad = " ".repeat(indent);
-    let file_pad = " ".repeat(indent + 4);
+struct WixInstallTreeRenderer<'a> {
+    install_scope: WixInstallScope,
+    upgrade_code: &'a Uuid,
+    registry_key: &'a str,
+    next_id: usize,
+    component_refs: String,
+}
 
-    for file in &tree.files {
-        let component_id = format!("Component_{}", *next_id);
-        *next_id += 1;
-        let file_id = format!("File_{}", *next_id);
-        *next_id += 1;
-
-        component_refs.push_str(&format!(
-            "\n            <ComponentRef Id=\"{component_id}\" />"
-        ));
-
-        let file_name = file
-            .relative_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy();
-        let source = windows_path_string(&file.source);
-        xml.push_str(&format!(
-            "\n{pad}<Component Id=\"{component_id}\" Guid=\"*\">\n{file_pad}<File Id=\"{file_id}\" Name=\"{}\" Source=\"{}\" KeyPath=\"yes\" />\n{pad}</Component>",
-            xml_attr_escape(&file_name),
-            xml_attr_escape(&source),
-        ));
+impl WixInstallTreeRenderer<'_> {
+    fn next_id(&mut self, prefix: &str) -> String {
+        let id = format!("{prefix}_{}", self.next_id);
+        self.next_id += 1;
+        id
     }
 
-    for (name, child) in &tree.dirs {
-        let dir_id = format!("Directory_{}", *next_id);
-        *next_id += 1;
-        let child_xml = render_wix_dir_contents(child, indent + 4, next_id, component_refs);
-        xml.push_str(&format!(
-            "\n{pad}<Directory Id=\"{dir_id}\" Name=\"{}\">{child_xml}\n{pad}</Directory>",
-            xml_attr_escape(name),
-        ));
-    }
+    fn render_dir_contents(
+        &mut self,
+        tree: &WixDirTree,
+        relative_dir: &Path,
+        indent: usize,
+    ) -> String {
+        let mut xml = String::new();
+        let pad = " ".repeat(indent);
+        let file_pad = " ".repeat(indent + 4);
 
-    xml
+        for file in &tree.files {
+            let component_id = self.next_id("Component");
+            let file_id = self.next_id("File");
+
+            self.component_refs.push_str(&format!(
+                "\n            <ComponentRef Id=\"{component_id}\" />"
+            ));
+
+            let file_name = file
+                .relative_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy();
+            let source = windows_path_string(&file.source);
+            let file_name = xml_attr_escape(&file_name);
+            let source = xml_attr_escape(&source);
+            let component_guid = wix_component_guid(
+                self.upgrade_code,
+                self.registry_key,
+                "file",
+                &file.relative_path,
+            );
+            match self.install_scope {
+                WixInstallScope::PerMachine => xml.push_str(&format!(
+                    "\n{pad}<Component Id=\"{component_id}\" Guid=\"*\">\n{file_pad}<File Id=\"{file_id}\" Name=\"{file_name}\" Source=\"{source}\" KeyPath=\"yes\" />\n{pad}</Component>",
+                )),
+                WixInstallScope::PerUser => xml.push_str(&format!(
+                    "\n{pad}<Component Id=\"{component_id}\" Guid=\"{component_guid}\">\n{file_pad}<File Id=\"{file_id}\" Name=\"{file_name}\" Source=\"{source}\" />\n{file_pad}<RegistryValue Root=\"HKCU\" Key=\"{}\" Name=\"{component_guid}\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n{pad}</Component>",
+                    xml_attr_escape(self.registry_key),
+                )),
+            }
+        }
+
+        for (name, child) in &tree.dirs {
+            let dir_id = self.next_id("Directory");
+            let child_relative_dir = relative_dir.join(name);
+            let child_xml = self.render_dir_contents(child, &child_relative_dir, indent + 4);
+            let cleanup_xml = if matches!(self.install_scope, WixInstallScope::PerUser) {
+                let cleanup_component_id = self.next_id("DirectoryCleanup");
+                let remove_folder_id = self.next_id("RemoveDirectory");
+                self.component_refs.push_str(&format!(
+                    "\n            <ComponentRef Id=\"{cleanup_component_id}\" />"
+                ));
+                let child_pad = " ".repeat(indent + 4);
+                let cleanup_pad = " ".repeat(indent + 8);
+                let cleanup_guid = wix_component_guid(
+                    self.upgrade_code,
+                    self.registry_key,
+                    "directory",
+                    &child_relative_dir,
+                );
+                format!(
+                    "\n{child_pad}<Component Id=\"{cleanup_component_id}\" Guid=\"{cleanup_guid}\">\n{cleanup_pad}<RemoveFolder Id=\"{remove_folder_id}\" On=\"uninstall\" />\n{cleanup_pad}<RegistryValue Root=\"HKCU\" Key=\"{}\" Name=\"{cleanup_guid}\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n{child_pad}</Component>",
+                    xml_attr_escape(self.registry_key),
+                )
+            } else {
+                String::new()
+            };
+            xml.push_str(&format!(
+                "\n{pad}<Directory Id=\"{dir_id}\" Name=\"{}\">{child_xml}{cleanup_xml}\n{pad}</Directory>",
+                xml_attr_escape(name),
+            ));
+        }
+
+        xml
+    }
+}
+
+fn wix_component_guid(
+    upgrade_code: &Uuid,
+    registry_key: &str,
+    resource_kind: &str,
+    relative_path: &Path,
+) -> Uuid {
+    let identity = format!(
+        "{registry_key}\n{resource_kind}\n{}",
+        windows_path_string(relative_path)
+    );
+    Uuid::new_v5(upgrade_code, identity.as_bytes())
 }
 
 fn windows_path_string(path: &Path) -> String {
@@ -1049,12 +1142,23 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
             <Directory Id="{{wix_program_files_folder}}">
             {{/if}}
                     <Directory Id="INSTALLDIR" Name="{{product_name}}">
-                    <Component Id="MainExecutable" Guid="*">
+                    <Component Id="MainExecutable" Guid="{{main_component_guid}}">
                         <File
                             Id="MainExe"
                             Name="{{main_binary_name}}"
-                            Source="{{main_binary_path}}"
+                            Source="{{main_binary_path}}"{{#unless install_scope_per_user}}
                             KeyPath="yes" />
+                            {{else}} />
+                        <RemoveFolder Id="RemoveInstallDir" On="uninstall" />
+                        <RemoveFolder Id="RemoveLocalAppDataPrograms" Directory="LocalAppDataPrograms" On="uninstall" />
+                        <RegistryValue
+                            Root="HKCU"
+                            Key="{{per_user_registry_key}}"
+                            Name="MainExecutable"
+                            Type="integer"
+                            Value="1"
+                            KeyPath="yes" />
+                            {{/unless}}
                     </Component>
 {{{install_tree}}}
                     </Directory>
@@ -1277,10 +1381,13 @@ SectionEnd
 
 #[cfg(test)]
 mod tests {
-    use super::{WIX_TEMPLATE, render_template};
+    use super::{StagedFile, WIX_TEMPLATE, render_template, render_wix_install_tree};
+    use crate::WixInstallScope;
     use crate::bundler::Arch;
     use serde_json::json;
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
+    use uuid::Uuid;
 
     #[test]
     fn wix_program_files_folder_matches_architecture() {
@@ -1297,11 +1404,25 @@ mod tests {
 
     #[test]
     fn wix_template_uses_arch_specific_program_files_folder() {
-        let rendered = render_template(
-            WIX_TEMPLATE,
-            &wix_template_data("perMachine", false, "ProgramFiles64Folder"),
-        )
-        .unwrap();
+        let staged_files = [StagedFile {
+            source: PathBuf::from(r"C:\staging\settings.json"),
+            relative_path: PathBuf::from("settings.json"),
+        }];
+        let (install_tree, component_refs_xml) = render_wix_install_tree(
+            &staged_files,
+            WixInstallScope::PerMachine,
+            &Uuid::nil(),
+            r"Software\Dioxus Labs\Hotdog",
+        );
+        assert!(install_tree.contains("<File Id=\"File_1\""));
+        assert!(install_tree.contains("KeyPath=\"yes\""));
+        assert!(!install_tree.contains("<RegistryValue"));
+        assert!(!install_tree.contains("<RemoveFolder"));
+
+        let mut data = wix_template_data("perMachine", false, "ProgramFiles64Folder");
+        data.insert("install_tree".into(), install_tree.into());
+        data.insert("component_refs_xml".into(), component_refs_xml.into());
+        let rendered = render_template(WIX_TEMPLATE, &data).unwrap();
 
         assert!(rendered.contains("InstallScope=\"perMachine\""));
         assert!(!rendered.contains("InstallPrivileges=\"limited\""));
@@ -1336,23 +1457,84 @@ mod tests {
             "merge_refs": [],
             "wix_program_files_folder": program_files,
             "install_scope": install_scope,
-            "install_scope_per_user": per_user
+            "install_scope_per_user": per_user,
+            "main_component_guid": if per_user {
+                "11111111-1111-1111-1111-111111111111"
+            } else {
+                "*"
+            },
+            "per_user_registry_key": "Software\\Dioxus Labs\\Hotdog"
         }))
         .unwrap()
     }
 
     #[test]
     fn wix_template_per_user_uses_local_app_data() {
-        let rendered = render_template(
-            WIX_TEMPLATE,
-            &wix_template_data("perUser", true, "ProgramFiles64Folder"),
-        )
-        .unwrap();
+        let staged_files = [
+            StagedFile {
+                source: PathBuf::from(r"C:\staging\settings.json"),
+                relative_path: PathBuf::from("settings.json"),
+            },
+            StagedFile {
+                source: PathBuf::from(r"C:\staging\assets\logo.png"),
+                relative_path: PathBuf::from("assets/logo.png"),
+            },
+        ];
+        let (install_tree, component_refs_xml) = render_wix_install_tree(
+            &staged_files,
+            WixInstallScope::PerUser,
+            &Uuid::nil(),
+            r"Software\Dioxus Labs\Hotdog",
+        );
+        let generated_directory_count = install_tree.matches("<Directory ").count();
+        assert_eq!(
+            install_tree
+                .matches("<RemoveFolder Id=\"RemoveDirectory_")
+                .count(),
+            generated_directory_count
+        );
+
+        let mut data = wix_template_data("perUser", true, "ProgramFiles64Folder");
+        data.insert("install_tree".into(), install_tree.into());
+        data.insert("component_refs_xml".into(), component_refs_xml.into());
+        let rendered = render_template(WIX_TEMPLATE, &data).unwrap();
 
         assert!(rendered.contains("InstallScope=\"perUser\""));
         assert!(rendered.contains("InstallPrivileges=\"limited\""));
         assert!(rendered.contains("<Directory Id=\"LocalAppDataFolder\">"));
         assert!(rendered.contains("<Directory Id=\"LocalAppDataPrograms\" Name=\"Programs\">"));
         assert!(!rendered.contains("<Directory Id=\"ProgramFiles64Folder\">"));
+        assert!(rendered.contains("<RemoveFolder Id=\"RemoveInstallDir\" On=\"uninstall\" />"));
+        assert!(rendered.contains(
+            "<RemoveFolder Id=\"RemoveLocalAppDataPrograms\" Directory=\"LocalAppDataPrograms\" On=\"uninstall\" />"
+        ));
+
+        for component in rendered.split("<Component ").skip(1) {
+            let component = component
+                .split_once("</Component>")
+                .expect("WiX component should have a closing tag")
+                .0;
+            assert!(
+                component.contains("Root=\"HKCU\"") && component.contains("KeyPath=\"yes\""),
+                "per-user component must use an HKCU registry key path: {component}"
+            );
+            if component.contains("<File") {
+                assert!(
+                    !component.contains("Guid=\"*\""),
+                    "file component with a registry key path needs an explicit GUID: {component}"
+                );
+            }
+        }
+
+        for file in rendered.split("<File").skip(1) {
+            let file = file
+                .split_once("/>")
+                .expect("WiX file should be self-closing")
+                .0;
+            assert!(
+                !file.contains("KeyPath=\"yes\""),
+                "per-user file must not be the component key path: {file}"
+            );
+        }
     }
 }
