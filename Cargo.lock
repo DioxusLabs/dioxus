@@ -3292,15 +3292,11 @@ dependencies = [
  "dioxus-document",
  "dioxus-hooks",
  "dioxus-html",
- "dioxus-html-internal-macro",
- "dioxus-rsx",
  "dioxus-signals",
  "dioxus-ssr",
  "dioxus-stores",
- "dioxus-stores-macro",
  "dioxus-vdom",
  "dioxus-vdom-macro",
- "dioxus-vdom-template",
 ]
 
 [[package]]

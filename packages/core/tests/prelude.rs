@@ -8,6 +8,11 @@
 
 use dioxus_core::prelude::*;
 
+dioxus_core::html::define_elements! {
+    #[element(name = "custom-panel")]
+    customPanel { metric }
+}
+
 #[derive(Clone, Store)]
 struct Counter {
     value: i32,
@@ -16,7 +21,7 @@ struct Counter {
 #[component]
 fn App(name: String) -> Element {
     let count = use_signal(|| 0);
-    rsx! { div { "{name}: {count}" } }
+    rsx! { customPanel { metric: "value", div { "{name}: {count}" } } }
 }
 
 #[test]

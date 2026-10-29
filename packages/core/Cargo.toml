@@ -12,15 +12,11 @@ rust-version = "1.85.0"
 [dependencies]
 dioxus-vdom = { workspace = true }
 dioxus-vdom-macro = { workspace = true }
-dioxus-vdom-template = { workspace = true }
-dioxus-rsx = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
 dioxus-stores = { workspace = true, optional = true }
-dioxus-stores-macro = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-html = { workspace = true, optional = true }
-dioxus-html-internal-macro = { workspace = true, optional = true }
 dioxus-document = { workspace = true, optional = true }
 
 [features]
@@ -28,7 +24,7 @@ default = ["macro", "signals", "hooks", "stores", "html", "document"]
 macro = []
 signals = ["dep:dioxus-signals"]
 hooks = ["dep:dioxus-hooks"]
-stores = ["dep:dioxus-stores", "dep:dioxus-stores-macro"]
+stores = ["dep:dioxus-stores"]
 ssr = ["dep:dioxus-ssr"]
-html = ["dep:dioxus-html", "dep:dioxus-html-internal-macro"]
+html = ["dep:dioxus-html"]
 document = ["dep:dioxus-document"]
