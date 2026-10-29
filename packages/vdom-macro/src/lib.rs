@@ -40,3 +40,15 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
         .into_token_stream()
         .into()
 }
+
+fn dioxus_root() -> proc_macro2::TokenStream {
+    use proc_macro_crate::{FoundCrate, crate_name};
+    match crate_name("dioxus") {
+        Ok(FoundCrate::Itself) => quote::quote!(::dioxus),
+        Ok(FoundCrate::Name(name)) => {
+            let name = quote::format_ident!("{}", name);
+            quote::quote!(::#name)
+        }
+        Err(_) => quote::quote!(::dioxus),
+    }
+}

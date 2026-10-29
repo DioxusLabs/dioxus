@@ -167,6 +167,7 @@ impl ComponentBody {
         block: &Block,
     ) -> TokenStream {
         let fn_ident = &self.item_fn.sig.ident;
+        let root = crate::dioxus_root();
         let inputs = &self.item_fn.sig.inputs;
 
         let lazy_name = format_ident!("Lazy{fn_ident}");
@@ -190,11 +191,12 @@ impl ComponentBody {
                 #block
             }
 
-            dioxus::config_macros::maybe_wasm_split! {
+            #root::config_macros::maybe_wasm_split! {
                 if wasm_split {
                     {
-                        static __MODULE: wasm_split::LazyLoader<#props_ty, #out_ty> =
-                            wasm_split::lazy_loader!(extern "lazy" fn #lazy_name(props: #props_ty,) -> #out_ty);
+                        use #root::wasm_split;
+                        static __MODULE: #root::wasm_split::LazyLoader<#props_ty, #out_ty> =
+                            #root::wasm_split::lazy_loader!(extern "lazy" fn #lazy_name(props: #props_ty,) -> #out_ty);
 
                         use_resource(|| async move { __MODULE.load().await }).suspend()?;
                         __MODULE.call(props).unwrap()
