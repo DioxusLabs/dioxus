@@ -25,8 +25,6 @@ rustversion = { workspace = true }
 
 [features]
 default = ["html"]
-# No-op kept for compatibility.
-streaming = []
 wasm-split = []
 html = ["dep:dioxus-html"]
 
