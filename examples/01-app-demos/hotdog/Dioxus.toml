@@ -6,3 +6,23 @@ name = "hot_dog"
 [bundle]
 identifier = "com.dioxuslabs"
 publisher = "Dioxus Labs"
+
+# Shared by .deb, .rpm, and AppImage. Format-specific packaging stays under
+# [linux.deb] and [linux.rpm].
+[linux]
+desktop_template = "hotdog.desktop"
+
+[linux.deb]
+depends = ["libwebkit2gtk-4.1-0"]
+
+[linux.rpm]
+requires = ["webkit2gtk4.1"]
+recommends = ["shared-mime-info"]
+provides = ["hotdog-rpm-capability"]
+conflicts = ["hotdog-nightly"]
+obsoletes = ["hotdog-legacy"]
+
+# CI fixture: prove that [linux.rpm.files] copies this source file into the
+# configured absolute path in the generated RPM payload.
+[linux.rpm.files]
+"/usr/share/hotdog/rpm-file-test.txt" = "rpm-file-test.txt"

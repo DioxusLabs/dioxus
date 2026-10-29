@@ -182,6 +182,64 @@ mod tests {
     }
 
     #[test]
+    fn linux_package_settings_parse_from_platform_tables() {
+        let source = r#"
+            [linux]
+            desktop_template = "linux.desktop"
+
+            [linux.deb]
+            depends = ["libwebkit2gtk-4.1-0"]
+
+            [linux.rpm]
+            requires = ["webkit2gtk4.1"]
+            recommends = ["shared-mime-info"]
+            provides = ["hotdog"]
+            conflicts = ["hotdog-nightly"]
+            obsoletes = ["hotdog-legacy"]
+            pre_install_script = "rpm-pre.sh"
+            post_install_script = "rpm-post.sh"
+            pre_remove_script = "rpm-preun.sh"
+            post_remove_script = "rpm-postun.sh"
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert_eq!(
+            config.linux.desktop_template.as_deref(),
+            Some(std::path::Path::new("linux.desktop"))
+        );
+        assert_eq!(
+            config.linux.deb.unwrap().depends.unwrap(),
+            vec!["libwebkit2gtk-4.1-0".to_string()]
+        );
+
+        let rpm = config.linux.rpm.unwrap();
+        assert_eq!(rpm.requires.unwrap(), vec!["webkit2gtk4.1".to_string()]);
+        assert_eq!(
+            rpm.recommends.unwrap(),
+            vec!["shared-mime-info".to_string()]
+        );
+        assert_eq!(rpm.provides.unwrap(), vec!["hotdog".to_string()]);
+        assert_eq!(rpm.conflicts.unwrap(), vec!["hotdog-nightly".to_string()]);
+        assert_eq!(rpm.obsoletes.unwrap(), vec!["hotdog-legacy".to_string()]);
+        assert_eq!(
+            rpm.pre_install_script.as_deref(),
+            Some(std::path::Path::new("rpm-pre.sh"))
+        );
+        assert_eq!(
+            rpm.post_install_script.as_deref(),
+            Some(std::path::Path::new("rpm-post.sh"))
+        );
+        assert_eq!(
+            rpm.pre_remove_script.as_deref(),
+            Some(std::path::Path::new("rpm-preun.sh"))
+        );
+        assert_eq!(
+            rpm.post_remove_script.as_deref(),
+            Some(std::path::Path::new("rpm-postun.sh"))
+        );
+    }
+
+    #[test]
     fn static_dir_can_be_disabled() {
         let source = r#"
             [application]

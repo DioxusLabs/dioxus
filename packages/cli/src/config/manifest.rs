@@ -1300,11 +1300,14 @@ pub struct WindowsSignCommand {
 /// [linux]
 /// identifier = "com.example.myapp.linux"  # Override bundle.identifier for Linux
 /// categories = ["Utility"]
+/// desktop_template = "linux.desktop"
 ///
-/// # Debian package settings (previously in [bundle.deb])
 /// [linux.deb]
 /// depends = ["libwebkit2gtk-4.0-37"]
 /// section = "utils"
+///
+/// [linux.rpm]
+/// requires = ["webkit2gtk4.1"]
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct LinuxConfig {
@@ -1349,10 +1352,21 @@ pub struct LinuxConfig {
     #[serde(default)]
     pub long_description: Option<String>,
 
-    // === Debian package settings (previously in bundle.deb) ===
+    /// Path to a custom desktop file Handlebars template shared by Linux
+    /// package formats.
+    ///
+    /// Available variables: `categories`, `comment` (optional), `exec`, `icon`
+    /// and `name`.
+    #[serde(default)]
+    pub desktop_template: Option<PathBuf>,
+
     /// Debian-specific package settings.
     #[serde(default)]
     pub deb: Option<LinuxDebSettings>,
+
+    /// RPM-specific package settings.
+    #[serde(default)]
+    pub rpm: Option<LinuxRpmSettings>,
 
     // === Linux-specific settings ===
     /// Flatpak sandbox permissions.
@@ -1403,10 +1417,6 @@ pub struct LinuxDebSettings {
     #[serde(default)]
     pub files: HashMap<PathBuf, PathBuf>,
 
-    /// Path to custom desktop template.
-    #[serde(default)]
-    pub desktop_template: Option<PathBuf>,
-
     /// Debian section (e.g., "utils", "web").
     #[serde(default)]
     pub section: Option<String>,
@@ -1418,6 +1428,50 @@ pub struct LinuxDebSettings {
     /// Path to changelog file.
     #[serde(default)]
     pub changelog: Option<PathBuf>,
+
+    /// Pre-install script path.
+    #[serde(default)]
+    pub pre_install_script: Option<PathBuf>,
+
+    /// Post-install script path.
+    #[serde(default)]
+    pub post_install_script: Option<PathBuf>,
+
+    /// Pre-remove script path.
+    #[serde(default)]
+    pub pre_remove_script: Option<PathBuf>,
+
+    /// Post-remove script path.
+    #[serde(default)]
+    pub post_remove_script: Option<PathBuf>,
+}
+
+/// RPM package settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub struct LinuxRpmSettings {
+    /// RPM package `Requires`.
+    #[serde(default)]
+    pub requires: Option<Vec<String>>,
+
+    /// RPM package `Recommends`.
+    #[serde(default)]
+    pub recommends: Option<Vec<String>>,
+
+    /// RPM package `Provides`.
+    #[serde(default)]
+    pub provides: Option<Vec<String>>,
+
+    /// RPM package `Conflicts`.
+    #[serde(default)]
+    pub conflicts: Option<Vec<String>>,
+
+    /// RPM package `Obsoletes`.
+    #[serde(default)]
+    pub obsoletes: Option<Vec<String>>,
+
+    /// Additional files to include. Maps package path to source path.
+    #[serde(default)]
+    pub files: HashMap<PathBuf, PathBuf>,
 
     /// Pre-install script path.
     #[serde(default)]

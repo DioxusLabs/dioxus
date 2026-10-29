@@ -637,16 +637,6 @@
             "null"
           ]
         },
-        "deb": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DebianSettings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "external_bin": {
           "type": [
             "array",
@@ -807,124 +797,6 @@
         "cmd",
         "args"
       ]
-    },
-    "DebianSettings": {
-      "type": "object",
-      "properties": {
-        "changelog": {
-          "description": "Path of the uncompressed Changelog file, to be stored at /usr/share/doc/package-name/changelog.gz. See\n<https://www.debian.org/doc/debian-policy/ch-docs.html#changelog-files-and-release-notes>",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "conflicts": {
-          "description": "the list of package conflicts.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "depends": {
-          "description": "the list of debian dependencies.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "desktop_template": {
-          "description": "Path to a custom desktop file Handlebars template.\n\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "files": {
-          "description": "List of custom files to add to the deb package.\nMaps the path on the debian package to the path of the file to include (relative to the current working directory).",
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "post_install_script": {
-          "description": "Path to script that will be executed after the package is unpacked. See\n<https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "post_remove_script": {
-          "description": "Path to script that will be executed after the package is removed. See\n<https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "pre_install_script": {
-          "description": "Path to script that will be executed before the package is unpacked. See\n<https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "pre_remove_script": {
-          "description": "Path to script that will be executed before the package is removed. See\n<https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "priority": {
-          "description": "Change the priority of the Debian Package. By default, it is set to `optional`.\nRecognized Priorities as of now are :  `required`, `important`, `standard`, `optional`, `extra`",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "provides": {
-          "description": "the list of dependencies the package provides.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "recommends": {
-          "description": "the list of recommended debian dependencies.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "replaces": {
-          "description": "the list of package replaces.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "section": {
-          "description": "Define the section in Debian Control file. See : <https://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections>",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
     },
     "DeepLinkConfig": {
       "description": "Unified deep linking configuration.\n\nThis provides a cross-platform interface for URL schemes and universal/app links.\nPlatform-specific overrides can be configured in `[ios]` and `[android]` sections.\n\nExample:\n```toml\n[deep_links]\nschemes = [\"myapp\", \"com.example.myapp\"]\nhosts = [\"example.com\", \"*.example.com\"]\n```",
@@ -1249,7 +1121,7 @@
       ]
     },
     "LinuxConfig": {
-      "description": "Linux-specific configuration.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"  # Override bundle.identifier for Linux\ncategories = [\"Utility\"]\n\n# Debian package settings (previously in [bundle.deb])\n[linux.deb]\ndepends = [\"libwebkit2gtk-4.0-37\"]\nsection = \"utils\"\n```",
+      "description": "Linux-specific configuration.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"  # Override bundle.identifier for Linux\ncategories = [\"Utility\"]\ndesktop_template = \"linux.desktop\"\n\n[linux.deb]\ndepends = [\"libwebkit2gtk-4.0-37\"]\nsection = \"utils\"\n\n[linux.rpm]\nrequires = [\"webkit2gtk4.1\"]\n```",
       "type": "object",
       "properties": {
         "categories": {
@@ -1289,6 +1161,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "desktop_template": {
+          "description": "Path to a custom desktop file Handlebars template shared by Linux\npackage formats.\n\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon`\nand `name`.",
+          "type": [
+            "string",
+            "null"
           ]
         },
         "flatpak_permissions": {
@@ -1353,6 +1232,17 @@
             "type": "string"
           }
         },
+        "rpm": {
+          "description": "RPM-specific package settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinuxRpmSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "short_description": {
           "description": "Short description.\nOverrides `bundle.short_description` for Linux builds.",
           "type": [
@@ -1392,13 +1282,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "desktop_template": {
-          "description": "Path to custom desktop template.",
-          "type": [
-            "string",
-            "null"
-          ]
         },
         "files": {
           "description": "Additional files to include. Maps package path to source path.",
@@ -1478,6 +1361,97 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "LinuxRpmSettings": {
+      "description": "RPM package settings.",
+      "type": "object",
+      "properties": {
+        "conflicts": {
+          "description": "RPM package `Conflicts`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "description": "Additional files to include. Maps package path to source path.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "obsoletes": {
+          "description": "RPM package `Obsoletes`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "post_install_script": {
+          "description": "Post-install script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "post_remove_script": {
+          "description": "Post-remove script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_install_script": {
+          "description": "Pre-install script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_remove_script": {
+          "description": "Pre-remove script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provides": {
+          "description": "RPM package `Provides`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommends": {
+          "description": "RPM package `Recommends`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "requires": {
+          "description": "RPM package `Requires`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
