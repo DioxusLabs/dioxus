@@ -109,25 +109,33 @@ impl WasmOpt {
     }
 
     pub async fn optimize(&self) -> Result<()> {
-        let mut command = self.build_command();
+        self.run(self.build_command()).await
+    }
+
+    async fn run(&self, mut command: tokio::process::Command) -> Result<()> {
         let res = command.output().await?;
 
         if !res.status.success() {
-            let err = String::from_utf8_lossy(&res.stderr);
-            tracing::error!(
-                telemetry = %serde_json::json!({ "event": "wasm_opt_failed" }),
-                "wasm-opt failed with status code {}\nstderr: {}\nstdout: {}",
+            let message = format!(
+                "wasm-opt failed with status {}\nstderr: {}\nstdout: {}",
                 res.status,
-                err,
+                String::from_utf8_lossy(&res.stderr),
                 String::from_utf8_lossy(&res.stdout)
             );
-            // A failing wasm-opt execution may leave behind an empty file so copy the original file instead.
-            if self.input_path != self.output_path {
-                std::fs::copy(&self.input_path, &self.output_path).unwrap();
-            }
-        } else {
-            std::fs::copy(self.temporary_output_path.path(), &self.output_path).unwrap();
+            tracing::error!(
+                telemetry = %serde_json::json!({ "event": "wasm_opt_failed" }),
+                "{message}"
+            );
+            // A failed optimizer may leave partial output. Preserve the original wasm.
+            bail!(message);
         }
+
+        std::fs::copy(self.temporary_output_path.path(), &self.output_path).with_context(|| {
+            format!(
+                "Failed to write optimized wasm to {}",
+                self.output_path.display()
+            )
+        })?;
 
         Ok(())
     }
@@ -325,4 +333,143 @@ async fn install_github(install_dir: &Path) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CHILD_OUTPUT: &str = "DIOXUS_TEST_WASM_OPT_OUTPUT";
+    const CHILD_MODE: &str = "DIOXUS_TEST_WASM_OPT_MODE";
+    const ORIGINAL: &[u8] = b"original wasm";
+    const OPTIMIZED: &[u8] = b"optimized wasm";
+
+    // Run only in a child process when exercising optimizer exit handling.
+    #[test]
+    fn optimizer_process() {
+        let Some(output) = std::env::var_os(CHILD_OUTPUT) else {
+            return;
+        };
+        let mode = std::env::var(CHILD_MODE).unwrap();
+        std::fs::write(output, OPTIMIZED).unwrap();
+        println!("optimizer stdout");
+        eprintln!("optimizer stderr");
+        match mode.as_str() {
+            "success" => {}
+            "failure" => std::process::exit(23),
+            #[cfg(unix)]
+            "signal" => {
+                // Terminate by signal without creating a core dump.
+                std::process::Command::new("kill")
+                    .arg("-TERM")
+                    .arg(std::process::id().to_string())
+                    .status()
+                    .unwrap();
+                panic!("the optimizer subprocess should have terminated");
+            }
+            _ => panic!("unknown optimizer mode"),
+        }
+    }
+
+    fn optimizer(dir: &Path, in_place: bool) -> WasmOpt {
+        let input_path = dir.join("input.wasm");
+        std::fs::write(&input_path, ORIGINAL).unwrap();
+        WasmOpt {
+            path: std::env::current_exe().unwrap(),
+            output_path: if in_place {
+                input_path.clone()
+            } else {
+                dir.join("output.wasm")
+            },
+            input_path,
+            temporary_output_path: NamedTempFile::new_in(dir).unwrap(),
+            cfg: WasmOptConfig::default(),
+        }
+    }
+
+    fn command(optimizer: &WasmOpt, mode: &str) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new(&optimizer.path);
+        command
+            .args([
+                "--exact",
+                "wasm_opt::tests::optimizer_process",
+                "--nocapture",
+            ])
+            .env(CHILD_OUTPUT, optimizer.temporary_output_path.path())
+            .env(CHILD_MODE, mode);
+        command
+    }
+
+    async fn assert_failure(mode: &str, status: &str) {
+        for in_place in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let optimizer = optimizer(dir.path(), in_place);
+            if !in_place {
+                std::fs::write(&optimizer.output_path, b"previous output").unwrap();
+            }
+
+            let error = optimizer
+                .run(command(&optimizer, mode))
+                .await
+                .expect_err("a failed optimizer must fail the build")
+                .to_string();
+            assert!(error.contains("wasm-opt"), "{error}");
+            assert!(error.contains(status), "{error}");
+            assert!(error.contains("optimizer stderr"), "{error}");
+            assert!(error.contains("optimizer stdout"), "{error}");
+            assert_eq!(std::fs::read(&optimizer.input_path).unwrap(), ORIGINAL);
+            if !in_place {
+                assert_eq!(
+                    std::fs::read(&optimizer.output_path).unwrap(),
+                    b"previous output"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn unsuccessful_optimizer_fails_build() {
+        assert_failure("failure", "23").await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn signaled_optimizer_fails_build() {
+        assert_failure("signal", "signal").await;
+    }
+
+    #[tokio::test]
+    async fn successful_optimizer_copies_output() {
+        for in_place in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let optimizer = optimizer(dir.path(), in_place);
+            optimizer.run(command(&optimizer, "success")).await.unwrap();
+            assert_eq!(std::fs::read(&optimizer.output_path).unwrap(), OPTIMIZED);
+            if !in_place {
+                assert_eq!(std::fs::read(&optimizer.input_path).unwrap(), ORIGINAL);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn output_copy_failure_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut optimizer = optimizer(dir.path(), false);
+        optimizer.output_path = dir.path().to_path_buf();
+        let error = optimizer
+            .run(command(&optimizer, "success"))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("Failed to write optimized wasm"));
+        assert_eq!(std::fs::read(&optimizer.input_path).unwrap(), ORIGINAL);
+    }
+
+    #[test]
+    fn zero_level_still_passes_o0_to_optimizer() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut optimizer = optimizer(dir.path(), true);
+        optimizer.cfg.level = WasmOptLevel::Zero;
+        let command = optimizer.build_command();
+        assert!(command.as_std().get_args().any(|arg| arg == "-O0"));
+    }
 }
