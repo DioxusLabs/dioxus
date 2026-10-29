@@ -14,7 +14,7 @@ default = []
 nightly-features = []
 
 [dependencies]
-dioxus-core = { workspace = true }
+dioxus-vdom = { workspace = true }
 dioxus-signals = { workspace = true }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
@@ -25,7 +25,7 @@ rustversion = { workspace = true }
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }
-dioxus-core = { workspace = true }
+dioxus-vdom = { workspace = true }
 dioxus = { workspace = true }
 web-sys = { workspace = true, features = ["Document", "Window", "Element"] }
 tokio = { workspace = true, features = ["full"] }

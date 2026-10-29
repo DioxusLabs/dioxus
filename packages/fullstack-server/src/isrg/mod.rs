@@ -160,5 +160,5 @@ pub enum IncrementalRendererError {
 
     /// An error occurred while rendering a route.
     #[error("Unknown error: {0}")]
-    Other(#[from] dioxus_core::CapturedError),
+    Other(#[from] dioxus_vdom::CapturedError),
 }

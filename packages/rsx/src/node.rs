@@ -127,7 +127,7 @@ impl ToTokens for BodyNode {
             BodyNode::SyntheticBoundary(body) => {
                 tokens.extend(quote::quote! {
                     {
-                        let ___nodes = dioxus_core::IntoDynNode::into_dyn_node({ #body });
+                        let ___nodes = dioxus_vdom::IntoDynNode::into_dyn_node({ #body });
                         ___nodes
                     }
                 });

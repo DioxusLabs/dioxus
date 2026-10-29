@@ -1,6 +1,6 @@
 use crate::{Outlet, provide_router_context, routable::Routable, router_cfg::RouterConfig};
-use dioxus_core::{Callback, Element, provide_context, use_hook};
-use dioxus_core_macro::{Props, rsx};
+use dioxus_vdom::{Callback, Element, provide_context, use_hook};
+use dioxus_vdom_macro::{Props, rsx};
 
 /// The props for [`Router`].
 #[derive(Props)]

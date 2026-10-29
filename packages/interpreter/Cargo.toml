@@ -23,8 +23,8 @@ sledgehammer_utils = { version = "0.3.1", optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 rustc-hash = { workspace = true, optional = true }
 
-dioxus-core = { workspace = true, optional = true }
-dioxus-core-types = { workspace = true, optional = true }
+dioxus-vdom = { workspace = true, optional = true }
+dioxus-base-types = { workspace = true, optional = true }
 dioxus-html = { workspace = true, optional = true }
 
 [build-dependencies]
@@ -42,5 +42,5 @@ webonly = [
     "dep:web-sys",
     "sledgehammer_bindgen/web",
 ]
-binary-protocol = ["sledgehammer", "dep:dioxus-core", "dep:dioxus-core-types", "dep:dioxus-html"]
+binary-protocol = ["sledgehammer", "dep:dioxus-vdom", "dep:dioxus-base-types", "dep:dioxus-html"]
 minimal_bindings = []

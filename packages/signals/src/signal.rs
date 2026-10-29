@@ -2,7 +2,7 @@ use crate::{
     CopyValue, Global, GlobalMemo, GlobalSignal, Memo, ReadableRef, WritableRef, default_impl,
     fmt_impls, read::*, write::*, write_impls,
 };
-use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
+use dioxus_vdom::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 use std::{collections::HashSet, ops::Deref, sync::Arc, sync::Mutex};
 
@@ -464,7 +464,7 @@ impl<T> IntoAttributeValue for Signal<T>
 where
     T: Clone + IntoAttributeValue + 'static,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
+    fn into_value(self) -> dioxus_vdom::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
@@ -473,7 +473,7 @@ impl<T> IntoDynNode for Signal<T>
 where
     T: Clone + IntoDynNode + 'static,
 {
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+    fn into_dyn_node(self) -> dioxus_vdom::DynamicNode {
         self().into_dyn_node()
     }
 }

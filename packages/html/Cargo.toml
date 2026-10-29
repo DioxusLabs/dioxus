@@ -10,9 +10,9 @@ homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-dioxus-core = { workspace = true }
-dioxus-core-macro = { workspace = true }
-dioxus-core-types = { workspace = true }
+dioxus-vdom = { workspace = true }
+dioxus-vdom-macro = { workspace = true }
+dioxus-base-types = { workspace = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
 dioxus-hooks = { workspace = true }
@@ -50,7 +50,7 @@ serialize = [
     "dep:serde_repr",
     "euclid/serde",
     "keyboard-types/serde",
-    "dioxus-core/serialize",
+    "dioxus-vdom/serialize",
     "bytes/serde"
 ]
 hot-reload-context = ["dep:dioxus-rsx"]

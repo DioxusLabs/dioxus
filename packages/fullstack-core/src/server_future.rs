@@ -1,7 +1,7 @@
 use crate::Transportable;
-use dioxus_core::{RenderError, suspend, use_hook};
 use dioxus_hooks::*;
 use dioxus_signals::ReadableExt;
+use dioxus_vdom::{RenderError, suspend, use_hook};
 use std::future::Future;
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.

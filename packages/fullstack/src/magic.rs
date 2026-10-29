@@ -593,7 +593,7 @@ mod resp {
 
     use super::*;
     use axum::response::Response;
-    use dioxus_core::CapturedError;
+    use dioxus_vdom::CapturedError;
     use http::HeaderValue;
 
     /// A trait for converting the result of the Server Function into an Axum response.

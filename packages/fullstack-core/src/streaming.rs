@@ -1,7 +1,7 @@
 use crate::{HttpError, ServerFnError};
 use axum_core::extract::FromRequest;
 use axum_core::response::IntoResponse;
-use dioxus_core::{CapturedError, ReactiveContext};
+use dioxus_vdom::{CapturedError, ReactiveContext};
 use http::StatusCode;
 use http::{HeaderMap, request::Parts};
 use parking_lot::RwLock;
@@ -160,7 +160,7 @@ impl FullstackContext {
         }
 
         // Otherwise, try to get it from the dioxus runtime context (for streaming SSR)
-        if let Some(rt) = dioxus_core::Runtime::try_current() {
+        if let Some(rt) = dioxus_vdom::Runtime::try_current() {
             let id = rt.try_current_scope_id()?;
             if let Some(ctx) = rt.consume_context::<FullstackContext>(id) {
                 return Some(ctx);

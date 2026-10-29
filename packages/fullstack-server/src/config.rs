@@ -1,7 +1,7 @@
 //! Configuration for how to serve a Dioxus application
 #![allow(non_snake_case)]
 
-use dioxus_core::LaunchConfig;
+use dioxus_vdom::LaunchConfig;
 use std::any::Any;
 use std::sync::Arc;
 
@@ -111,7 +111,7 @@ impl ServeConfig {
         self
     }
 
-    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_core::consume_context).
+    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_vdom::consume_context).
     ///
     ///
     /// The context providers passed into this method will be called when the context type is requested which may happen many times in the lifecycle of the application.
@@ -170,7 +170,7 @@ impl ServeConfig {
     }
 
     /// Provide context to the root and server functions. You can use this context
-    /// while rendering with [`consume_context`](dioxus_core::consume_context).
+    /// while rendering with [`consume_context`](dioxus_vdom::consume_context).
     ///
     ///
     /// The context providers passed into this method will be called when the context type is requested which may happen many times in the lifecycle of the application.
@@ -223,7 +223,7 @@ impl ServeConfig {
         self
     }
 
-    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_core::consume_context).
+    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_vdom::consume_context).
     ///
     /// Context will be forwarded from the LaunchBuilder if it is provided.
     ///

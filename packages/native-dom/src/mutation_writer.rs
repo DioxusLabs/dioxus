@@ -4,7 +4,7 @@ use crate::{
 };
 use blitz_dom::{BaseDocument, Document, DocumentMutator, Widget};
 use blitz_traits::events::DomEventKind;
-use dioxus_core::{BorrowedAttributeValue, ElementId, WriteMutations};
+use dioxus_vdom::{BorrowedAttributeValue, ElementId, WriteMutations};
 use std::str::FromStr as _;
 
 pub(crate) trait RealDom {

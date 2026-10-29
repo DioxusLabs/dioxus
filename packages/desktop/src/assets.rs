@@ -1,4 +1,4 @@
-use dioxus_core::Callback;
+use dioxus_vdom::Callback;
 use rustc_hash::FxHashMap;
 use std::{cell::RefCell, rc::Rc};
 use wry::{RequestAsyncResponder, http::Request};

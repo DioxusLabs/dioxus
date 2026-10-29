@@ -9,7 +9,7 @@ use crate::{ExternalNavigationFailure, NavigationTarget, RouterContext};
 /// Panics if there is no router present.
 pub fn navigator() -> Navigator {
     Navigator(
-        dioxus_core::try_consume_context::<RouterContext>()
+        dioxus_vdom::try_consume_context::<RouterContext>()
             .expect("A router must be present to use navigator"),
     )
 }

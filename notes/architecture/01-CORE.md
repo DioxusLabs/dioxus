@@ -1,6 +1,6 @@
 # Dioxus Core - VirtualDOM Architecture
 
-The `dioxus-core` crate is the heart of Dioxus, implementing the virtual DOM, component lifecycle, rendering pipeline, and reactive runtime.
+The `dioxus-vdom` crate is the heart of Dioxus, implementing the virtual DOM, component lifecycle, rendering pipeline, and reactive runtime.
 
 ## VirtualDom Structure
 

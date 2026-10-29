@@ -1,8 +1,8 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 use dioxus::prelude::*;
-use dioxus_core::{ElementId, generation};
-use dioxus_core::{NoOpMutations, ScopeState};
 use dioxus_signals::*;
+use dioxus_vdom::{ElementId, generation};
+use dioxus_vdom::{NoOpMutations, ScopeState};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

@@ -7,11 +7,11 @@
 //! by hot reload (rather than being silently dropped) and that the parent template's dynamic-node
 //! indices stay aligned with the boundaries.
 
-use dioxus_core::internal::{HotReloadDynamicNode, HotReloadedTemplate};
-use dioxus_core_template::TEMPLATE_SLOT_PATH_MAX_PATH_BITS;
-use dioxus_core_types::HotReloadingContext;
+use dioxus_base_types::HotReloadingContext;
 use dioxus_rsx::{BodyNode, CallBody};
 use dioxus_rsx_hotreload::HotReloadResult;
+use dioxus_vdom::internal::{HotReloadDynamicNode, HotReloadedTemplate};
+use dioxus_vdom_template::TEMPLATE_SLOT_PATH_MAX_PATH_BITS;
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::collections::HashMap;

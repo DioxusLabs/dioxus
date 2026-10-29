@@ -14,7 +14,7 @@
 #[inline(never)]
 pub extern "C" fn start_app() {
     use crate::Config;
-    use dioxus_core::{Element, VirtualDom};
+    use dioxus_vdom::{Element, VirtualDom};
     use std::any::Any;
 
     // `WryActivity.onCreate` (and therefore this setup) runs again on activity re-creation

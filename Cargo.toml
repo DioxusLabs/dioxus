@@ -2,15 +2,15 @@
 resolver = "2"
 members = [
     "packages/dioxus",
-    "packages/core",
-    "packages/core-template",
+    "packages/vdom",
+    "packages/vdom-template",
     "packages/oracle",
     "packages/fuzz",
-    "packages/core-types",
+    "packages/base-types",
     "packages/cli",
     "packages/cli-config",
     "packages/cli-telemetry",
-    "packages/core-macro",
+    "packages/vdom-macro",
     "packages/config-macro",
     "packages/router-macro",
     "packages/extension",
@@ -124,11 +124,11 @@ version = "0.8.0-alpha.3"
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "=0.8.0-alpha.3" }
-dioxus-core = { path = "packages/core", version = "=0.8.0-alpha.3" }
-dioxus-core-template = { path = "packages/core-template", version = "=0.8.0-alpha.3" }
+dioxus-vdom = { path = "packages/vdom", version = "=0.8.0-alpha.3" }
+dioxus-vdom-template = { path = "packages/vdom-template", version = "=0.8.0-alpha.3" }
 dioxus-renderer-oracle = { path = "packages/oracle", version = "=0.8.0-alpha.3" }
-dioxus-core-types = { path = "packages/core-types", version = "=0.8.0-alpha.3" }
-dioxus-core-macro = { path = "packages/core-macro", version = "=0.8.0-alpha.3" }
+dioxus-base-types = { path = "packages/base-types", version = "=0.8.0-alpha.3" }
+dioxus-vdom-macro = { path = "packages/vdom-macro", version = "=0.8.0-alpha.3" }
 dioxus-config-macro = { path = "packages/config-macro", version = "=0.8.0-alpha.3" }
 dioxus-router = { path = "packages/router", version = "=0.8.0-alpha.3" }
 dioxus-router-macro = { path = "packages/router-macro", version = "=0.8.0-alpha.3" }

@@ -1,5 +1,5 @@
 use crate::{ReadSignal, Signal};
-use dioxus_core::SuperFrom;
+use dioxus_vdom::SuperFrom;
 
 #[doc(hidden)]
 pub struct ReadFromMarker<M>(std::marker::PhantomData<M>);
@@ -17,7 +17,7 @@ where
 #[test]
 #[allow(unused)]
 fn into_signal_compiles() {
-    use dioxus_core::SuperInto;
+    use dioxus_vdom::SuperInto;
     fn takes_signal_string<M>(_: impl SuperInto<ReadSignal<String>, M>) {}
 
     fn takes_option_signal_string<M>(_: impl SuperInto<ReadSignal<Option<String>>, M>) {}

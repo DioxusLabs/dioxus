@@ -13,7 +13,7 @@ pub(crate) const MAX_ROOTS: usize = 8;
 pub(crate) const MAX_CHILDREN: usize = 8;
 pub(crate) const MAX_TEMPLATE_ATTRS: usize = 12;
 pub(crate) const MAX_DYNAMIC_ATTRS: usize = 8;
-// Larger than `dioxus_core::diff::iterator::FRAGMENT_WORK_BATCH` so the
+// Larger than `dioxus_vdom::diff::iterator::FRAGMENT_WORK_BATCH` so the
 // fuzz can drive the batched `component_props_update` code path.
 pub(crate) const MAX_FRAGMENT_CHILDREN: usize = 24;
 pub(crate) const MAX_MODEL_COST: u64 = 256;

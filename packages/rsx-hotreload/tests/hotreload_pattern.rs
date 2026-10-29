@@ -2,17 +2,17 @@
 
 use std::collections::HashMap;
 
-use dioxus_core::{
+use dioxus_base_types::HotReloadingContext;
+use dioxus_rsx::CallBody;
+use dioxus_rsx_hotreload::{self, ChangedRsx, HotReloadResult, diff_rsx};
+use dioxus_vdom::{
     Template, VNode,
     internal::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
     },
 };
-use dioxus_core_template::DecodedTemplateOp;
-use dioxus_core_types::HotReloadingContext;
-use dioxus_rsx::CallBody;
-use dioxus_rsx_hotreload::{self, ChangedRsx, HotReloadResult, diff_rsx};
+use dioxus_vdom_template::DecodedTemplateOp;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{File, parse::Parse, spanned::Spanned, token::Token};
@@ -554,7 +554,7 @@ fn template_generates() {
 #[test]
 fn diffs_complex() {
     #[allow(unused, non_snake_case)]
-    fn Comp() -> dioxus_core::Element {
+    fn Comp() -> dioxus_vdom::Element {
         VNode::empty()
     }
 

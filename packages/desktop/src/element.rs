@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
-use dioxus_core::ElementId;
 use dioxus_html::{
     MountedResult, RenderedElementBacking,
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
 };
+use dioxus_vdom::ElementId;
 
 use crate::{WeakDesktopContext, desktop_context::DesktopContext, query::QueryEngine};
 

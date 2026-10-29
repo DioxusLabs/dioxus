@@ -6,7 +6,7 @@ mod cache;
 pub mod config;
 pub mod renderer;
 
-use dioxus_core::{Element, VirtualDom};
+use dioxus_vdom::{Element, VirtualDom};
 
 pub use crate::renderer::Renderer;
 

@@ -1,7 +1,7 @@
 use std::{any::Any, rc::Rc};
 
 use crate::events::*;
-use dioxus_core::ElementId;
+use dioxus_vdom::ElementId;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "serialize")]

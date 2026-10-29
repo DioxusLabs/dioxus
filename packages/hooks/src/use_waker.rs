@@ -1,5 +1,5 @@
-use dioxus_core::use_hook;
 use dioxus_signals::{ReadableExt, Signal, WritableExt};
+use dioxus_vdom::use_hook;
 use futures_channel::oneshot::{Canceled, Receiver, Sender};
 use futures_util::{FutureExt, future::Shared};
 

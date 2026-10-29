@@ -9,9 +9,9 @@ use crate::{
 };
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{RenderTargetId, Runtime, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
+use dioxus_vdom::{RenderTargetId, Runtime, VirtualDom};
 use std::rc::Rc;
 use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
@@ -218,7 +218,7 @@ impl WebviewEdits {
             _ => data.into_any(),
         };
 
-        let event = dioxus_core::Event::new(as_any, bubbles);
+        let event = dioxus_vdom::Event::new(as_any, bubbles);
         self.runtime
             .handle_event_for_target(self.target_id, &name, event.clone(), element);
 
@@ -731,7 +731,7 @@ impl PendingWebview {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dioxus_core::{Element, VNode};
+    use dioxus_vdom::{Element, VNode};
     use futures_util::FutureExt;
 
     fn empty_app() -> Element {

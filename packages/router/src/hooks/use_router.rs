@@ -10,11 +10,11 @@ pub fn use_router() -> RouterContext {
 /// Acquire the router without subscribing to updates.
 #[doc(alias = "url")]
 pub fn router() -> RouterContext {
-    dioxus_core::consume_context()
+    dioxus_vdom::consume_context()
 }
 
 /// Try to acquire the router without subscribing to updates.
 #[doc(alias = "url")]
 pub fn try_router() -> Option<RouterContext> {
-    dioxus_core::try_consume_context()
+    dioxus_vdom::try_consume_context()
 }

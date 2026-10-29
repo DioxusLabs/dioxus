@@ -82,7 +82,7 @@ pub trait HasProps {
     type Props;
 }
 
-impl<P> HasProps for dioxus_core::Component<P> {
+impl<P> HasProps for dioxus_vdom::Component<P> {
     type Props = P;
 }
 

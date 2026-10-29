@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_core::*;
 use dioxus_stores::GlobalStore;
+use dioxus_vdom::*;
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Store, std::fmt::Debug, Clone, Default)]

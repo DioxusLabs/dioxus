@@ -1,4 +1,4 @@
-use dioxus_core::use_drop;
+use dioxus_vdom::use_drop;
 
 #[deprecated(note = "Use `use_drop` instead, which has the same functionality.")]
 pub fn use_on_unmount<D: FnOnce() + 'static>(destroy: D) {

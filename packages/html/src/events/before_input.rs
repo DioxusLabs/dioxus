@@ -1,4 +1,4 @@
-use dioxus_core::Event;
+use dioxus_vdom::Event;
 use std::fmt::{self, Debug, Display};
 
 pub type BeforeInputEvent = Event<BeforeInputData>;

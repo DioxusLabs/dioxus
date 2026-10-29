@@ -1,7 +1,7 @@
 use super::cache::Segment;
 use crate::cache::StringCache;
 
-use dioxus_core::{
+use dioxus_vdom::{
     Attribute, AttributeValue, DynamicNode, Element, MountedVNode, ScopeId, Template, VirtualDom,
 };
 use rustc_hash::FxHashMap;

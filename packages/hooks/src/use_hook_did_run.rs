@@ -1,5 +1,5 @@
-use dioxus_core::{use_after_render, use_before_render, use_hook};
 use dioxus_signals::{CopyValue, WritableExt};
+use dioxus_vdom::{use_after_render, use_before_render, use_hook};
 
 /// A utility lifecycle hook that is intended to be used inside other hooks to determine if the outer hook has ran this render.
 /// The provided callback is executed after each render.

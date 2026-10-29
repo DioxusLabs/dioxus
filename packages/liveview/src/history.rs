@@ -1,6 +1,6 @@
-use dioxus_core::spawn;
 use dioxus_document::Eval;
 use dioxus_history::History;
+use dioxus_vdom::spawn;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use std::sync::{Mutex, RwLock};

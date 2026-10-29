@@ -4,8 +4,8 @@
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
 use crate::dom::WebsysDom;
-use dioxus_core::{ScopeState, SuspenseBoundaryProps, VirtualDom};
 use dioxus_fullstack_core::HydrationContext;
+use dioxus_vdom::{ScopeState, SuspenseBoundaryProps, VirtualDom};
 use futures_channel::mpsc::UnboundedReceiver;
 use wasm_bindgen::JsCast;
 

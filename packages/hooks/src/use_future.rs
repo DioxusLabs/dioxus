@@ -1,14 +1,14 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal};
-use dioxus_core::{Callback, Subscribers, Task, use_hook};
 use dioxus_signals::*;
+use dioxus_vdom::{Callback, Subscribers, Task, use_hook};
 use std::future::Future;
 use std::ops::Deref;
 
 /// A hook that allows you to spawn a future the first time you render a component.
 ///
 ///
-/// This future will **not** run on the server. To run a future on the server, you should use [`dioxus_core::spawn_isomorphic`] directly.
+/// This future will **not** run on the server. To run a future on the server, you should use [`dioxus_vdom::spawn_isomorphic`] directly.
 ///
 ///
 /// `use_future` **won't return a value**. If you want to return a value from a future, use [`crate::use_resource()`] instead.
@@ -50,7 +50,7 @@ where
 
     let callback = use_callback(move |_| {
         let fut = future();
-        dioxus_core::spawn(async move {
+        dioxus_vdom::spawn(async move {
             state.set(UseFutureState::Pending);
             fut.await;
             state.set(UseFutureState::Ready);

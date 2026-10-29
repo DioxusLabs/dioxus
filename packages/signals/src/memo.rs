@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
-use dioxus_core::{
+use dioxus_vdom::{
     IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers, current_scope_id,
     spawn_isomorphic,
 };
@@ -231,7 +231,7 @@ impl<T> IntoAttributeValue for Memo<T>
 where
     T: Clone + IntoAttributeValue + PartialEq + 'static,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
+    fn into_value(self) -> dioxus_vdom::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
@@ -240,7 +240,7 @@ impl<T> IntoDynNode for Memo<T>
 where
     T: Clone + IntoDynNode + PartialEq + 'static,
 {
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+    fn into_dyn_node(self) -> dioxus_vdom::DynamicNode {
         self().into_dyn_node()
     }
 }

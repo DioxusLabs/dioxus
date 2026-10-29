@@ -5,14 +5,14 @@ use crate::{
     platform_override::CommandWithPlatformOverrides,
 };
 use anyhow::{Context, bail};
-use dioxus_core::internal::{
-    HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
-};
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_dx_wire_format::BuildStage;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
+use dioxus_vdom::internal::{
+    HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
+};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use futures_util::future::OptionFuture;
@@ -1283,7 +1283,7 @@ impl AppServer {
 
     /// Get the directories of every local (non-`.cargo`) crate reachable from `crate_package`
     /// through the dependency graph. Walks transitively so workspace members pulled in via
-    /// intermediate workspace crates (e.g. `dioxus-examples` → `dioxus` → `dioxus-core`) are
+    /// intermediate workspace crates (e.g. `dioxus-examples` → `dioxus` → `dioxus-vdom`) are
     /// included. Registry/git deps under `.cargo` are skipped and not descended into.
     fn local_dependencies(&self, crate_package: NodeId) -> Vec<PathBuf> {
         let mut paths = vec![];

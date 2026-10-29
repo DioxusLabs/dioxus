@@ -1,4 +1,4 @@
-use dioxus_core::Event;
+use dioxus_vdom::Event;
 
 pub type TransitionEvent = Event<TransitionData>;
 

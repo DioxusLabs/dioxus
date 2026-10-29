@@ -1,6 +1,6 @@
 use anyrender::CompositeAlphaMode;
 use blitz_dom::FontContext;
-use dioxus_core::LaunchConfig;
+use dioxus_vdom::LaunchConfig;
 use peniko::Color;
 use winit::window::WindowAttributes;
 

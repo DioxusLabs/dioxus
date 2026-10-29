@@ -3,7 +3,7 @@
 use self::location::DynIdx;
 use crate::stats::{TemplateStatsBuilder, TemplateStorageStats};
 use crate::*;
-use dioxus_core_template::{TEMPLATE_SLOT_PATH_MAX_PATH_BITS, TEMPLATE_STORAGE_MAX_CAP};
+use dioxus_vdom_template::{TEMPLATE_SLOT_PATH_MAX_PATH_BITS, TEMPLATE_STORAGE_MAX_CAP};
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
@@ -147,7 +147,7 @@ impl ToTokens for TemplateBody {
         let node_hoists = &pieces.node_hoists;
         let view_expr = match node.implicit_key() {
             Some(key) => quote! {{
-                use dioxus_core::view::ViewKeyExt as _;
+                use dioxus_vdom::view::ViewKeyExt as _;
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes.
                 let __key = Some(#key.to_string());
                 #(#node_hoists)*
@@ -172,7 +172,7 @@ impl ToTokens for TemplateBody {
         let hot_reload_mapping = pieces.hot_reload_template_tokens(quote! { *__vnode.template() });
 
         tokens.append_all(quote! {
-            dioxus_core::Element::Ok({
+            dioxus_vdom::Element::Ok({
                 #diagnostics
 
                 #key_warnings
@@ -184,28 +184,28 @@ impl ToTokens for TemplateBody {
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
                     static __NORMALIZED_FILE: &'static str = {
-                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                        dioxus_core::const_format::str_replace!(PATH, '\\', "/")
+                        const PATH: &str = dioxus_vdom::const_format::str_replace!(file!(), "\\\\", "/");
+                        dioxus_vdom::const_format::str_replace!(PATH, '\\', "/")
                     };
 
                     use dioxus_signals::ReadableExt;
 
-                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
-                        || None::<dioxus_core::internal::HotReloadedTemplate>,
+                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_vdom::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
+                        || None::<dioxus_vdom::internal::HotReloadedTemplate>,
                         __NORMALIZED_FILE,
                         line!(),
                         column!(),
                         #index
                     );
 
-                    dioxus_core::Runtime::try_current().map(|_| __HOT_RELOAD_TEMPLATE.read())
+                    dioxus_vdom::Runtime::try_current().map(|_| __HOT_RELOAD_TEMPLATE.read())
                 };
 
                 // The literal pool and hot-reload read must be in scope before the view is built:
                 // component literal props pull their hot-reloaded value from the pool while the view
                 // expression evaluates.
                 #[cfg(debug_assertions)]
-                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                let mut __dynamic_literal_pool = dioxus_vdom::internal::DynamicLiteralPool::new(
                     vec![ #( #dynamic_text.to_string() ),* ],
                 );
 
@@ -219,7 +219,7 @@ impl ToTokens for TemplateBody {
 
                     #[cfg(not(debug_assertions))]
                     {
-                        dioxus_core::view::into_vnode_with_capacity::<
+                        dioxus_vdom::view::into_vnode_with_capacity::<
                             #template_ops_cap,
                             #template_string_cap,
                             #template_dynamic_cap,
@@ -229,9 +229,9 @@ impl ToTokens for TemplateBody {
 
                     #[cfg(debug_assertions)]
                     {
-                        static __RUNTIME_TEMPLATE: ::std::sync::OnceLock<dioxus_core::Template> =
+                        static __RUNTIME_TEMPLATE: ::std::sync::OnceLock<dioxus_vdom::Template> =
                             ::std::sync::OnceLock::new();
-                        dioxus_core::view::into_vnode_cached(__view, &__RUNTIME_TEMPLATE)
+                        dioxus_vdom::view::into_vnode_cached(__view, &__RUNTIME_TEMPLATE)
                     }
                 };
 
@@ -252,7 +252,7 @@ impl ToTokens for TemplateBody {
                         _ => &__original_template,
                     };
 
-                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::from_vnode(
+                    let mut __dynamic_value_pool = dioxus_vdom::internal::DynamicValuePool::from_vnode(
                         &__vnode,
                         __dynamic_literal_pool
                     );
@@ -296,7 +296,7 @@ impl ViewBuilderPieces {
             groups.into_iter().next().unwrap()
         } else {
             let groups = groups.iter();
-            quote! { dioxus_core::view::fragment() #(.child(#groups))* }
+            quote! { dioxus_vdom::view::fragment() #(.child(#groups))* }
         };
         builder.finish(view, template_stats)
     }
@@ -324,7 +324,7 @@ impl ViewBuilderPieces {
         let component_values = self.component_value_tokens.iter();
 
         quote! {
-            dioxus_core::internal::HotReloadedTemplate::from_template(
+            dioxus_vdom::internal::HotReloadedTemplate::from_template(
                 #key,
                 vec![ #( #dynamic_nodes ),* ],
                 vec![ #( #dyn_attrs ),* ],
@@ -474,13 +474,13 @@ impl ViewBuilder {
         let value = text.input.to_static().unwrap();
         self.definitions.push(quote_spanned! { text.input.span() =>
             struct #marker;
-            impl dioxus_core::view::StaticText for #marker {
+            impl dioxus_vdom::view::StaticText for #marker {
                 const TEXT: &'static str = #value;
             }
         });
         quote_spanned! {
             text.input.span() =>
-            dioxus_core::view::StaticTextBuilder::<#marker>(::core::marker::PhantomData)
+            dioxus_vdom::view::StaticTextBuilder::<#marker>(::core::marker::PhantomData)
         }
     }
 
@@ -488,7 +488,7 @@ impl ViewBuilder {
         let id = self.dynamic_node_count;
         self.dynamic_node_count += 1;
         self.hot_reload_dynamic_nodes
-            .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
+            .push(quote! { dioxus_vdom::internal::HotReloadDynamicNode::Dynamic(#id) });
         // Bind the node value to a local before the builder chain. This matches the 0.6 evaluation
         // order where dynamic nodes are evaluated before dynamic attributes, releasing any borrow
         // the value takes (e.g. a `"{var}"` interpolation) before the surrounding chain moves
@@ -496,13 +496,13 @@ impl ViewBuilder {
         // from the bound value's type.
         let node = format_ident!("__dyn_node_{id}");
         self.node_hoists.push(quote! { let #node = #tokens; });
-        quote! { dioxus_core::view::dynamic_node_builder(#node) }
+        quote! { dioxus_vdom::view::dynamic_node_builder(#node) }
     }
 
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
         self.track_dynamic_attr(attr);
         let attrs = attr.rendered_as_dynamic_attr();
-        quote! { .attribute(dioxus_core::view::dynamic_attributes_builder(#attrs)) }
+        quote! { .attribute(dioxus_vdom::view::dynamic_attributes_builder(#attrs)) }
     }
 
     fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TokenStream2 {
@@ -521,7 +521,7 @@ impl ViewBuilder {
         let id = self.dynamic_attr_count;
         self.dynamic_attr_count += 1;
         self.hot_reload_dynamic_attrs
-            .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
+            .push(quote! { dioxus_vdom::internal::HotReloadDynamicAttribute::Dynamic(#id) });
         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
             self.allocate_formatted(lit);
         }
@@ -548,16 +548,16 @@ impl ViewBuilder {
             let hot_literal = match literal {
                 HotLiteral::Fmted(fmted) => {
                     let fmted = self.allocate_formatted(fmted);
-                    quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#fmted) }
+                    quote! { dioxus_vdom::internal::HotReloadLiteral::Fmted(#fmted) }
                 }
                 HotLiteral::Float(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Float(#value as _) }
+                    quote! { dioxus_vdom::internal::HotReloadLiteral::Float(#value as _) }
                 }
                 HotLiteral::Int(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Int(#value as _) }
+                    quote! { dioxus_vdom::internal::HotReloadLiteral::Int(#value as _) }
                 }
                 HotLiteral::Bool(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Bool(#value) }
+                    quote! { dioxus_vdom::internal::HotReloadLiteral::Bool(#value) }
                 }
             };
 
@@ -592,15 +592,15 @@ impl ViewBuilder {
         let marker = self.next_ident("__DioxusAttr");
         self.definitions.push(quote_spanned! { span =>
             struct #marker;
-            impl dioxus_core::view::AttributeDescriptor for #marker {
+            impl dioxus_vdom::view::AttributeDescriptor for #marker {
                 const NAME: &'static str = #name;
                 const NAMESPACE: Option<&'static str> = #namespace;
             }
-            impl dioxus_core::view::StaticAttributeValue for #marker {
+            impl dioxus_vdom::view::StaticAttributeValue for #marker {
                 const VALUE: &'static str = #value;
             }
         });
-        let attr = quote_spanned! { span => dioxus_core::view::static_attribute::<#marker>() };
+        let attr = quote_spanned! { span => dioxus_vdom::view::static_attribute::<#marker>() };
         quote! { .attribute(#attr) }
     }
 
@@ -609,7 +609,7 @@ impl ViewBuilder {
             ElementName::Ident(ident) => quote_spanned! { element.name.span() => html::#ident },
             ElementName::Custom(_) => {
                 let tag = self.define_tag(element);
-                quote! { dioxus_core::view::element_builder::<#tag>() }
+                quote! { dioxus_vdom::view::element_builder::<#tag>() }
             }
         }
     }
@@ -620,7 +620,7 @@ impl ViewBuilder {
         self.definitions
             .push(quote_spanned! { element.name.span() =>
                 struct #marker;
-                impl dioxus_core::view::ElementTag for #marker {
+                impl dioxus_vdom::view::ElementTag for #marker {
                     const NAME: &'static str = #tag;
                 }
             });
@@ -653,13 +653,13 @@ impl Element {
                 let value = value.to_static().unwrap();
                 builder.definitions.push(quote_spanned! { attr.span() =>
                     struct #marker;
-                    impl dioxus_core::view::StaticAttributeValue for #marker {
+                    impl dioxus_vdom::view::StaticAttributeValue for #marker {
                         const VALUE: &'static str = #value;
                     }
                 });
                 return quote! {
                     .#method(
-                        dioxus_core::view::StaticAttributeValueBuilder::<#marker>(
+                        dioxus_vdom::view::StaticAttributeValueBuilder::<#marker>(
                             ::core::marker::PhantomData
                         )
                     )

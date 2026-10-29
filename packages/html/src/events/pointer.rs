@@ -1,4 +1,4 @@
-use dioxus_core::Event;
+use dioxus_vdom::Event;
 use keyboard_types::Modifiers;
 use std::option::Option;
 

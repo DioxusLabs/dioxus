@@ -1,5 +1,5 @@
-use dioxus_core::AnyhowContext;
 use dioxus_html::{FileData, NativeFileData, bytes::Bytes};
+use dioxus_vdom::AnyhowContext;
 use futures_channel::oneshot;
 use js_sys::Uint8Array;
 use send_wrapper::SendWrapper;
@@ -39,7 +39,7 @@ impl NativeFileData for WebFileData {
 
     fn read_bytes(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::CapturedError>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_vdom::CapturedError>> + 'static>> {
         let file_reader = self.reader.clone();
         let file_reader_ = self.reader.clone();
         let file = self.file.clone();
@@ -72,7 +72,7 @@ impl NativeFileData for WebFileData {
 
     fn read_string(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_vdom::CapturedError>> + 'static>> {
         let file_reader = self.reader.clone();
         let file_reader_ = self.reader.clone();
         let file = self.file.clone();
@@ -115,7 +115,7 @@ impl NativeFileData for WebFileData {
         &self,
     ) -> Pin<
         Box<
-            dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::CapturedError>>
+            dyn futures_util::Stream<Item = Result<Bytes, dioxus_vdom::CapturedError>>
                 + 'static
                 + Send,
         >,

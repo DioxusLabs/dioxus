@@ -25,15 +25,15 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-pub use dioxus_core;
+pub use dioxus_vdom;
 #[doc(inline)]
-pub use dioxus_core::{CapturedError, Ok, Result};
+pub use dioxus_vdom::{CapturedError, Ok, Result};
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 mod launch;
 
-pub use dioxus_core as core;
+pub use dioxus_vdom as core;
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
@@ -71,7 +71,7 @@ pub use dioxus_html as html;
 
 #[cfg(feature = "macro")]
 #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
-pub use dioxus_core_macro as core_macro;
+pub use dioxus_vdom_macro as core_macro;
 
 #[cfg(feature = "logger")]
 #[cfg_attr(docsrs, doc(cfg(feature = "logger")))]
@@ -174,7 +174,7 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
     #[allow(deprecated)]
     #[doc(inline)]
-    pub use dioxus_core_macro::{Props, component, rsx};
+    pub use dioxus_vdom_macro::{Props, component, rsx};
 
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
@@ -211,7 +211,7 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
     pub use dioxus_devtools;
 
-    pub use dioxus_core;
+    pub use dioxus_vdom;
 
     #[cfg(feature = "fullstack")]
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
@@ -249,7 +249,7 @@ pub mod prelude {
     pub use wasm_splitter as wasm_split;
 
     #[doc(inline)]
-    pub use dioxus_core::{
+    pub use dioxus_vdom::{
         AnyhowContext, Attribute, Callback, Component, ComponentFunctionExt, Element,
         ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoDynNode,
         Portal, PortalProps, RenderError, RenderTargetId, Result, ScopeId, SuspenseBoundary,

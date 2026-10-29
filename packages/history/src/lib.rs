@@ -1,4 +1,4 @@
-use dioxus_core::{provide_context, provide_root_context};
+use dioxus_vdom::{provide_context, provide_root_context};
 use std::{rc::Rc, sync::Arc};
 
 mod memory;
@@ -6,7 +6,7 @@ pub use memory::*;
 
 /// Get the history provider for the current platform if the platform doesn't implement a history functionality.
 pub fn history() -> Rc<dyn History> {
-    match dioxus_core::try_consume_context::<Rc<dyn History>>() {
+    match dioxus_vdom::try_consume_context::<Rc<dyn History>>() {
         Some(history) => history,
         None => {
             tracing::error!(

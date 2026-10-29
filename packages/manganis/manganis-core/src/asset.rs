@@ -159,7 +159,7 @@ impl Asset {
     pub fn resolve(&self) -> PathBuf {
         #[cfg(feature = "dioxus")]
         // If the asset is relative, we resolve the asset at the current directory
-        if !dioxus_core_types::is_bundled_app() {
+        if !dioxus_base_types::is_bundled_app() {
             return PathBuf::from(self.bundled().absolute_source_path.as_str());
         }
 
@@ -203,7 +203,7 @@ impl std::fmt::Display for Asset {
 }
 
 #[cfg(feature = "dioxus")]
-impl dioxus_core_types::DioxusFormattable for Asset {
+impl dioxus_base_types::DioxusFormattable for Asset {
     fn format(&self) -> std::borrow::Cow<'static, str> {
         std::borrow::Cow::Owned(self.to_string())
     }
