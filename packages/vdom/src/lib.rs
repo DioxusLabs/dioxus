@@ -14,13 +14,6 @@
 // components can use the derive instead of hand-written builders.
 extern crate self as dioxus_vdom;
 
-#[doc(hidden)]
-pub mod __private {
-    pub use dioxus_config_macros::maybe_wasm_split;
-    #[cfg(feature = "wasm-split")]
-    pub use wasm_splitter as wasm_split;
-}
-
 // Debug assertions document internal invariants, but the standard
 // `debug_assert*` macros leave unreachable `cfg!(debug_assertions)` branches in
 // coverage builds. These compile away completely under `coverage_nightly` so the

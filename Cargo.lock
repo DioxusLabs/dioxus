@@ -4116,7 +4116,6 @@ dependencies = [
  "criterion",
  "dioxus",
  "dioxus-base-types",
- "dioxus-config-macros",
  "dioxus-const-vec",
  "dioxus-html",
  "dioxus-renderer-oracle",
@@ -4141,7 +4140,6 @@ dependencies = [
  "tracing",
  "tracing-fluent-assertions",
  "tracing-subscriber",
- "wasm-splitter",
  "web-sys",
  "xxhash-rust",
 ]

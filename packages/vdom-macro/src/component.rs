@@ -191,12 +191,12 @@ impl ComponentBody {
                 #block
             }
 
-            #root::__private::maybe_wasm_split! {
+            #root::config_macros::maybe_wasm_split! {
                 if wasm_split {
                     {
-                        use #root::__private::wasm_split;
-                        static __MODULE: #root::__private::wasm_split::LazyLoader<#props_ty, #out_ty> =
-                            #root::__private::wasm_split::lazy_loader!(extern "lazy" fn #lazy_name(props: #props_ty,) -> #out_ty);
+                        use #root::wasm_split;
+                        static __MODULE: #root::wasm_split::LazyLoader<#props_ty, #out_ty> =
+                            #root::wasm_split::lazy_loader!(extern "lazy" fn #lazy_name(props: #props_ty,) -> #out_ty);
 
                         use_resource(|| async move { __MODULE.load().await }).suspend()?;
                         __MODULE.call(props).unwrap()

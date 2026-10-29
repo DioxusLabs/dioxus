@@ -13,8 +13,8 @@ mod utils;
 
 fn dioxus_root() -> proc_macro2::TokenStream {
     use proc_macro_crate::{FoundCrate, crate_name};
-    match crate_name("dioxus").or_else(|_| crate_name("dioxus-vdom")) {
-        Ok(FoundCrate::Itself) => quote::quote!(crate),
+    match crate_name("dioxus") {
+        Ok(FoundCrate::Itself) => quote::quote!(::dioxus),
         Ok(FoundCrate::Name(name)) => {
             let name = quote::format_ident!("{}", name);
             quote::quote!(::#name)
