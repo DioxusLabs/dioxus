@@ -2972,8 +2972,13 @@ impl BuildRequest {
             .filter(|dep| {
                 !matches!(
                     krates.graph()[dep.edge_id],
-                    krates::Edge::Dep { kind: krates::DepKind::Dev, .. }
-                        | krates::Edge::DepFeature { kind: krates::DepKind::Dev, .. }
+                    krates::Edge::Dep {
+                        kind: krates::DepKind::Dev,
+                        ..
+                    } | krates::Edge::DepFeature {
+                        kind: krates::DepKind::Dev,
+                        ..
+                    }
                 )
             })
             .filter_map(|dep| {
