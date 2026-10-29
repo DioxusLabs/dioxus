@@ -2966,6 +2966,16 @@ impl BuildRequest {
         krates
             .direct_dependents(target_nid)
             .into_iter()
+            // Dev-dependencies are never linked into the binary being patched. Following them
+            // adds replay edges that do not exist — and cycles, since a crate's tests commonly
+            // use a workspace crate that depends on it.
+            .filter(|dep| {
+                !matches!(
+                    krates.graph()[dep.edge_id],
+                    krates::Edge::Dep { kind: krates::DepKind::Dev, .. }
+                        | krates::Edge::DepFeature { kind: krates::DepKind::Dev, .. }
+                )
+            })
             .filter_map(|dep| {
                 let name = dep.krate.name.replace('-', "_");
                 if workspace_names.contains(&name) {
