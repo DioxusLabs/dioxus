@@ -11,6 +11,18 @@ mod component;
 mod props;
 mod utils;
 
+fn dioxus_root() -> proc_macro2::TokenStream {
+    use proc_macro_crate::{FoundCrate, crate_name};
+    match crate_name("dioxus").or_else(|_| crate_name("dioxus-vdom")) {
+        Ok(FoundCrate::Itself) => quote::quote!(crate),
+        Ok(FoundCrate::Name(name)) => {
+            let name = quote::format_ident!("{}", name);
+            quote::quote!(::#name)
+        }
+        Err(_) => quote::quote!(::dioxus),
+    }
+}
+
 use dioxus_rsx as rsx;
 
 #[doc = include_str!("../docs/props.md")]

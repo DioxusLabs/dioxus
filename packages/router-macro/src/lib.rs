@@ -26,6 +26,18 @@ mod route;
 mod route_tree;
 mod segment;
 
+fn dioxus_root() -> proc_macro2::TokenStream {
+    use proc_macro_crate::{FoundCrate, crate_name};
+    match crate_name("dioxus").or_else(|_| crate_name("dioxus-vdom")) {
+        Ok(FoundCrate::Itself) => quote::quote!(crate),
+        Ok(FoundCrate::Name(name)) => {
+            let name = quote::format_ident!("{}", name);
+            quote::quote!(::#name)
+        }
+        Err(_) => quote::quote!(::dioxus),
+    }
+}
+
 /// Derives the Routable trait for an enum of routes
 ///
 /// Each variant must:

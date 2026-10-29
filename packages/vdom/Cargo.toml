@@ -21,6 +21,8 @@ rust-version = "1.85.0"
 bench = false
 
 [dependencies]
+dioxus-config-macros = { workspace = true }
+wasm-splitter = { workspace = true, optional = true }
 dioxus-const-vec = { workspace = true }
 dioxus-vdom-macro = { workspace = true }
 dioxus-vdom-template = { workspace = true }
@@ -59,6 +61,7 @@ workspace = true
 features = ["Document", "HtmlElement", "Window"]
 
 [features]
+wasm-split = ["dep:wasm-splitter", "dioxus-config-macros/wasm-split"]
 serialize = ["dep:serde", "dioxus-vdom-template/serialize"]
 
 [[bench]]

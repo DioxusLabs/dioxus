@@ -75,6 +75,7 @@ cli-config = ["dep:dioxus-cli-config"]
 warnings = ["dep:warnings"]
 wasm-split = [
   "dep:wasm-splitter",
+  "dioxus-vdom/wasm-split",
   "dioxus-config-macros/wasm-split",
 ] # note: to turn on the router splitter, you need to manually enable wasm-split on the router
 

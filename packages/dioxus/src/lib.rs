@@ -130,6 +130,9 @@ pub use warnings;
 
 pub use dioxus_config_macros as config_macros;
 
+#[doc(hidden)]
+pub use dioxus_vdom::__private;
+
 #[cfg(feature = "wasm-split")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
 pub use wasm_splitter as wasm_split;

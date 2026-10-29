@@ -293,11 +293,12 @@ impl Route {
                 );
                 let module_name = format_ident!("module{}{unique_identifier}", name).to_string();
                 let comp_name = format_ident!("route{}{unique_identifier}", name);
+                let root = crate::dioxus_root();
 
                 quote! {
                     #[allow(unused)]
                     (#last_index, Self::#name { #(#dynamic_segments,)* }) => {
-                        dioxus::config_macros::maybe_wasm_split! {
+                        #root::__private::maybe_wasm_split! {
                             if wasm_split {
                                 {
                                     fn #comp_name(args: #router_name) -> Element {
@@ -317,8 +318,9 @@ impl Route {
 
                                     #[component]
                                     fn LoaderInner(args: NoPartialEq<#router_name>) -> Element {
-                                        static MODULE: wasm_split::LazyLoader<#router_name, Element> =
-                                            wasm_split::lazy_loader!(extern #module_name fn #comp_name(props: #router_name) -> Element);
+                                        use #root::__private::wasm_split;
+                                        static MODULE: #root::__private::wasm_split::LazyLoader<#router_name, Element> =
+                                            #root::__private::wasm_split::lazy_loader!(extern #module_name fn #comp_name(props: #router_name) -> Element);
 
                                         use_resource(|| async move { MODULE.load().await }).suspend()?;
                                         MODULE.call(args.0).unwrap()

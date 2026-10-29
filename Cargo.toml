@@ -161,6 +161,7 @@ dioxus-native = { path = "packages/native", version = "=0.8.0-alpha.3" }
 dioxus-native-dom = { path = "packages/native-dom", version = "=0.8.0-alpha.3" }
 dioxus-asset-resolver = { path = "packages/asset-resolver", version = "=0.8.0-alpha.3" }
 dioxus-config-macros = { path = "packages/config-macros", version = "=0.8.0-alpha.3" }
+proc-macro-crate = "3"
 dioxus-component-manifest = { path = "packages/component-manifest", version = "=0.8.0-alpha.3" }
 generational-box = { path = "packages/generational-box", version = "=0.8.0-alpha.3" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "=0.8.0-alpha.3" }
