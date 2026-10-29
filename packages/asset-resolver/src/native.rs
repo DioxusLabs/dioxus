@@ -21,6 +21,9 @@ pub enum AssetServeError {
 
 /// Try to resolve the path of an asset from a given URI path.
 pub(crate) fn resolve_native_asset_path(path: &str) -> Result<PathBuf, AssetPathError> {
+    if get_embedded(path).is_some() {
+        return Err(AssetPathError::CannotRepresentAsPath);
+    }
     #[allow(clippy::unnecessary_lazy_evaluations)]
     resolve_asset_path_from_filesystem(path).ok_or_else(|| {
         #[cfg(target_os = "android")]
@@ -83,6 +86,9 @@ impl ResolvedAsset {
 
 /// Read the bytes for an asset
 pub(crate) fn resolve_native_asset(path: &str) -> Result<Vec<u8>, NativeAssetResolveError> {
+    if let Some(bytes) = get_embedded(path) {
+        return Ok(bytes.to_vec());
+    }
     // Attempt to serve from the asset dir on android using its loader
     #[cfg(target_os = "android")]
     {
@@ -102,6 +108,13 @@ pub(crate) fn resolve_native_asset(path: &str) -> Result<Vec<u8>, NativeAssetRes
 
 /// Resolve the asset and its mime type
 fn resolve_asset(path: &str) -> Result<Option<ResolvedAsset>, NativeAssetResolveError> {
+    if let Some(bytes) = get_embedded(path) {
+        let decoded = percent_encoding::percent_decode_str(path).decode_utf8_lossy();
+        let mime_type = infer::get(bytes)
+            .map(|kind| kind.mime_type())
+            .unwrap_or_else(|| get_mime_by_ext(Path::new(decoded.as_ref())));
+        return Ok(Some(ResolvedAsset::new(mime_type, bytes.to_vec())));
+    }
     // Attempt to serve from the asset dir on android using its loader
     #[cfg(target_os = "android")]
     {
@@ -118,6 +131,53 @@ fn resolve_asset(path: &str) -> Result<Option<ResolvedAsset>, NativeAssetResolve
     let mime_type = get_mime_from_path(&uri_path)?;
     let body = std::fs::read(uri_path)?;
     Ok(Some(ResolvedAsset::new(mime_type, body)))
+}
+
+fn get_embedded(path: &str) -> Option<&'static [u8]> {
+    let decoded = percent_encoding::percent_decode_str(path)
+        .decode_utf8()
+        .ok()?;
+    manganis_core::embedded_asset(&decoded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manganis::{
+        Asset, AssetOptions, BundledAsset,
+        macro_helpers::{ConstVec, serialize_asset},
+    };
+
+    static DATA: ConstVec<u8, 4096> = serialize_asset(&BundledAsset::new(
+        "/source/style sheet.css",
+        BundledAsset::PLACEHOLDER_HASH,
+        AssetOptions::builder().into_asset_options(),
+    ));
+
+    #[test]
+    fn serves_embedded_assets() {
+        let asset = Asset::new_with_embedded(|| DATA.as_slice(), Some(b"body {}"));
+        let path = asset.to_string().replace(' ', "%20");
+        let response = serve_asset(&path).unwrap();
+        assert_eq!(response.body(), b"body {}");
+        assert_eq!(
+            response.headers()["Content-Type"],
+            "text/css; charset=utf-8"
+        );
+        assert_eq!(resolve_native_asset(&path).unwrap(), b"body {}");
+        assert!(matches!(
+            resolve_native_asset_path(&path),
+            Err(AssetPathError::CannotRepresentAsPath)
+        ));
+        assert!(matches!(
+            resolve_native_asset_path("/missing-embedded-test.css"),
+            Err(AssetPathError::NotFound)
+        ));
+        assert_eq!(
+            serve_asset("/missing-embedded-test.css").unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
+    }
 }
 
 /// Serve an asset from the filesystem or a custom asset handler.

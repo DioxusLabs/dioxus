@@ -1,6 +1,20 @@
 use crate::AssetOptions;
 use const_serialize::{ConstStr, SerializeConst, deserialize_const};
-use std::{fmt::Debug, hash::Hash, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    hash::{DefaultHasher, Hash, Hasher},
+    path::{Path, PathBuf},
+    sync::{LazyLock, RwLock},
+};
+
+static EMBEDDED_ASSETS: LazyLock<RwLock<HashMap<String, &'static [u8]>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// Get the bytes of an embedded asset by its resolved path.
+pub fn embedded_asset(path: &str) -> Option<&'static [u8]> {
+    EMBEDDED_ASSETS.read().unwrap().get(path).copied()
+}
 
 /// An asset that should be copied by the bundler with some options. This type will be
 /// serialized into the binary.
@@ -110,6 +124,7 @@ pub struct Asset {
     /// the data for this is filled in by the CLI after the binary is built. Instead, use
     /// [`std::ptr::read_volatile`] to read the data.
     bundled: fn() -> &'static [u8],
+    embedded: Option<&'static [u8]>,
 }
 
 impl Debug for Asset {
@@ -126,7 +141,16 @@ impl Asset {
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
     pub const fn new(bundled: extern "Rust" fn() -> &'static [u8]) -> Self {
-        Self { bundled }
+        Self::new_with_embedded(bundled, None)
+    }
+
+    #[doc(hidden)]
+    /// Create an asset with optional embedded bytes.
+    pub const fn new_with_embedded(
+        bundled: extern "Rust" fn() -> &'static [u8],
+        embedded: Option<&'static [u8]>,
+    ) -> Self {
+        Self { bundled, embedded }
     }
 
     /// Get the bundled asset
@@ -159,35 +183,50 @@ impl Asset {
     pub fn resolve(&self) -> PathBuf {
         let bundled = self.bundled();
         if bundled.bundled_path() == BundledAsset::PLACEHOLDER_HASH {
+            if let Some(bytes) = self.embedded {
+                let mut hasher = DefaultHasher::new();
+                bundled.hash(&mut hasher);
+                let name = Path::new(bundled.absolute_source_path())
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                let path = bundle_root().join(format!("{:016x}-{name}", hasher.finish()));
+                let path = path.to_string_lossy().into_owned();
+                EMBEDDED_ASSETS.write().unwrap().insert(path.clone(), bytes);
+                return PathBuf::from(path);
+            }
             return PathBuf::from(bundled.absolute_source_path());
         }
 
         #[cfg(feature = "dioxus")]
-        // If the asset is relative, we resolve the asset at the current directory
         if !dioxus_base_types::is_bundled_app() {
             return PathBuf::from(bundled.absolute_source_path());
         }
 
-        #[cfg(feature = "dioxus")]
-        let bundle_root = {
-            let base_path = dioxus_cli_config::base_path();
-            let base_path = base_path
-                .as_deref()
-                .map(|base_path| {
-                    let trimmed = base_path.trim_matches('/');
-                    format!("/{trimmed}")
-                })
-                .unwrap_or_default();
-            PathBuf::from(format!("{base_path}/assets/"))
-        };
-        #[cfg(not(feature = "dioxus"))]
-        let bundle_root = PathBuf::from("/assets/");
-
         // Otherwise presumably we're bundled and we can use the bundled path
-        bundle_root.join(PathBuf::from(
+        bundle_root().join(PathBuf::from(
             bundled.bundled_path().trim_start_matches('/'),
         ))
     }
+}
+
+fn bundle_root() -> PathBuf {
+    #[cfg(feature = "dioxus")]
+    let bundle_root = {
+        let base_path = dioxus_cli_config::base_path();
+        let base_path = base_path
+            .as_deref()
+            .map(|base_path| {
+                let trimmed = base_path.trim_matches('/');
+                format!("/{trimmed}")
+            })
+            .unwrap_or_default();
+        PathBuf::from(format!("{base_path}/assets/"))
+    };
+    #[cfg(not(feature = "dioxus"))]
+    let bundle_root = PathBuf::from("/assets/");
+
+    bundle_root
 }
 
 #[cfg(test)]
@@ -209,6 +248,18 @@ mod tests {
     fn resolve_unprocessed_asset() {
         let asset = Asset::new(|| UNPROCESSED.as_slice());
         assert_eq!(asset.resolve(), PathBuf::from("/source/style.css"));
+    }
+
+    #[test]
+    fn resolve_embedded_asset() {
+        let asset = Asset::new_with_embedded(|| UNPROCESSED.as_slice(), Some(b"embedded"));
+        let path = asset.resolve();
+        assert!(path.to_string_lossy().ends_with("-style.css"));
+        assert_eq!(
+            embedded_asset(path.to_str().unwrap()),
+            Some(&b"embedded"[..])
+        );
+        assert_eq!(embedded_asset("/missing"), None);
     }
 
     #[test]
