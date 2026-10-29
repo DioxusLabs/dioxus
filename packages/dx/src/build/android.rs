@@ -961,16 +961,42 @@ impl BuildRequest {
         let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#).expect("Invalid regex");
         let cleaned = version_pattern.replace_all(&contents, "");
 
-        // AGP 9 compiles Kotlin itself and has no library `targetSdk`, so drop the Kotlin
-        // Android plugin, its `kotlinOptions` block and `targetSdk` from AGP 8 modules.
+        // AGP 9 compiles Kotlin itself, so drop the Kotlin Android plugin and its
+        // `kotlinOptions` block from AGP 8 modules.
         let agp8_pattern = regex::Regex::new(
-            r#"(?m)^[ \t]*(?:kotlin\("android"\)|id\("org\.jetbrains\.kotlin\.android"\)|id\("kotlin-android"\)|targetSdk\s*=.*|kotlinOptions\s*\{[^}]*\})[ \t]*(?:\r?\n|$)"#,
+            r#"(?m)^[ \t]*(?:kotlin\("android"\)|id\("org\.jetbrains\.kotlin\.android"\)|id\("kotlin-android"\)|kotlinOptions\s*\{[^}]*\})[ \t]*(?:\r?\n|$)"#,
         )
         .expect("Invalid regex");
         let cleaned = agp8_pattern.replace_all(&cleaned, "");
 
+        // AGP 9 also removed `targetSdk` from the library `defaultConfig`. Its replacements,
+        // `lint { targetSdk }` and `testOptions { targetSdk }`, are kept.
+        let mut blocks = Vec::new();
+        let cleaned: String = cleaned
+            .split_inclusive('\n')
+            .filter(|line| {
+                let keep = !(blocks.last() == Some(&"defaultConfig")
+                    && line.trim_start().starts_with("targetSdk"));
+                for (i, c) in line.char_indices() {
+                    match c {
+                        '{' => blocks.push(
+                            line[..i]
+                                .split(|c: char| !c.is_alphanumeric() && c != '_')
+                                .rfind(|word| !word.is_empty())
+                                .unwrap_or_default(),
+                        ),
+                        '}' => {
+                            blocks.pop();
+                        }
+                        _ => {}
+                    }
+                }
+                keep
+            })
+            .collect();
+
         if cleaned != contents {
-            fs::write(&build_gradle, cleaned.as_ref())?;
+            fs::write(&build_gradle, &cleaned)?;
             tracing::debug!(
                 "Stripped version specifiers and AGP 8 settings from {}",
                 build_gradle.display()
@@ -1520,7 +1546,14 @@ mod tests {
 android {
     namespace = "example.library"
     compileSdk = 35
-    targetSdk = 35
+    defaultConfig {
+        minSdk = 24
+        targetSdk = 35
+    }
+    lint {
+        targetSdk = 35
+    }
+    testOptions { targetSdk = 35 }
 }
 
 kotlinOptions {
@@ -1545,6 +1578,13 @@ dependencies {
 android {
     namespace = "example.library"
     compileSdk = 35
+    defaultConfig {
+        minSdk = 24
+    }
+    lint {
+        targetSdk = 35
+    }
+    testOptions { targetSdk = 35 }
 }
 
 
