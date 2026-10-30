@@ -279,6 +279,113 @@ impl BuildRequest {
         }
     }
 
+    /// Compile the largest `[ios] icon` image, or else `[bundle] icon` one, into the app's
+    /// `Assets.car` and merge the icon keys actool declares into its `Info.plist`.
+    pub(crate) async fn write_ios_app_icon(&self) -> Result<()> {
+        use image::GenericImageView;
+
+        let Some(icons) = self
+            .config
+            .ios
+            .icon
+            .as_ref()
+            .or(self.config.bundle.icon.as_ref())
+        else {
+            return Ok(());
+        };
+
+        // Entries such as `.icns` and `.svg` serve other platforms.
+        let mut sources = Vec::new();
+        for icon in icons
+            .iter()
+            .filter(|icon| image::ImageFormat::from_path(icon).is_ok())
+        {
+            let path = self.canonicalize_icon_path(Path::new(icon))?;
+            let (width, height) = image::image_dimensions(&path)
+                .with_context(|| format!("Failed to read icon {}", path.display()))?;
+            sources.push((width.min(height), path));
+        }
+        let (_, path) = sources
+            .into_iter()
+            .max_by_key(|(side, _)| *side)
+            .context("No icon is a raster image such as a PNG")?;
+        let icon = image::open(&path)?;
+        if icon.pixels().any(|(_, _, pixel)| pixel[3] < u8::MAX) {
+            bail!(
+                "The icon {} has transparent pixels, but iOS app icons must be opaque. \
+                 Give iOS an opaque image with `[ios] icon` in Dioxus.toml.",
+                path.display()
+            );
+        }
+
+        let scratch = tempfile::tempdir()?;
+        let catalog = scratch.path().join("Assets.xcassets");
+        let icon_set = catalog.join("AppIcon.appiconset");
+        std::fs::create_dir_all(&icon_set)?;
+        std::fs::write(
+            icon_set.join("Contents.json"),
+            r#"{"images":[{"filename":"icon.png","idiom":"universal","platform":"ios","size":"1024x1024"}]}"#,
+        )?;
+        let icon = icon.into_rgb8();
+        image::imageops::resize(&icon, 1024, 1024, image::imageops::FilterType::Lanczos3)
+            .save(icon_set.join("icon.png"))?;
+
+        let sdk = match self.triple.environment {
+            target_lexicon::Environment::Sim => "iphonesimulator",
+            _ => "iphoneos",
+        };
+        let deployment_target = self
+            .config
+            .ios
+            .deployment_target
+            .as_deref()
+            .unwrap_or("16.0");
+        let partial = scratch.path().join("partial.plist");
+        let assets_car = self.root_dir().join("Assets.car");
+        if assets_car.exists() {
+            std::fs::remove_file(&assets_car)?;
+        }
+        let output = Command::new("xcrun")
+            .args(["actool", "--compile"])
+            .arg(self.root_dir())
+            .args([
+                "--platform",
+                sdk,
+                "--minimum-deployment-target",
+                deployment_target,
+                "--app-icon",
+                "AppIcon",
+                "--output-format",
+                "human-readable-text",
+                "--output-partial-info-plist",
+            ])
+            .arg(&partial)
+            .arg(&catalog)
+            .output()
+            .await
+            .context("Failed to run `xcrun actool`, which ships with Xcode")?;
+        if !output.status.success() {
+            bail!(
+                "actool failed: {}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        // actool exits 0 without an `Assets.car` when the simulator runtime and SDK builds differ.
+        if !assets_car.exists() {
+            bail!(
+                "actool wrote no Assets.car. Install the iOS runtime matching the SDK with \
+                 `xcodebuild -downloadPlatform iOS`."
+            );
+        }
+
+        let info_plist = self.root_dir().join("Info.plist");
+        let mut info: plist::Dictionary = plist::from_file(&info_plist)?;
+        info.extend(plist::from_file::<_, plist::Dictionary>(&partial)?);
+        plist::to_file_xml(&info_plist, &info)?;
+        Ok(())
+    }
+
     pub async fn codesign_apple(&self, ctx: &BuildContext) -> Result<()> {
         ctx.status_codesigning();
 
