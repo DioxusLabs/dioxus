@@ -110,7 +110,11 @@ impl WindowConfig {
             protocols: Vec::new(),
             asynchronous_protocols: Vec::new(),
             pre_rendered: None,
-            disable_context_menu: !cfg!(debug_assertions),
+            disable_context_menu: !cfg!(any(
+                debug_assertions,
+                target_os = "android",
+                target_os = "ios"
+            )),
             resource_dir: None,
             data_dir: None,
             custom_head: None,
