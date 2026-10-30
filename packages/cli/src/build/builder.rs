@@ -1040,11 +1040,25 @@ impl AppBuilder {
     /// With simulators, we're free to basically do anything, so we don't need to do any fancy codesigning
     /// or entitlements, or anything like that.
     ///
-    /// However, if there's no simulator running, this *might* fail.
-    ///
-    /// TODO(jon): we should probably check if there's a simulator running before trying to install,
-    /// and open the simulator if we have to.
+    /// The simulator might have been shut down since `dx serve` started (e.g. the user quit
+    /// Simulator.app), so we boot one again before installing if none is running.
     async fn open_ios_sim(&mut self, envs: Vec<(String, String)>) -> Result<()> {
+        if !self.build.is_ios_sim_booted().await {
+            self.build.start_ios_sim().await?;
+
+            // `simctl boot` returns before the simulator is ready to install apps, so wait for it
+            let status = Command::new("xcrun")
+                .args(["simctl", "bootstatus", "booted"])
+                .output()
+                .await?;
+            if !status.status.success() {
+                tracing::warn!(
+                    "Failed to wait for the iOS simulator to boot: {}",
+                    String::from_utf8_lossy(&status.stderr).trim()
+                );
+            }
+        }
+
         tracing::debug!("Installing app to simulator {:?}", self.build.root_dir());
 
         let res = Command::new("xcrun")
