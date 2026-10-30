@@ -284,6 +284,15 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                 }
             }
 
+            ServeUpdate::ShowQrCode => {
+                let result = devserver
+                    .qr_code_url(builder.client.build.base_path())
+                    .and_then(|url| screen.print_qr_code(&url));
+                if let Err(err) = result {
+                    tracing::warn!("Could not show QR code: {err}");
+                }
+            }
+
             ServeUpdate::Redraw => {
                 // simply returning will cause a redraw
             }
