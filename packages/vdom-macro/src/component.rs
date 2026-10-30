@@ -199,7 +199,7 @@ impl ComponentBody {
                             #root::wasm_split::lazy_loader!(extern "lazy" fn #lazy_name(props: #props_ty,) -> #out_ty);
 
                         use_resource(|| async move { __MODULE.load().await }).suspend()?;
-                        __MODULE.call(props).unwrap()
+                        __MODULE.call(props)?
                     }
                 } else {
                     {
