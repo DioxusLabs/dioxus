@@ -1,8 +1,8 @@
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
 
 use crate::{
-    Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,
-    Platform, TargetArgs, Workspace, cli::*,
+    Anonymized, AppBuilder, ArtifactSource, BuildArtifacts, BuildId, BuildMode, BuildRequest,
+    BundleFormat, Platform, TargetArgs, Workspace, cli::*,
 };
 
 /// Build the Rust Dioxus app and all of its assets.
@@ -102,7 +102,18 @@ impl CommandWithPlatformOverrides<BuildArgs> {
     ///
     /// Currently it is not possible to serve the server without the client, but this could be added in the future.
     pub async fn into_targets(mut self) -> Result<BuildTargets> {
-        let workspace = Workspace::current().await?;
+        let prebuilt = [
+            Some(&self.shared),
+            self.client.as_ref(),
+            self.server.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|args| args.build_arguments.prebuilt_exe.is_some());
+        let workspace = match prebuilt {
+            true => Workspace::current_without_deps().await?,
+            false => Workspace::current().await?,
+        };
 
         // do some logging to ensure dx matches the dioxus version since we're not always API compatible
         workspace.check_dioxus_version_against_cli();
@@ -146,6 +157,16 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                     args.target = Some(target_lexicon::Triple::host());
                     server = Some(BuildRequest::new(&args, workspace.clone()).await?);
                 }
+            }
+        }
+
+        if let Some(server) = &server {
+            if server.artifact_source != ArtifactSource::Cargo
+                && server.artifact_source == client.artifact_source
+            {
+                anyhow::bail!(
+                    "The client and server need their own executables. Pass them with `@client --prebuilt-exe <client> @server --prebuilt-exe <server>`"
+                );
             }
         }
 

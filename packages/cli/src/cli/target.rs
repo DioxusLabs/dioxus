@@ -177,6 +177,19 @@ pub(crate) struct TargetArgs {
     #[clap(long, help_heading = HELP_HEADING)]
     #[serde(default)]
     pub(crate) raw_json_diagnostics: bool,
+
+    /// Package an executable that was already compiled instead of building it with cargo.
+    ///
+    /// dx skips `cargo rustc` and continues with asset collection, wasm-bindgen, and bundling. Use this
+    /// when another build system compiles the app. Pass it per target in fullstack apps:
+    ///
+    /// dx bundle --web --release @client --prebuilt-exe app.wasm @server --server --prebuilt-exe server
+    ///
+    /// The executable must be built the way dx would build it. `dx print client-args` and
+    /// `dx print server-args` show the features and environment dx would use. The workspace is read
+    /// with `cargo metadata --no-deps`, and the wasm-bindgen version comes from `Cargo.lock`.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) prebuilt_exe: Option<PathBuf>,
 }
 
 impl Anonymized for TargetArgs {
@@ -204,6 +217,7 @@ impl Anonymized for TargetArgs {
             "cargo_args": self.cargo_args.is_some(),
             "rustc_args": self.rustc_args.is_some(),
             "raw_json_diagnostics": self.raw_json_diagnostics,
+            "prebuilt_exe": self.prebuilt_exe.is_some(),
         }}
     }
 }
