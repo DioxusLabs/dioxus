@@ -1440,21 +1440,20 @@ pub enum Node {
 }
 
 fn reachable_graph(deps: &HashMap<Node, HashSet<Node>>, roots: &HashSet<Node>) -> HashSet<Node> {
+    // Mark a node as reached when it is queued, not when it is dequeued. Otherwise a node is
+    // queued (and its children walked) once for every parent seen before it is dequeued, which
+    // blows up on the call graph of a large module.
+    let mut reachable = roots.clone();
     let mut queue: VecDeque<Node> = roots.iter().copied().collect();
-    let mut reachable = HashSet::<Node>::new();
-    let mut parents = HashMap::<Node, Node>::new();
 
     while let Some(node) = queue.pop_front() {
-        reachable.insert(node);
         let Some(children) = deps.get(&node) else {
             continue;
         };
         for child in children {
-            if reachable.contains(child) {
-                continue;
+            if reachable.insert(*child) {
+                queue.push_back(*child);
             }
-            parents.entry(*child).or_insert(node);
-            queue.push_back(*child);
         }
     }
 
@@ -1547,4 +1546,56 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
         symbols,
         data_symbols,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn graph(edges: &[(usize, usize)]) -> HashMap<Node, HashSet<Node>> {
+        let mut deps: HashMap<Node, HashSet<Node>> = HashMap::new();
+        for (from, to) in edges {
+            deps.entry(Node::DataSymbol(*from))
+                .or_default()
+                .insert(Node::DataSymbol(*to));
+        }
+        deps
+    }
+
+    fn nodes(ids: impl IntoIterator<Item = usize>) -> HashSet<Node> {
+        ids.into_iter().map(Node::DataSymbol).collect()
+    }
+
+    #[test]
+    fn reachable_graph_follows_edges() {
+        // 0 -> 1 -> 3, 0 -> 2 -> 3, 3 -> 0 (a cycle), and 4 -> 5 that 0 never reaches
+        let deps = graph(&[(0, 1), (0, 2), (1, 3), (2, 3), (3, 0), (4, 5)]);
+        assert_eq!(reachable_graph(&deps, &nodes([0])), nodes([0, 1, 2, 3]));
+        assert_eq!(
+            reachable_graph(&deps, &nodes([2, 4])),
+            nodes([0, 1, 2, 3, 4, 5])
+        );
+        assert_eq!(reachable_graph(&deps, &nodes([7])), nodes([7]));
+    }
+
+    #[test]
+    fn reachable_graph_layered() {
+        // 32 layers of 4 nodes, each node calling every node of the next layer. Queuing a node
+        // once per parent would walk 4^32 paths here; queuing it once walks 128 nodes.
+        const WIDTH: usize = 4;
+        const DEPTH: usize = 32;
+        let mut edges = vec![];
+        for layer in 0..DEPTH - 1 {
+            for from in 0..WIDTH {
+                for to in 0..WIDTH {
+                    edges.push((layer * WIDTH + from, (layer + 1) * WIDTH + to));
+                }
+            }
+        }
+        let deps = graph(&edges);
+        assert_eq!(
+            reachable_graph(&deps, &nodes(0..WIDTH)),
+            nodes(0..WIDTH * DEPTH)
+        );
+    }
 }
