@@ -539,7 +539,9 @@ pub mod req_from {
                     .map_err(|e| e.into_response())?;
 
                 let request = Request::from_parts(parts, body);
-                let bytes = Bytes::from_request(request, &()).await.unwrap();
+                let bytes = Bytes::from_request(request, &())
+                    .await
+                    .map_err(|e| e.into_response())?;
                 let as_str = String::from_utf8_lossy(&bytes);
 
                 let bytes = if as_str.is_empty() {
@@ -584,6 +586,47 @@ pub mod req_from {
                 res.map(|out| (out, headers))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod extract_request_tests {
+    use super::*;
+    use axum::body::Body;
+    use dioxus_fullstack_core::FullstackContext;
+    use futures::stream;
+    use http::StatusCode;
+
+    #[test]
+    fn incomplete_body_returns_http_error_instead_of_panicking() {
+        futures::executor::block_on(async {
+            let body = Body::from_stream(stream::once(async {
+                Err::<Bytes, _>(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "IncompleteBody",
+                ))
+            }));
+
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/")
+                .header("content-type", "application/json")
+                .body(body)
+                .unwrap();
+
+            let (parts, body) = request.into_parts();
+            let state = FullstackContext::new(parts.clone());
+            let request = Request::from_parts(parts, body);
+
+            let encoder = ServerFnEncoder::<serde_json::Value, serde_json::Value>::new();
+            let result: Result<(serde_json::Value, http::HeaderMap), _> = (&&&&&&&&&&encoder)
+                .extract_axum(state, request, |value| value)
+                .await;
+
+            let response = result
+                .expect_err("incomplete body should bubble as an HTTP error instead of panicking");
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        });
     }
 }
 
