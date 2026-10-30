@@ -27,10 +27,10 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
     }
 
     /// Reborrow this state for a mount, disabling renderer writes if the mount is hidden.
-    pub(crate) fn reborrow_for_mount(
-        &mut self,
+    pub(crate) fn reborrow_for_mount<'a>(
+        &'a mut self,
         mount: MountId,
-    ) -> DiffState<'_, 'ctx, '_, 'mutation> {
+    ) -> DiffState<'a, 'a, 'a, 'mutation> {
         let write = self.dom.mount_should_render(mount) && self.to.is_some();
         DiffState {
             dom: &mut *self.dom,
@@ -97,12 +97,18 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
         result
     }
 
-    pub(crate) fn enter_context(&mut self, mount: MountId, old: &'ctx VNode, new: &'ctx VNode) {
-        let context = self.context.map_or_else(
-            || DiffContext::new(mount, old, new),
-            |context| context.enter(mount, old, new),
-        );
-        self.context = Some(context);
+    pub(crate) fn enter_context<'a>(
+        &'a mut self,
+        mount: MountId,
+        old: &'a VNode,
+        new: &'a VNode,
+    ) -> DiffState<'a, 'a, 'a, 'mutation> {
+        let context = DiffContext::enter(self.context.as_ref(), mount, old, new);
+        DiffState {
+            dom: &mut *self.dom,
+            to: self.to.as_deref_mut(),
+            context: Some(context),
+        }
     }
 }
 
@@ -119,38 +125,38 @@ impl<'a> DiffFrame<'a> {
     }
 }
 
-/// Diff-local view of the active vnode and its parent while children are being
-/// reconciled.
+/// Diff-local chain of active vnode frames while children are being reconciled.
 ///
 /// The committed mount table still points at the old vnode while a same-template frame is being
-/// diffed, so placement resolution needs these temporary old/new pairs to reason about slots inside
-/// the active vnode and sibling order in the active parent.
+/// diffed, so placement resolution walks the stack-linked ancestor chain to reason about slots
+/// inside any in-flight ancestor mount regardless of fragment/component nesting depth.
 #[derive(Clone, Copy)]
 pub(crate) struct DiffContext<'a> {
     current: DiffFrame<'a>,
-    parent: Option<DiffFrame<'a>>,
+    parent: Option<&'a DiffContext<'a>>,
 }
 
 impl<'a> DiffContext<'a> {
-    pub(crate) fn new(mount: MountId, old: &'a VNode, new: &'a VNode) -> Self {
+    pub(crate) fn enter(
+        parent: Option<&'a DiffContext<'a>>,
+        mount: MountId,
+        old: &'a VNode,
+        new: &'a VNode,
+    ) -> Self {
         Self {
             current: DiffFrame { mount, old, new },
-            parent: None,
-        }
-    }
-
-    pub(crate) fn enter(self, mount: MountId, old: &'a VNode, new: &'a VNode) -> Self {
-        Self {
-            current: DiffFrame { mount, old, new },
-            parent: Some(self.current),
+            parent,
         }
     }
 
     pub(crate) fn for_mount(self, mount: MountId) -> Option<DiffFrame<'a>> {
-        if self.current.mount == mount {
-            Some(self.current)
-        } else {
-            self.parent.filter(|frame| frame.mount == mount)
+        let mut cursor = Some(&self);
+        while let Some(ctx) = cursor {
+            if ctx.current.mount == mount {
+                return Some(ctx.current);
+            }
+            cursor = ctx.parent;
         }
+        None
     }
 }
