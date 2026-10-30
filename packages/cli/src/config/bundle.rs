@@ -24,8 +24,6 @@ pub(crate) struct BundleConfig {
     #[serde(default)]
     pub(crate) external_bin: Option<Vec<String>>,
     #[serde(default)]
-    pub(crate) deb: Option<DebianSettings>,
-    #[serde(default)]
     pub(crate) macos: Option<MacOsSettings>,
     #[serde(default)]
     pub(crate) windows: Option<WindowsSettings>,
@@ -39,62 +37,6 @@ pub(crate) struct BundleConfig {
     pub(crate) original_file_name: Option<String>,
     #[serde(default)]
     pub(crate) trademark: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
-pub(crate) struct DebianSettings {
-    // OS-specific settings:
-    /// the list of debian dependencies.
-    #[serde(default)]
-    pub depends: Option<Vec<String>>,
-    /// the list of recommended debian dependencies.
-    #[serde(default)]
-    pub recommends: Option<Vec<String>>,
-    /// the list of dependencies the package provides.
-    #[serde(default)]
-    pub provides: Option<Vec<String>>,
-    /// the list of package conflicts.
-    #[serde(default)]
-    pub conflicts: Option<Vec<String>>,
-    /// the list of package replaces.
-    #[serde(default)]
-    pub replaces: Option<Vec<String>>,
-    /// List of custom files to add to the deb package.
-    /// Maps the path on the debian package to the path of the file to include (relative to the current working directory).
-    #[serde(default)]
-    pub files: HashMap<PathBuf, PathBuf>,
-    /// Path to a custom desktop file Handlebars template.
-    ///
-    /// Available variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.
-    #[serde(default)]
-    pub desktop_template: Option<PathBuf>,
-    /// Define the section in Debian Control file. See : <https://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections>
-    #[serde(default)]
-    pub section: Option<String>,
-    /// Change the priority of the Debian Package. By default, it is set to `optional`.
-    /// Recognized Priorities as of now are :  `required`, `important`, `standard`, `optional`, `extra`
-    #[serde(default)]
-    pub priority: Option<String>,
-    /// Path of the uncompressed Changelog file, to be stored at /usr/share/doc/package-name/changelog.gz. See
-    /// <https://www.debian.org/doc/debian-policy/ch-docs.html#changelog-files-and-release-notes>
-    #[serde(default)]
-    pub changelog: Option<PathBuf>,
-    /// Path to script that will be executed before the package is unpacked. See
-    /// <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>
-    #[serde(default)]
-    pub pre_install_script: Option<PathBuf>,
-    /// Path to script that will be executed after the package is unpacked. See
-    /// <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>
-    #[serde(default)]
-    pub post_install_script: Option<PathBuf>,
-    /// Path to script that will be executed before the package is removed. See
-    /// <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>
-    #[serde(default)]
-    pub pre_remove_script: Option<PathBuf>,
-    /// Path to script that will be executed after the package is removed. See
-    /// <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>
-    #[serde(default)]
-    pub post_remove_script: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
