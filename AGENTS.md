@@ -80,3 +80,4 @@ fn MyComponent(name: String) -> Element {
 3. Each renderer implements `WriteMutations` differently - see `06-RENDERERS.md`
 4. Hot-reload has two systems: RSX template diffing (fast) and Subsecond code patching (full Rust)
 5. Assets use link sections and binary patching - the `asset!()` macro creates symbols the CLI processes
+6. Keep CI and `.devcontainer` development prerequisites in sync. When a toolchain, system package, Node/Playwright version, Rust target, or setup step changes in one, update the other in the same change and keep versions aligned with repository lockfiles.
