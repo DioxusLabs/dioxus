@@ -42,7 +42,7 @@ impl BundleContext<'_> {
                     for app_path in &bundle.bundle_paths {
                         let tar_path = output_dir.join(format!(
                             "{}_{}.app.tar.gz",
-                            self.product_name(),
+                            self.product_file_name(),
                             self.version_string()
                         ));
                         create_tar_gz(app_path, &tar_path)?;

@@ -218,9 +218,17 @@ impl<'a> BundleContext<'a> {
         self.package_types.clone()
     }
 
-    /// The product name.
+    /// The product's display name. Used where users see the name (installer UI,
+    /// shortcuts, the `.app` directory, `.desktop` entries).
     pub(crate) fn product_name(&self) -> String {
         self.build.bundled_app_name()
+    }
+
+    /// The PascalCase crate name. Used for artifact file names and intermediate
+    /// build files so they stay filesystem/shell-friendly and stable even when
+    /// the display name changes.
+    pub(crate) fn product_file_name(&self) -> String {
+        self.build.bundled_app_file_name()
     }
 
     /// The bundle identifier (e.g. "com.example.app").
