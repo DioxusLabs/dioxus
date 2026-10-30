@@ -557,7 +557,8 @@ impl<'a> Splitter<'a> {
     fn create_ifunc_initializers(&self, out: &mut Module, unique_symbols: &HashSet<Node>) {
         let ifunc_table = self.load_funcref_table(out);
 
-        let mut initializers = HashMap::new();
+        // Ordered by table offset so the element segments are emitted in the same order on every run.
+        let mut initializers = BTreeMap::new();
         for segment in out.elements.iter_mut() {
             let ElementKind::Active { offset, .. } = &mut segment.kind else {
                 continue;
@@ -759,8 +760,9 @@ impl<'a> Splitter<'a> {
                 continue;
             };
 
-            // And then assign chunks of the data to new data entries that will override the individual slots
-            for unique in unique_symbols {
+            // And then assign chunks of the data to new data entries that will override the individual slots.
+            // Sorted so the data segments are emitted in the same order on every run.
+            for unique in unique_symbols.iter().sorted() {
                 if let Node::DataSymbol(id) = unique {
                     if let Some(symbol) = self.data_symbols.get(id) {
                         if symbol.which_data_segment == idx {
