@@ -56,6 +56,14 @@ mod desktop_platforms {
         {
             use tao::platform::macos::WindowExtMacOS;
             menu.init_for_nsapp();
+
+            // `init_for_nsapp` installs the menu for the whole process, but the window only owns it
+            // until it closes. Keep a clone alive so the menu bar doesn't point at freed items after
+            // the window that installed it is dropped.
+            thread_local! {
+                static NSAPP_MENU: std::cell::RefCell<Option<Menu>> = const { std::cell::RefCell::new(None) };
+            }
+            NSAPP_MENU.with(|installed| *installed.borrow_mut() = Some(menu.clone()));
         }
     }
 
