@@ -82,6 +82,28 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// Check whether any iOS simulator is currently booted. Other platforms (watchOS, tvOS...) are ignored.
+    pub async fn is_ios_sim_booted(&self) -> bool {
+        #[derive(Deserialize, Debug)]
+        struct XcrunListJson {
+            devices: BTreeMap<String, Vec<serde_json::Value>>,
+        }
+        let Ok(output) = Command::new("xcrun")
+            .args(["simctl", "list", "devices", "booted", "-j"])
+            .output()
+            .await
+        else {
+            return false;
+        };
+        serde_json::from_slice::<XcrunListJson>(&output.stdout)
+            .map(|list| {
+                list.devices.iter().any(|(runtime, devices)| {
+                    runtime.contains(".SimRuntime.iOS-") && !devices.is_empty()
+                })
+            })
+            .unwrap_or(false)
+    }
+
     pub async fn start_ios_sim(&self) -> Result<()> {
         #[derive(Deserialize, Debug)]
         struct XcrunListJson {
