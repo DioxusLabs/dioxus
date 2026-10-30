@@ -182,6 +182,33 @@ mod tests {
     }
 
     #[test]
+    fn wix_install_scope_parses() {
+        let source = r#"
+            [windows.wix]
+            install_scope = "PerMachine"
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert_eq!(
+            config.windows.wix.expect("WiX settings").install_scope,
+            super::WixInstallScope::PerMachine
+        );
+    }
+
+    #[test]
+    fn wix_install_scope_defaults_to_per_user() {
+        let source = r#"
+            [windows.wix]
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert_eq!(
+            config.windows.wix.expect("WiX settings").install_scope,
+            super::WixInstallScope::PerUser
+        );
+    }
+
+    #[test]
     fn static_dir_can_be_disabled() {
         let source = r#"
             [application]

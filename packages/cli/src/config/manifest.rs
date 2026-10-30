@@ -1134,6 +1134,23 @@ pub struct WindowsConfig {
     pub device_capabilities: Vec<String>,
 }
 
+/// MSI `InstallScope`. Defaults to `PerUser`.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub enum WixInstallScope {
+    PerMachine,
+    #[default]
+    PerUser,
+}
+
+impl WixInstallScope {
+    pub(crate) fn as_wix_attr(self) -> &'static str {
+        match self {
+            Self::PerMachine => "perMachine",
+            Self::PerUser => "perUser",
+        }
+    }
+}
+
 /// WiX installer settings.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct WindowsWixSettings {
@@ -1201,6 +1218,15 @@ pub struct WindowsWixSettings {
     #[serde(default)]
     #[schemars(with = "Option<String>")]
     pub upgrade_code: Option<uuid::Uuid>,
+
+    /// MSI install scope. Defaults to `PerUser` (`%LOCALAPPDATA%\Programs`, no
+    /// elevation). `PerMachine` installs under `ProgramFiles` and requires
+    /// elevation.
+    ///
+    /// This value must stay the same across updates because Windows Installer
+    /// cannot perform a major upgrade across per-user and per-machine scopes.
+    #[serde(default)]
+    pub install_scope: WixInstallScope,
 }
 
 /// NSIS installer settings.
