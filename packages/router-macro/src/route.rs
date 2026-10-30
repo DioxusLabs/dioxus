@@ -323,7 +323,7 @@ impl Route {
                                             #root::wasm_split::lazy_loader!(extern #module_name fn #comp_name(props: #router_name) -> Element);
 
                                         use_resource(|| async move { MODULE.load().await }).suspend()?;
-                                        MODULE.call(args.0).unwrap()
+                                        MODULE.call(args.0)?
                                     }
 
                                     struct NoPartialEq<T>(T);

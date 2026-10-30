@@ -47,3 +47,18 @@ test("wasm-split page is functional", async ({ page }) => {
   await page.locator("#nested-child-add-world").click();
   await expect(nestedChildCounter).toContainText("Count: hello world");
 });
+
+test("a failed wasm-split route chunk reaches the error path", async ({ page }) => {
+  // Fail the request for the child route's chunk
+  await page.route("**/*routeChildSplit*.wasm", (route) => route.abort());
+  await page.goto("http://localhost:8001");
+
+  const counter = page.locator("#counter-display");
+  await expect(counter).toContainText("Count: 1");
+
+  // Without a completion callback the route would stay suspended forever
+  await page.locator("#link-child").click();
+  await expect(page.locator("body")).toContainText(
+    "Failed to load wasm-split module"
+  );
+});
