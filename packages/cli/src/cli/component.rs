@@ -10,7 +10,6 @@ use clap::Parser;
 use dioxus_component_manifest::{
     CargoDependency, Component, ComponentDependency, component_manifest_schema,
 };
-use git2::Repository;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::{process::Command, task::JoinSet};
@@ -365,14 +364,14 @@ impl RemoteComponentRegistry {
 
             // Make sure the parent directory exists
             tokio::fs::create_dir_all(&repo_dir).await?;
-            tokio::task::spawn_blocking({
+            let cloned = tokio::task::spawn_blocking({
                 let git = git.clone();
                 let repo_dir = repo_dir.clone();
                 move || {
                     println!("Downloading {git}...");
 
                     // Clone the repo
-                    let repo = Repository::clone(&git, repo_dir)?;
+                    let repo = Self::clone(&git, &repo_dir)?;
 
                     // If a rev is provided, checkout that rev
                     if let Some(rev) = &rev {
@@ -382,7 +381,13 @@ impl RemoteComponentRegistry {
                     anyhow::Ok(())
                 }
             })
-            .await??;
+            .await?;
+
+            // Don't leave a partial clone behind, or later runs would skip cloning and use it
+            if let Err(err) = cloned {
+                _ = tokio::fs::remove_dir_all(&repo_dir).await;
+                return Err(err);
+            }
         }
 
         Ok(repo_dir)
@@ -399,21 +404,29 @@ impl RemoteComponentRegistry {
         tokio::task::spawn_blocking({
             let path = path.clone();
             move || {
-                let repo = Repository::open(path)?;
-                let mut remote = repo.find_remote("origin")?;
-                // Fetch all remote branches with the same name as local branches
-                remote.fetch(&["refs/heads/*:refs/heads/*"], None, None)?;
+                let mut repo = gix::open(path)?;
+                // Ref updates write reflog entries, which need a committer even if git has none configured
+                repo.committer_or_set_generic_fallback()?;
+                // Fetch all remote branches into their remote-tracking refs
+                repo.find_remote("origin")?
+                    .connect(gix::remote::Direction::Fetch)?
+                    .prepare_fetch(gix::progress::Discard, Default::default())?
+                    .receive(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)?;
                 // If a rev is provided, checkout that rev
                 if let Some(rev) = &rev {
                     Self::checkout_rev(&repo, &git, rev)?;
                 }
                 // Otherwise, just checkout the latest commit on the default branch
                 else {
-                    let head = repo.head()?;
-                    let branch = head.shorthand().unwrap_or("main");
-                    let oid = repo.refname_to_id(&format!("refs/remotes/origin/{branch}"))?;
-                    let object = repo.find_object(oid, None).unwrap();
-                    repo.reset(&object, git2::ResetType::Hard, None)?;
+                    let branch = repo
+                        .head_name()?
+                        .map(|name| name.shorten().to_string())
+                        .unwrap_or_else(|| "main".to_string());
+                    let id = repo
+                        .find_reference(format!("refs/remotes/origin/{branch}").as_str())?
+                        .peel_to_id()?
+                        .detach();
+                    Self::checkout_commit(&repo, id)?;
                 }
                 anyhow::Ok(())
             }
@@ -424,29 +437,90 @@ impl RemoteComponentRegistry {
     }
 
     /// If a git url is provided use that (plus optional rev)
-    /// Otherwise use the built-in registry
+    /// Otherwise use the built-in registry, on the branch matching this CLI's minor version
     fn resolve_or_default(&self) -> (String, Option<String>) {
         if let Some(git) = &self.git {
             (git.clone(), self.rev.clone())
         } else {
-            ("https://github.com/dioxuslabs/components".into(), None)
+            let rev = self.rev.clone().unwrap_or_else(|| {
+                concat!(
+                    env!("CARGO_PKG_VERSION_MAJOR"),
+                    ".",
+                    env!("CARGO_PKG_VERSION_MINOR")
+                )
+                .to_string()
+            });
+            ("https://github.com/dioxuslabs/components".into(), Some(rev))
         }
     }
 
-    /// Checkout the given rev in the given repo
-    fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
-        let (object, reference) = repo
-            .revparse_ext(rev)
-            .with_context(|| format!("Failed to find revision '{}' in '{}'", rev, git))?;
-        repo.checkout_tree(&object, None)?;
+    /// Clone the repo at `git` into `dir` and checkout the remote's HEAD
+    fn clone(git: &str, dir: &Path) -> Result<gix::Repository> {
+        let (mut checkout, _) = gix::prepare_clone(git, dir)?
+            .fetch_then_checkout(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)?;
+        let (repo, _) =
+            checkout.main_worktree(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)?;
+        Ok(repo)
+    }
 
-        if let Some(gref) = reference {
-            if let Ok(name) = gref.name() {
-                repo.set_head(name)?;
+    /// Checkout the given rev in the given repo
+    fn checkout_rev(repo: &gix::Repository, git: &str, rev: &str) -> Result<()> {
+        // Prefer the remote-tracking branch: a fresh clone only has a local branch for the remote's
+        // HEAD, and fetching doesn't move local branches.
+        let id = match repo.try_find_reference(format!("refs/remotes/origin/{rev}").as_str())? {
+            Some(mut reference) => reference.peel_to_id()?.detach(),
+            None => repo
+                .rev_parse_single(rev)
+                .with_context(|| format!("Failed to find revision '{}' in '{}'", rev, git))?
+                .detach(),
+        };
+        Self::checkout_commit(repo, id)
+    }
+
+    /// Replace the worktree and index with the tree of commit `id`, and detach HEAD at it
+    fn checkout_commit(repo: &gix::Repository, id: gix::ObjectId) -> Result<()> {
+        let workdir = repo
+            .workdir()
+            .context("Component registry has no worktree")?;
+        let tree = repo.find_commit(id)?.tree_id()?.detach();
+
+        // The cache isn't edited by hand, so clear the worktree and check out into it from scratch
+        for entry in std::fs::read_dir(workdir)? {
+            let path = entry?.path();
+            if path.file_name() == Some(".git".as_ref()) {
+                continue;
             }
-        } else {
-            repo.set_head_detached(object.id())?;
+            if path.is_dir() {
+                std::fs::remove_dir_all(path)?;
+            } else {
+                std::fs::remove_file(path)?;
+            }
         }
+
+        let mut index = repo.index_from_tree(&tree)?;
+        let mut options =
+            repo.checkout_options(gix::worktree::stack::state::attributes::Source::IdMapping)?;
+        options.destination_is_initially_empty = true;
+        gix::worktree::state::checkout(
+            &mut index,
+            workdir,
+            repo.objects.clone().into_arc()?,
+            &gix::progress::Discard,
+            &gix::progress::Discard,
+            &gix::interrupt::IS_INTERRUPTED,
+            options,
+        )?;
+        index.write(Default::default())?;
+
+        repo.edit_reference(gix::refs::transaction::RefEdit {
+            change: gix::refs::transaction::Change::Update {
+                log: Default::default(),
+                expected: gix::refs::transaction::PreviousValue::Any,
+                new: gix::refs::Target::Object(id),
+            },
+            name: "HEAD".try_into()?,
+            deref: false,
+        })?;
 
         Ok(())
     }
@@ -841,4 +915,73 @@ async fn copy_global_assets(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+            .args(["-c", "init.defaultBranch=main"])
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn commit_file(dir: &Path, branch: &str, contents: &str) {
+        git(dir, &["checkout", "-B", branch]);
+        std::fs::write(dir.join("component.txt"), contents).unwrap();
+        git(dir, &["add", "component.txt"]);
+        git(dir, &["commit", "-m", contents]);
+    }
+
+    #[test]
+    fn default_registry_uses_the_branch_for_this_cli_version() {
+        let (git, rev) = RemoteComponentRegistry::default().resolve_or_default();
+        assert_eq!(git, "https://github.com/dioxuslabs/components");
+        let version = env!("CARGO_PKG_VERSION");
+        let major_minor = version.splitn(3, '.').take(2).collect::<Vec<_>>().join(".");
+        assert_eq!(rev.as_deref(), Some(major_minor.as_str()));
+    }
+
+    #[test]
+    fn default_registry_respects_an_explicit_rev() {
+        let registry = RemoteComponentRegistry {
+            git: None,
+            rev: Some("main".to_string()),
+        };
+        assert_eq!(registry.resolve_or_default().1.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn checkout_rev_finds_a_remote_branch_in_a_fresh_clone() {
+        let dir = tempfile::tempdir().unwrap();
+        let origin = dir.path().join("origin");
+        std::fs::create_dir(&origin).unwrap();
+        git(&origin, &["init"]);
+        commit_file(&origin, "main", "main");
+        commit_file(&origin, "0.8", "0.8");
+        git(&origin, &["checkout", "main"]);
+
+        let origin_url = origin.display().to_string();
+        let clone = RemoteComponentRegistry::clone(&origin_url, &dir.path().join("clone")).unwrap();
+        assert!(
+            clone
+                .try_find_reference("refs/heads/0.8")
+                .unwrap()
+                .is_none()
+        );
+
+        RemoteComponentRegistry::checkout_rev(&clone, &origin_url, "0.8").unwrap();
+        let contents = std::fs::read_to_string(dir.path().join("clone/component.txt")).unwrap();
+        assert_eq!(contents, "0.8");
+    }
 }
