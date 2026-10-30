@@ -6,7 +6,7 @@ use convert_case::{Case, Casing};
 use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
     Attribute, AttributeName, AttributeValue, BodyNode, CallBody, Component, Element, ElementName,
-    HotLiteral, TemplateBody, TextNode,
+    HotLiteral, NodeDelimiter, TemplateBody, TextNode,
 };
 pub use html_parser::{Dom, Node};
 use htmlentity::entity::ICodedDataTrait;
@@ -107,7 +107,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 merged_attributes: Default::default(),
                 diagnostics: Default::default(),
                 spreads: Default::default(),
-                brace: Default::default(),
+                delimiter: NodeDelimiter::Brace(Default::default()),
             }))
         }
 
@@ -143,7 +143,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
                     diagnostics: Default::default(),
                     fields: vec![],
                     children: TemplateBody::new(vec![]),
-                    brace: Some(Default::default()),
+                    delimiter: NodeDelimiter::Brace(Default::default()),
                 });
 
                 std::mem::swap(child, &mut new_comp);

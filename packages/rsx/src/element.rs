@@ -34,8 +34,8 @@ pub struct Element {
     /// The children of the element
     pub children: Vec<BodyNode>,
 
-    /// the brace of the `div { }`
-    pub brace: Option<Brace>,
+    /// The tokens around the body: the brace of `div { }` or the tags of `<div></div>`
+    pub delimiter: NodeDelimiter,
 
     /// A list of diagnostics that were generated during parsing. This element might be a valid rsx_block
     /// but not technically a valid element - these diagnostics tell us what's wrong and then are used
@@ -49,14 +49,14 @@ impl Parse for Element {
 
         // We very liberally parse elements - they might not even have a brace!
         // This is designed such that we can emit a diagnostic instead of failing to parse.
-        let mut brace = None;
+        let mut delimiter = NodeDelimiter::Missing;
         let mut block = RsxBlock::default();
 
         match stream.peek(Brace) {
             // If the element is followed by a brace, it is complete. Parse the body
             true => {
                 block = stream.parse::<RsxBlock>()?;
-                brace = Some(block.brace);
+                delimiter = NodeDelimiter::Brace(block.brace);
             }
 
             // Otherwise, it is incomplete. Add a diagnostic
@@ -67,40 +67,14 @@ impl Parse for Element {
             ),
         }
 
-        // Make sure these attributes have element context for name and namespace resolution.
-        for attr in block.attributes.iter_mut() {
-            attr.el_name = Some(name.clone());
-        }
-
-        // Assemble the new element from the contents of the block
-        let mut element = Element {
-            brace,
-            name: name.clone(),
-            raw_attributes: block.attributes,
-            children: block.children,
-            diagnostics: block.diagnostics,
-            spreads: block.spreads.clone(),
-            merged_attributes: Vec::new(),
-        };
-
-        // And then merge the various attributes together
-        // The original raw_attributes are kept for lossless parsing used by hotreload/autofmt
-        element.merge_attributes();
-
-        // And then merge the spreads *after* the attributes are merged. This ensures walking the
-        // merged attributes in path order stops before we hit the spreads, but spreads are still
-        // counted as dynamic attributes
-        for spread in block.spreads.iter() {
-            element.merged_attributes.push(Attribute {
-                name: AttributeName::Spread(spread.dots),
-                colon: None,
-                value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
-                comma: spread.comma,
-                el_name: Some(name.clone()),
-            });
-        }
-
-        Ok(element)
+        Ok(Self::from_parts(
+            name,
+            block.attributes,
+            block.spreads,
+            block.children,
+            delimiter,
+            block.diagnostics,
+        ))
     }
 }
 
@@ -122,6 +96,51 @@ impl ToTokens for Element {
 }
 
 impl Element {
+    /// Assemble an element from its parsed parts, merging attributes and spreads
+    pub(crate) fn from_parts(
+        name: ElementName,
+        mut attributes: Vec<Attribute>,
+        spreads: Vec<Spread>,
+        children: Vec<BodyNode>,
+        delimiter: NodeDelimiter,
+        diagnostics: Diagnostics,
+    ) -> Self {
+        // Make sure these attributes have element context for name and namespace resolution.
+        for attr in attributes.iter_mut() {
+            attr.el_name = Some(name.clone());
+        }
+
+        // Assemble the new element from the contents of the block
+        let mut element = Element {
+            delimiter,
+            name: name.clone(),
+            raw_attributes: attributes,
+            children,
+            diagnostics,
+            spreads: spreads.clone(),
+            merged_attributes: Vec::new(),
+        };
+
+        // And then merge the various attributes together
+        // The original raw_attributes are kept for lossless parsing used by hotreload/autofmt
+        element.merge_attributes();
+
+        // And then merge the spreads *after* the attributes are merged. This ensures walking the
+        // merged attributes in path order stops before we hit the spreads, but spreads are still
+        // counted as dynamic attributes
+        for spread in spreads.iter() {
+            element.merged_attributes.push(Attribute {
+                name: AttributeName::Spread(spread.dots),
+                colon: None,
+                value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
+                comma: spread.comma,
+                el_name: Some(name.clone()),
+            });
+        }
+
+        element
+    }
+
     pub(crate) fn add_merging_non_string_diagnostic(diagnostics: &mut Diagnostics, span: Span) {
         diagnostics.push(span.error("Cannot merge non-fmt literals").help(
             "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",

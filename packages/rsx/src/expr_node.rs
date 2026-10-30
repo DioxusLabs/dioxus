@@ -1,6 +1,11 @@
 use crate::PartialExpr;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, TokenStreamExt, quote};
-use syn::parse::Parse;
+use syn::{
+    Expr, ExprMatch, Token,
+    parse::{Parse, discouraged::Speculative},
+    token::Brace,
+};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ExprNode {
@@ -30,6 +35,30 @@ impl Parse for ExprNode {
         //         });
         //     }
         // }
+
+        // An expression node directly followed by a `<` is followed by a tag (`{children}</div>`
+        // or `match x { .. } <span />`). A node can never be a comparison, so stop the expression
+        // before the `<` instead of letting it be parsed as a binary operator.
+        if input.peek(Brace) && input.peek2(Token![<]) {
+            let content;
+            let brace = syn::braced!(content in input);
+            let expr = content.parse::<TokenStream2>()?;
+            return Ok(Self {
+                expr: PartialExpr::from_braced(brace, expr),
+            });
+        }
+
+        if input.peek(Token![match]) {
+            let fork = input.fork();
+            if let Ok(expr) = fork.parse::<ExprMatch>()
+                && fork.peek(Token![<])
+            {
+                input.advance_to(&fork);
+                return Ok(Self {
+                    expr: PartialExpr::from_expr(&Expr::Match(expr)),
+                });
+            }
+        }
 
         Ok(Self {
             expr: input.parse()?,
