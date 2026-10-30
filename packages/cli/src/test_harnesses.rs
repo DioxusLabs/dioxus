@@ -294,6 +294,26 @@ async fn test_harnesses() {
                 assert_eq!(t.client.features.iter().map(|s| s.as_str()).collect::<HashSet<_>>(), ["dioxus/web", "other"].into_iter().collect::<HashSet<_>>());
                 assert!(t.server.is_none());
             }),
+        TestHarnessBuilder::new("harness-simple-desktop-tests")
+            .deps(r#"dioxus = { workspace = true, features = ["desktop"] }"#)
+            .asrt(r#"dx check"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                assert_eq!(t.client.triple, Triple::host());
+                assert!(t.server.is_none());
+
+                // The rustc-wrapper scope dir must differ across build kinds so check
+                // captures never overwrite the fat/base captures used for hotpatch replay.
+                let mut req = t.client.clone();
+                let build = req
+                    .rustc_wrapper_scope_dir_name(&crate::BuildMode::Base)
+                    .unwrap();
+                req.kind = crate::BuildKind::Check;
+                let check = req
+                    .rustc_wrapper_scope_dir_name(&crate::BuildMode::Base)
+                    .unwrap();
+                assert_ne!(build, check);
+            }),
     ])
     .await;
 }
@@ -456,8 +476,10 @@ fn main() {
                     escaped.push(harness.name.clone());
                 }
                 let args = Cli::try_parse_from(escaped).unwrap();
-                let Commands::Build(build_args) = args.action else {
-                    panic!("Expected build command");
+                let build_args = match args.action {
+                    Commands::Build(build_args) => build_args,
+                    Commands::Check(check) => check.build_args,
+                    _ => panic!("Expected build/check command"),
                 };
 
                 futures.push(async move {
