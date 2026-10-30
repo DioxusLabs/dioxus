@@ -788,6 +788,21 @@
         }
       }
     },
+    "CompressionAlgorithm": {
+      "description": "Which compression algorithm to use when pre-compressing web assets",
+      "oneOf": [
+        {
+          "description": "Compress with brotli, emitting `.br` files",
+          "type": "string",
+          "const": "brotli"
+        },
+        {
+          "description": "Compress with gzip, emitting `.gz` files",
+          "type": "string",
+          "const": "gzip"
+        }
+      ]
+    },
     "CustomSignCommandSettings": {
       "type": "object",
       "properties": {
@@ -2215,6 +2230,19 @@
         }
       }
     },
+    "PreCompressConfig": {
+      "description": "Whether to pre-compress web assets, and with which algorithm",
+      "anyOf": [
+        {
+          "description": "`true` compresses with brotli, `false` disables pre-compression",
+          "type": "boolean"
+        },
+        {
+          "description": "Compress with the given algorithm",
+          "$ref": "#/$defs/CompressionAlgorithm"
+        }
+      ]
+    },
     "RawPermission": {
       "description": "Raw platform permission entry.",
       "type": "object",
@@ -2358,8 +2386,8 @@
           "$ref": "#/$defs/WebHttpsConfig"
         },
         "pre_compress": {
-          "description": "Whether to enable pre-compression of assets and wasm during a web build in release mode",
-          "type": "boolean"
+          "description": "Whether to enable pre-compression of assets and wasm during a web build in release mode\n\nAccepts a boolean (`true` compresses with brotli, `false` disables pre-compression) or the\nname of a compression algorithm (`\"brotli\"` or `\"gzip\"`).",
+          "$ref": "#/$defs/PreCompressConfig"
         },
         "proxy": {
           "type": "array",
