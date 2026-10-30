@@ -1831,6 +1831,8 @@ pub async fn create_framework_bundle(
             anyhow::bail!("install_name_tool failed: {}", stderr);
         }
 
+        adhoc_sign(&exec_path).await?;
+
         // Create Info.plist
         let info_plist = format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1890,6 +1892,8 @@ pub async fn create_framework_bundle(
             let stderr = String::from_utf8_lossy(&output.stderr);
             anyhow::bail!("install_name_tool failed: {}", stderr);
         }
+
+        adhoc_sign(&exec_path).await?;
 
         // Create Info.plist in Resources
         let info_plist = format!(
@@ -2006,4 +2010,30 @@ fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
         }
         serde_json::Value::Null => String::new(),
     }
+}
+
+/// Ad-hoc re-sign a Mach-O image after `install_name_tool` rewrites its load commands.
+///
+/// `install_name_tool` invalidates the linker's ad-hoc signature and leaves a stale code
+/// directory behind, which `dlopen` rejects with `SIGKILL (Code Signature Invalid)` on
+/// Apple Silicon (verified with Xcode 27 / macOS 27). Nested code also needs a signature of
+/// its own before the surrounding app bundle is signed, because codesign only recurses into
+/// code that already carries a valid signature.
+async fn adhoc_sign(path: &Path) -> Result<()> {
+    let output = Command::new("codesign")
+        .args(["--force", "--sign", "-"])
+        .arg(path)
+        .output()
+        .await
+        .context("Failed to run `codesign` - is `codesign` in your path?")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to ad-hoc codesign {}: {}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    Ok(())
 }
