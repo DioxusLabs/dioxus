@@ -40,6 +40,18 @@ use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
 
 impl BuildRequest {
+    /// One argument of the linker's command file on Windows, quoted. MSVC's `link.exe` takes
+    /// backslashes as they are; clang and lld (Android, Linux, the web...) read a command file
+    /// the GNU way, where a backslash escapes the next character, so a path such as
+    /// `C:\target\aarch64-linux-android\libdeps.a` loses its separators unless they are doubled.
+    fn command_file_arg(&self, arg: &str) -> String {
+        if self.triple.operating_system == OperatingSystem::Windows {
+            format!("\"{arg}\"")
+        } else {
+            format!("\"{}\"", arg.replace('\\', "\\\\").replace('"', "\\\""))
+        }
+    }
+
     /// We're going to create a DAG of modified crates, replay their rustc commands directly, and then
     /// manually link at the end.
     ///
@@ -267,7 +279,7 @@ impl BuildRequest {
         if cfg!(windows) {
             let cmd_contents: String = out_args
                 .iter()
-                .map(|s| format!("\"{}\"", s.to_string_lossy()))
+                .map(|s| self.command_file_arg(&s.to_string_lossy()))
                 .join(" ");
             std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
@@ -1125,7 +1137,7 @@ impl BuildRequest {
         // Handle windows command files
         let mut out_args = args.clone();
         if cfg!(windows) {
-            let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
+            let cmd_contents: String = out_args.iter().map(|f| self.command_file_arg(f)).join(" ");
             std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
             out_args = vec![format!("@{}", self.windows_command_file().display())];
