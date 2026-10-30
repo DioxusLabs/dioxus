@@ -3,12 +3,14 @@ mod linux;
 mod macos;
 mod tools;
 mod updater;
+mod version;
 mod windows;
 
 use crate::PackageType;
 use crate::{BuildRequest, DebianSettings, MacOsSettings, WindowsSettings};
 use anyhow::Context;
 use anyhow::Result;
+use krates::semver::Version;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tools::ResolvedTools;
@@ -233,9 +235,14 @@ impl<'a> BundleContext<'a> {
         self.build.config.bundle.publisher.as_deref()
     }
 
-    /// The version string from Cargo.toml.
+    /// Parsed version from Cargo.toml.
+    pub(crate) fn package_version(&self) -> &Version {
+        &self.build.package().version
+    }
+
+    /// String version from Cargo.toml.
     pub(crate) fn version_string(&self) -> String {
-        self.build.package().version.to_string()
+        self.package_version().to_string()
     }
 
     /// The short description.
