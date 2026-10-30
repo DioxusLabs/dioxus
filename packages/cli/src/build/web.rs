@@ -120,6 +120,7 @@ impl BuildRequest {
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
             debug: self.debug_symbols,
+            keep_names: self.config.web.wasm_opt.keep_names || self.keep_names,
             ..self.config.web.wasm_opt.clone()
         };
 
