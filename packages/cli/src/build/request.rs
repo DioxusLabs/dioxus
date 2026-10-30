@@ -2332,6 +2332,17 @@ impl BuildRequest {
             let src_path = entry.path();
             let dst_path = dst.join(entry.file_name());
 
+            // Frameworks keep their versioned layout through relative links
+            // (`Versions/Current`). Dereferencing them duplicates the binary and leaves
+            // `codesign` unable to tell the bundle apart from an app, so recreate the link.
+            #[cfg(unix)]
+            {
+                if entry.file_type()?.is_symlink() {
+                    std::os::unix::fs::symlink(std::fs::read_link(&src_path)?, &dst_path)?;
+                    continue;
+                }
+            }
+
             if src_path.is_dir() {
                 // Skip build directories and hidden folders
                 let name = entry.file_name();
