@@ -97,12 +97,12 @@ pub(crate) struct TargetArgs {
     #[clap(long, default_value_t = false, help_heading = HELP_HEADING)]
     pub(crate) wasm_split: bool,
 
-    /// Generate debug symbols for the wasm binary [default: true]
+    /// Generate debug symbols for the wasm binary [default: true in debug, false in release]
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
     /// wasm binary
-    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
-    pub(crate) debug_symbols: bool,
+    #[clap(long, default_missing_value = "true", num_args = 0..=1, help_heading = HELP_HEADING)]
+    pub(crate) debug_symbols: Option<bool>,
 
     /// Keep the name section in the wasm binary, useful for profiling and debugging [default: false]
     ///
