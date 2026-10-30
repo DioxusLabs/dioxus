@@ -98,10 +98,12 @@ impl HotLiteral {
     }
 
     pub fn from_raw_text(text: &str) -> Self {
-        HotLiteral::Fmted(HotReloadFormattedSegment::from(IfmtInput {
-            source: LitStr::new(text, Span::call_site()),
-            segments: vec![],
-        }))
+        // Attribute values coming from raw sources (like HTML) are literal, so escape any `{`/`}`
+        // to keep them from being interpreted as format-string interpolation.
+        let source = LitStr::new(&IfmtInput::escape_literal_braces(text), Span::call_site());
+        let ifmt = IfmtInput::new_litstr(source)
+            .expect("escaping the braces should always produce a valid format string");
+        HotLiteral::Fmted(HotReloadFormattedSegment::from(ifmt))
     }
 }
 
