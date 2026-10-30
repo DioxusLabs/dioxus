@@ -413,6 +413,49 @@ jobs:
 
 
 
+  # The Ubuntu image provides Chrome and ChromeDriver through `CHROMEWEBDRIVER`.
+  hydration-edges:
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
+    name: "Test | Hydration edges"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
+      - name: Refresh apt package lists
+        run: sudo apt-get update
+      - name: Install Rust ${{ needs.rust.outputs.rust_stable }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: "hydration-edges-${{ needs.rust.outputs.rust_stable }}"
+          cache-all-crates: "true"
+          cache-workspace-crates: "true"
+      - name: Check runner Chrome and ChromeDriver
+        run: |
+          google-chrome --version
+          "$CHROMEWEBDRIVER/chromedriver" --version
+          echo "CHROMEDRIVER=$CHROMEWEBDRIVER/chromedriver" >> "$GITHUB_ENV"
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install wasm-bindgen-cli
+        run: |
+          version=$(python3 -c 'import tomllib; print(next(p["version"] for p in tomllib.load(open("Cargo.lock", "rb"))["package"] if p["name"] == "wasm-bindgen"))')
+          cargo binstall wasm-bindgen-cli --version "$version" -y --force --locked
+          test "$(wasm-bindgen-test-runner --version)" = "wasm-bindgen-test-runner $version"
+      - name: Native SSR test
+        run: cargo test -p dioxus-playwright-markerless-hydration-edges-test --features server --test ssr
+      - name: Wasm hydration test
+        run: |
+          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+            cargo test -p dioxus-playwright-markerless-hydration-edges-test --features web \
+              --target wasm32-unknown-unknown --test hydrate
+
+
   test:
     needs: rust
     if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
