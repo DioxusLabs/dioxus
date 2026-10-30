@@ -115,9 +115,10 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
         // Create the server build request if needed
         let mut server = None;
-        if matches!(self.shared.fullstack, Some(true))
-            || client.fullstack_feature_enabled()
-            || self.server.is_some()
+        if self
+            .shared
+            .fullstack
+            .unwrap_or_else(|| client.fullstack_feature_enabled() || self.server.is_some())
         {
             match self.server.as_mut() {
                 Some(server_args) => {
