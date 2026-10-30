@@ -38,7 +38,7 @@ pub(crate) fn finalize_route() {
         return;
     };
 
-    if cfg!(feature = "server") {
+    if crate::transport::is_server() {
         let history = history();
         let route = history.current_route();
         entry.insert(&route, std::panic::Location::caller());

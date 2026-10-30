@@ -144,12 +144,23 @@ impl<T> SerializeContextEntry<T> {
     }
 }
 
+pub(crate) fn is_server() -> bool {
+    #[cfg(feature = "web")]
+    if CONTEXT.with(|context| context.borrow().is_some()) {
+        return false;
+    }
+
+    // Cargo may unify the client and server features. Browser builds remain clients
+    // even after their hydration context has been removed.
+    cfg!(feature = "server") && !cfg!(all(feature = "web", target_arch = "wasm32"))
+}
+
 /// Check if the client is currently rendering a component for hydration. Always returns true on the server.
 pub fn is_hydrating() -> bool {
     #[cfg(feature = "web")]
     {
         // On the client, we can check if the context is set
-        CONTEXT.with(|context| context.borrow().is_some())
+        is_server() || CONTEXT.with(|context| context.borrow().is_some())
     }
     #[cfg(not(feature = "web"))]
     {
@@ -161,22 +172,22 @@ pub fn is_hydrating() -> bool {
 /// will always return `TakeDataError::DataNotAvailable` if hydration of the current chunk is finished.
 pub fn serialize_context() -> HydrationContext {
     #[cfg(feature = "web")]
-    // On the client, the hydration logic provides the context in a global
-    if let Some(current_context) = CONTEXT.with(|context| context.borrow().clone()) {
-        current_context
-    } else {
-        // If the context is not set, then suspense is not active
-        HydrationContext {
-            suspense_finished: true,
-            ..Default::default()
+    {
+        // On the client, the hydration logic provides the context in a global
+        if let Some(current_context) = CONTEXT.with(|context| context.borrow().clone()) {
+            return current_context;
+        }
+        if !is_server() {
+            // If the client context is not set, then suspense is not active
+            return HydrationContext {
+                suspense_finished: true,
+                ..Default::default()
+            };
         }
     }
-    #[cfg(not(feature = "web"))]
-    {
-        // On the server each scope creates the context lazily
-        dioxus_vdom::has_context()
-            .unwrap_or_else(|| dioxus_vdom::provide_context(HydrationContext::default()))
-    }
+    // On the server each scope creates the context lazily
+    dioxus_vdom::has_context()
+        .unwrap_or_else(|| dioxus_vdom::provide_context(HydrationContext::default()))
 }
 
 pub(crate) struct HTMLData {

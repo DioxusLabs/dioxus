@@ -76,11 +76,16 @@ where
 
     #[cfg(feature = "server")]
     let caller = std::panic::Location::caller();
+    #[cfg(feature = "server")]
+    let is_server = crate::transport::is_server();
 
     // If this is the first run and we are on the web client, the data might be cached
     #[cfg(feature = "web")]
-    let initial_web_result =
-        use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(Some(storage_entry.get()))));
+    let initial_web_result = use_hook(|| {
+        std::rc::Rc::new(std::cell::RefCell::new(
+            (!crate::transport::is_server()).then(|| storage_entry.get()),
+        ))
+    });
 
     let resource = use_resource(move || {
         #[cfg(feature = "server")]
@@ -116,7 +121,9 @@ where
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
             #[cfg(feature = "server")]
-            storage_entry.insert(&out, caller);
+            if is_server {
+                storage_entry.insert(&out, caller);
+            }
 
             out
         }
