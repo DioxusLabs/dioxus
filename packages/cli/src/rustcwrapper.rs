@@ -11,6 +11,9 @@ use std::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceRustcArgs {
     pub link_args: Vec<String>,
+    /// The env rustc gave the tip crate's linker invocation. Empty if the link step was not
+    /// intercepted, in which case replays fall back to the tip crate's rustc env.
+    pub link_envs: Vec<(String, String)>,
     pub rustc_args: HashMap<String, RustcArgs>,
 }
 
@@ -18,6 +21,7 @@ impl WorkspaceRustcArgs {
     pub fn new(link_args: Vec<String>) -> Self {
         Self {
             link_args,
+            link_envs: Default::default(),
             rustc_args: Default::default(),
         }
     }
@@ -136,8 +140,9 @@ fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
                 _ => "bin", // proc-macro, cdylib, etc. — treat as bin
             };
 
-            std::fs::write(
-                args_dir.join(format!("{crate_name}.{suffix}.json")),
+            // The dump is a verbatim copy of the process env, so keep it owner-only.
+            crate::secure_fs::write_private(
+                &args_dir.join(format!("{crate_name}.{suffix}.json")),
                 &serialized_args,
             )
             .expect("Failed to write rustc args to file");
@@ -176,4 +181,38 @@ fn has_linking_args() -> bool {
     }
 
     false
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn captured_rustc_args_are_written_owner_only() {
+        // `.captured-args/<crate>.json` holds a verbatim `std::env::vars()`, so it can carry the
+        // user's tokens and must not be readable by other local users.
+        let dir = tempfile::tempdir().unwrap();
+        let args_dir = dir.path().join(".captured-args");
+
+        write_rustc_args(
+            &args_dir,
+            &RustcArgs {
+                args: vec![
+                    "rustc".into(),
+                    "--crate-name".into(),
+                    "myapp".into(),
+                    "--crate-type".into(),
+                    "bin".into(),
+                ],
+                envs: vec![("SECRET_TOKEN".into(), "hunter2".into())],
+                cwd: PathBuf::new(),
+            },
+        );
+
+        let path = args_dir.join("myapp.bin.json");
+        assert!(std::fs::read_to_string(&path).unwrap().contains("hunter2"));
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "captured rustc env must be owner-only");
+    }
 }
