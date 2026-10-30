@@ -12,7 +12,7 @@ use axum::{
     },
     http::{
         Method, Response, StatusCode,
-        header::{CACHE_CONTROL, EXPIRES, HeaderName, HeaderValue, PRAGMA},
+        header::{CACHE_CONTROL, CONTENT_TYPE, EXPIRES, HeaderName, HeaderValue, PRAGMA},
     },
     middleware::{self, Next},
     response::IntoResponse,
@@ -30,7 +30,7 @@ use std::{
     convert::Infallible,
     fs, io,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -530,6 +530,23 @@ fn build_devserver_router(
         } else {
             router = router.nest_service(&base_path, build_serve_dir(runner));
         }
+
+        // `ServeDir` maps the request path to a file on disk. Filesystems cap a single
+        // path component at `NAME_MAX` (255 bytes on Linux/macOS), so a request whose
+        // path contains a longer component can never be a real file - it must be a
+        // client-side route, and its parameter lives in the URL, not in the file body.
+        // Feeding that path to `ServeDir` makes the underlying `open` fail with
+        // `ENAMETOOLONG`, which tower-http reports as a `500` instead of a `404`, so the
+        // SPA shell never loads. Intercept those requests before they reach the
+        // filesystem and serve the shell directly.
+        router = router.layer(middleware::from_fn_with_state(
+            ClientRouteFallback {
+                out_dir: runner.client().build.root_dir(),
+                index_on_404: runner.client().build.config.web.watcher.index_on_404,
+                cross_origin_policy: runner.cross_origin_policy,
+            },
+            client_route_fallback_middleware,
+        ));
     }
 
     // Setup middleware to intercept html requests if the build status is "Building"
@@ -583,23 +600,131 @@ fn build_devserver_router(
     Ok(router)
 }
 
+/// Filesystems limit a single path component to `NAME_MAX` bytes (255 on Linux/macOS).
+/// A request path with a longer component can never resolve to a real file.
+const MAX_PATH_COMPONENT_LEN: usize = 255;
+
+/// State for [`client_route_fallback_middleware`].
+#[derive(Clone)]
+struct ClientRouteFallback {
+    /// Output directory holding the built `index.html` served as the SPA shell.
+    out_dir: PathBuf,
+    /// Whether unknown routes should fall back to the SPA shell (`index_on_404`).
+    index_on_404: bool,
+    cross_origin_policy: bool,
+}
+
+/// Serves the SPA shell for client-side routes whose path can't map to a file.
+///
+/// This keeps `ServeDir` from ever trying to open an over-long filename, which would
+/// otherwise fail with `ENAMETOOLONG` and be reported as a `500`.
+async fn client_route_fallback_middleware(
+    State(state): State<ClientRouteFallback>,
+    request: Request,
+    next: Next,
+) -> Response<Body> {
+    if has_oversized_path_component(request.uri().path()) {
+        return if state.index_on_404 {
+            spa_index_response(&state.out_dir, state.cross_origin_policy)
+        } else {
+            spa_not_found_response(state.cross_origin_policy)
+        };
+    }
+
+    next.run(request).await
+}
+
+/// Returns `true` if any percent-decoded path segment exceeds the filesystem's
+/// `NAME_MAX`, meaning the path can never map to a real file.
+///
+/// `ServeDir` percent-decodes the path before turning it into filesystem components,
+/// so the check must be done on the decoded form too.
+fn has_oversized_path_component(uri_path: &str) -> bool {
+    let path = uri_path.trim_start_matches('/');
+    let Ok(decoded) = percent_encoding::percent_decode_str(path).decode_utf8() else {
+        // Invalid UTF-8 is rejected by `ServeDir` as an invalid path (404/fallback),
+        // so it can never produce the `ENAMETOOLONG` error we're guarding against.
+        return false;
+    };
+
+    decoded
+        .split('/')
+        .any(|segment| segment.len() > MAX_PATH_COMPONENT_LEN)
+}
+
+fn spa_index_response(out_dir: &Path, cross_origin_policy: bool) -> Response<Body> {
+    let mut response = Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, HeaderValue::from_static("text/html"))
+        .body(Body::from(read_index_html(out_dir)))
+        .unwrap();
+    insert_static_headers(response.headers_mut(), cross_origin_policy);
+    response
+}
+
+/// Reads the built SPA shell (`index.html`) from `out_dir`, falling back to a placeholder
+/// page when it can't be read (e.g. the app hasn't been built yet).
+fn read_index_html(out_dir: &Path) -> String {
+    std::fs::read_to_string(out_dir.join("index.html")).unwrap_or_else(|_| {
+        String::from(
+            r#"
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>Err 404 - dx is not serving a web app</title>
+                </head>
+                <body>
+                <p>Err 404 - dioxus is not currently serving a web app</p>
+                </body>
+            </html>
+            "#,
+        )
+    })
+}
+
+fn spa_not_found_response(cross_origin_policy: bool) -> Response<Body> {
+    let mut response = Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body(Body::empty())
+        .unwrap();
+    insert_static_headers(response.headers_mut(), cross_origin_policy);
+    response
+}
+
+const CROSS_ORIGIN_EMBEDDER_POLICY: HeaderName =
+    HeaderName::from_static("cross-origin-embedder-policy");
+const CROSS_ORIGIN_OPENER_POLICY: HeaderName =
+    HeaderName::from_static("cross-origin-opener-policy");
+
+/// Returns the `(Cross-Origin-Embedder-Policy, Cross-Origin-Opener-Policy)` values for
+/// the given cross-origin isolation setting.
+fn cross_origin_policy_headers(cross_origin_policy: bool) -> (HeaderValue, HeaderValue) {
+    if cross_origin_policy {
+        (
+            HeaderValue::from_static("require-corp"),
+            HeaderValue::from_static("same-origin"),
+        )
+    } else {
+        (
+            HeaderValue::from_static("unsafe-none"),
+            HeaderValue::from_static("unsafe-none"),
+        )
+    }
+}
+
+/// Adds the cross-origin isolation and no-cache headers that `build_serve_dir` sets on
+/// files served by `ServeDir`, so responses produced by this module stay consistent.
+fn insert_static_headers(headers: &mut HeaderMap, cross_origin_policy: bool) {
+    let (coep, coop) = cross_origin_policy_headers(cross_origin_policy);
+    headers.insert(CROSS_ORIGIN_EMBEDDER_POLICY, coep);
+    headers.insert(CROSS_ORIGIN_OPENER_POLICY, coop);
+    insert_no_cache_headers(headers);
+}
+
 fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     use tower::ServiceBuilder;
 
-    static CORS_UNSAFE: (HeaderValue, HeaderValue) = (
-        HeaderValue::from_static("unsafe-none"),
-        HeaderValue::from_static("unsafe-none"),
-    );
-
-    static CORS_REQUIRE: (HeaderValue, HeaderValue) = (
-        HeaderValue::from_static("require-corp"),
-        HeaderValue::from_static("same-origin"),
-    );
-
-    let (coep, coop) = match runner.cross_origin_policy {
-        true => CORS_REQUIRE.clone(),
-        false => CORS_UNSAFE.clone(),
-    };
+    let (coep, coop) = cross_origin_policy_headers(runner.cross_origin_policy);
 
     let app = &runner.client;
     let cfg = &runner.client.build.config;
@@ -609,11 +734,8 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
 
     get_service(
         ServiceBuilder::new()
-            .override_response_header(
-                HeaderName::from_static("cross-origin-embedder-policy"),
-                coep,
-            )
-            .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
+            .override_response_header(CROSS_ORIGIN_EMBEDDER_POLICY, coep)
+            .override_response_header(CROSS_ORIGIN_OPENER_POLICY, coop)
             .and_then({
                 let out_dir = out_dir.clone();
                 move |response| async move { Ok(no_cache(index_on_404, &out_dir, response)) }
@@ -639,23 +761,7 @@ fn no_cache(
     // If there's a 404 and we're supposed to index on 404, upgrade that failed request to the index.html
     // We might want to isnert a header here saying we *did* that but oh well
     if response.status() == StatusCode::NOT_FOUND && index_on_404 {
-        let fallback = out_dir.join("index.html");
-        let contents = std::fs::read_to_string(fallback).unwrap_or_else(|_| {
-            String::from(
-                r#"
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <title>Err 404 - dx is not serving a web app</title>
-                </head>
-                <body>
-                <p>Err 404 - dioxus is not currently serving a web app</p>
-                </body>
-            </html>
-            "#,
-            )
-        });
-        let body = Body::from(contents);
+        let body = Body::from(read_index_html(out_dir));
 
         response = Response::builder()
             .status(StatusCode::OK)
