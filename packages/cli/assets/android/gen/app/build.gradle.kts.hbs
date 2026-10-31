@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     {{#each gradle_plugins}}
     id("{{ this }}")
     {{/each}}
@@ -9,6 +8,12 @@ plugins {
 android {
     namespace="{{ application_id }}"
     compileSdk = {{ compile_sdk }}
+    {{#if compile_sdk_minor}}
+    compileSdkMinor = {{ compile_sdk_minor }}
+    {{/if}}
+    {{#if build_tools_version}}
+    buildToolsVersion = "{{ build_tools_version }}"
+    {{/if}}
     defaultConfig {
         applicationId = "{{ application_id }}"
         minSdk = {{ min_sdk }}
@@ -26,6 +31,13 @@ android {
         }
     }
     {{/if}}
+    // Keep .so files compressed in the APK. Uncompressed page-aligned libraries (the AGP default
+    // for minSdk >= 23) install faster, but make the APK much larger to distribute.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
     buildTypes {
         getByName("debug") {
             isDebuggable = true
@@ -50,9 +62,6 @@ android {
             )
         }
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -62,7 +71,7 @@ android {
     }
     sourceSets {
         getByName("main") {
-            java.srcDirs("src/main/kotlin", "src/main/java")
+            java.directories.addAll(listOf("src/main/kotlin", "src/main/java"))
         }
     }
 }
