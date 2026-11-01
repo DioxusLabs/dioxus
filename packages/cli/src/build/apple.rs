@@ -879,7 +879,7 @@ We checked the folders:
         }
 
         // Copy the entire framework bundle
-        self.copy_build_dir_recursive(framework_path, &dest)?;
+        Self::copy_build_dir_recursive(framework_path, &dest)?;
 
         tracing::debug!(
             "Installed Swift framework '{}' to {}",
@@ -1026,7 +1026,7 @@ We checked the folders:
                 std::fs::remove_dir_all(&dest_path)?;
             }
 
-            self.copy_build_dir_recursive(&appex_path, &dest_path)?;
+            Self::copy_build_dir_recursive(&appex_path, &dest_path)?;
 
             tracing::debug!(
                 "Installed widget extension '{}' to {}",
