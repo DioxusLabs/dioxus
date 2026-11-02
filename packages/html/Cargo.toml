@@ -12,7 +12,6 @@ keywords = ["dom", "ui", "gui", "react"]
 [dependencies]
 dioxus-vdom = { workspace = true }
 dioxus-vdom-macro = { workspace = true }
-dioxus-rsx-hotreload = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
 dioxus-hooks = { workspace = true }
 generational-box = { workspace = true }
@@ -51,7 +50,7 @@ serialize = [
     "dioxus-vdom/serialize",
     "bytes/serde"
 ]
-hot-reload-context = ["dep:dioxus-rsx-hotreload"]
+hot-reload-context = []
 html-to-rsx = []
 
 [package.metadata.docs.rs]

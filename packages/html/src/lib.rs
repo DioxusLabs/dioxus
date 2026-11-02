@@ -25,7 +25,7 @@ pub enum html {}
 #[macro_use]
 pub mod elements;
 #[cfg(feature = "hot-reload-context")]
-pub use elements::HtmlCtx;
+pub use elements::{map_attribute, map_element};
 #[cfg(feature = "html-to-rsx")]
 pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 mod bubbles;

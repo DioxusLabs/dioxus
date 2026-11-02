@@ -335,25 +335,23 @@ impl DefineElements {
             .map(ElementDef::extension_export_tokens);
 
         quote! {
+            /// Map the Rust name of an element's attribute to its rendered name and namespace.
             #[cfg(feature = "hot-reload-context")]
-            pub struct HtmlCtx;
+            pub fn map_attribute(
+                element: &str,
+                attribute: &str,
+            ) -> ::std::option::Option<(&'static str, ::std::option::Option<&'static str>)> {
+                #(#map_attribute)*
+                ::std::option::Option::None
+            }
 
+            /// Map the Rust name of an element to its rendered tag name and namespace.
             #[cfg(feature = "hot-reload-context")]
-            impl ::dioxus_rsx_hotreload::HotReloadingContext for HtmlCtx {
-                fn map_attribute(
-                    element: &str,
-                    attribute: &str,
-                ) -> ::std::option::Option<(&'static str, ::std::option::Option<&'static str>)> {
-                    #(#map_attribute)*
-                    ::std::option::Option::None
-                }
-
-                fn map_element(
-                    element: &str,
-                ) -> ::std::option::Option<(&'static str, ::std::option::Option<&'static str>)> {
-                    #(#map_element)*
-                    ::std::option::Option::None
-                }
+            pub fn map_element(
+                element: &str,
+            ) -> ::std::option::Option<(&'static str, ::std::option::Option<&'static str>)> {
+                #(#map_element)*
+                ::std::option::Option::None
             }
 
             #[cfg(feature = "html-to-rsx")]

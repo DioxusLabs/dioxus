@@ -7,9 +7,8 @@ use crate::{
 use anyhow::{Context, bail};
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_dx_wire_format::BuildStage;
-use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
-use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
+use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult, HotReloadingContext};
 use dioxus_vdom::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -2310,6 +2309,22 @@ fn analyze_dioxus_value(
     // release post-processing, none of which run during `dx serve`.
 
     outcome
+}
+
+/// Maps dioxus-html element and attribute names for rsx hot reloading.
+struct HtmlCtx;
+
+impl HotReloadingContext for HtmlCtx {
+    fn map_attribute(
+        element: &str,
+        attribute: &str,
+    ) -> Option<(&'static str, Option<&'static str>)> {
+        dioxus_html::map_attribute(element, attribute)
+    }
+
+    fn map_element(element: &str) -> Option<(&'static str, Option<&'static str>)> {
+        dioxus_html::map_element(element)
+    }
 }
 
 #[cfg(test)]
