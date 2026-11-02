@@ -7,7 +7,7 @@ members = [
     "packages/vdom-template",
     "packages/oracle",
     "packages/fuzz",
-    "packages/cli",
+    "packages/dx",
     "packages/cli-config",
     "packages/cli-telemetry",
     "packages/vdom-macro",
