@@ -155,7 +155,7 @@ dioxus-fullstack = { path = "packages/fullstack", version = "=0.8.0-alpha.3", de
 dioxus-fullstack-core = { path = "packages/fullstack-core", version = "=0.8.0-alpha.3", default-features = false }
 dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "=0.8.0-alpha.3", default-features = false }
 dioxus-server = { path = "packages/fullstack-server", version = "=0.8.0-alpha.3" }
-dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "=0.8.0-alpha.3" }
+dx-wire-format = { path = "packages/dx-wire-format", version = "=0.8.0-alpha.3" }
 dioxus-logger = { path = "packages/logger", version = "=0.8.0-alpha.3" }
 dioxus-native = { path = "packages/native", version = "=0.8.0-alpha.3" }
 dioxus-native-dom = { path = "packages/native-dom", version = "=0.8.0-alpha.3" }

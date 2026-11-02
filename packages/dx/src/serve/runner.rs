@@ -6,13 +6,13 @@ use crate::{
 };
 use anyhow::{Context, bail};
 use dioxus_devtools_types::HotReloadMsg;
-use dioxus_dx_wire_format::BuildStage;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use dioxus_vdom::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
+use dx_wire_format::BuildStage;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use futures_util::future::OptionFuture;
