@@ -28,3 +28,7 @@ pub(crate) use builder::*;
 pub(crate) use context::*;
 pub(crate) use patch::*;
 pub(crate) use request::*;
+
+/// Window settings read by the Dioxus renderers (desktop, native and liveview) rather than by `dx-env`.
+pub(crate) const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
+pub(crate) const ALWAYS_ON_TOP_ENV: &str = "DIOXUS_ALWAYS_ON_TOP";

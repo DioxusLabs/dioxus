@@ -77,9 +77,14 @@ pub use dioxus_core::core_macro;
 #[cfg_attr(docsrs, doc(cfg(feature = "logger")))]
 pub use dioxus_logger as logger;
 
-#[cfg(feature = "cli-config")]
-#[cfg_attr(docsrs, doc(cfg(feature = "cli-config")))]
-pub use dioxus_cli_config as cli_config;
+#[cfg(feature = "dx-env")]
+#[cfg_attr(docsrs, doc(cfg(feature = "dx-env")))]
+pub use dx_env;
+
+/// Deprecated alias for [`dx_env`].
+#[cfg(feature = "dx-env")]
+#[doc(hidden)]
+pub use dx_env as cli_config;
 
 #[cfg(feature = "server")]
 #[cfg_attr(docsrs, doc(cfg(feature = "server")))]

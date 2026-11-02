@@ -15,7 +15,7 @@ fn app() -> Element {
     let mut user_from_server_fn = use_action(get_user);
 
     let mut user_from_reqwest = use_action(move |id: i32| async move {
-        let port = dioxus::cli_config::server_port().unwrap_or(8080);
+        let port = dioxus::dx_env::server_port().unwrap_or(8080);
         reqwest::get(&format!("http://localhost:{}/api/user/{}", port, id))
             .await?
             .json::<User>()

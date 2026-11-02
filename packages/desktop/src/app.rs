@@ -354,9 +354,7 @@ impl App {
                     }
                 }
 
-                if hr_msg.jump_table.is_some()
-                    && hr_msg.for_build_id == Some(dioxus_cli_config::build_id())
-                {
+                if hr_msg.jump_table.is_some() && hr_msg.for_build_id == Some(dx_env::build_id()) {
                     match patch_error {
                         None => self.send_toast_to_all(
                             "Hot-patch success!",
@@ -709,6 +707,6 @@ pub(crate) struct PreservedWindowState {
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later
 pub(crate) fn restore_file() -> std::path::PathBuf {
-    let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(std::env::temp_dir);
+    let dir = dx_env::session_cache_dir().unwrap_or_else(std::env::temp_dir);
     dir.join("window-state.json")
 }

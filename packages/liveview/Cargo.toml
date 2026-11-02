@@ -29,7 +29,7 @@ rustc-hash = { workspace = true }
 dioxus-vdom = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-devtools = { workspace = true, optional = true }
-dioxus-cli-config = { workspace = true }
+dx-env = { workspace = true }
 generational-box = { workspace = true }
 
 # axum

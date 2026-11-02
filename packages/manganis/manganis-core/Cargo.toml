@@ -15,7 +15,7 @@ readme = "../manganis/README.md"
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 const-serialize = { package = "const-serialize", path = "../../const-serialize", version = "0.8.0-alpha.3", features = ["serde"] }
-dioxus-cli-config = { workspace = true }
+dx-env = { workspace = true }
 winnow = { workspace = true }
 
 [dev-dependencies]

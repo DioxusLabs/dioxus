@@ -1,7 +1,5 @@
 # dioxus-cli-config
 
-A crate that provides key/value names and types for configuring Dioxus applications at runtime.
+This crate has been renamed to [`dx-env`](https://crates.io/crates/dx-env) and now only re-exports it. It will be removed in a future release.
 
-This crate exists for us to very cleanly define the exact fields we want to pass down to Dioxus applications at runtime but without exposing the entire config object.
-
-This leads to faster compile times, smaller binaries, and a clearer distinction between the config and the application.
+`app_title` and `always_on_top` are Dioxus window settings rather than part of the `dx` environment contract, so they moved into the renderers that use them (`dioxus-desktop`, `dioxus-native` and `dioxus-liveview`). This crate keeps deprecated copies of them.

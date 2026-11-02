@@ -29,7 +29,7 @@ warnings = { workspace = true, optional = true }
 subsecond = { workspace = true }
 
 serde = { workspace = true, optional = true }
-dioxus-cli-config = { workspace = true, optional = true }
+dx-env = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 
 [features]
@@ -49,7 +49,7 @@ lib = [
   "document",
   "asset",
   "warnings",
-  "cli-config",
+  "dx-env",
 ]
 # The minimal set of features required to use dioxus renderers for minimal binary size
 minimal = ["macro", "html", "signals", "hooks", "launch"]
@@ -62,7 +62,9 @@ mounted = ["dioxus-web?/mounted"]
 asset = ["dep:manganis", "dep:dioxus-asset-resolver", "dioxus-core/manganis_08"]
 document = ["dioxus-web?/document", "dioxus-core/document", "dep:dioxus-history"]
 logger = ["dep:dioxus-logger"]
-cli-config = ["dep:dioxus-cli-config"]
+dx-env = ["dep:dx-env"]
+# Deprecated alias for `dx-env`, kept for one release
+cli-config = ["dx-env"]
 warnings = ["dep:warnings"]
 wasm-split = [
   "dioxus-core/wasm-split",
@@ -89,8 +91,8 @@ web = [
   "dep:dioxus-web",
   "dioxus-fullstack?/web",
   "dioxus-config-macro/web",
-  "dep:dioxus-cli-config",
-  "dioxus-cli-config?/web",
+  "dep:dx-env",
+  "dx-env?/web",
   "dioxus-asset-resolver?/web",
 ]
 ssr = ["dioxus-core/ssr", "dioxus-config-macro/ssr"]

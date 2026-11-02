@@ -30,7 +30,7 @@ pub trait DioxusRouterExt {
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
-    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+    ///     let addr = dioxus::dx_env::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Server side render the application, serve static assets, and register server functions
     ///         .serve_static_assets()
@@ -55,7 +55,7 @@ pub trait DioxusRouterExt {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+    ///     let addr = dioxus::dx_env::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Server side render the application, serve static assets, and register server functions
     ///         .serve_dioxus_application(ServeConfig::new(), app);
@@ -81,7 +81,7 @@ pub trait DioxusRouterExt {
     /// # use dioxus_server::DioxusRouterExt;
     /// #[tokio::main]
     /// async fn main() {
-    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+    ///     let addr = dioxus::dx_env::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Register server functions routes with the default handler
     ///         .register_server_functions()
@@ -192,7 +192,7 @@ impl DioxusRouterExt for Router<FullstackState> {
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+///     let addr = dioxus::dx_env::fullstack_address_or_localhost();
 ///     let router = axum::Router::new()
 ///         // Register server functions, etc.
 ///         // Note you can use `register_server_functions_with_context`
@@ -306,7 +306,7 @@ impl FullstackState {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+    ///     let addr = dioxus::dx_env::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Register server functions, etc.
     ///         // Note you can use `register_server_functions_with_context`

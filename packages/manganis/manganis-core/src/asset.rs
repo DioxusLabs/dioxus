@@ -158,12 +158,12 @@ impl Asset {
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
         // If the asset is relative, we resolve the asset at the current directory
-        if !dioxus_cli_config::is_bundled_app() {
+        if !dx_env::is_bundled_app() {
             return PathBuf::from(self.bundled().absolute_source_path.as_str());
         }
 
         let bundle_root = {
-            let base_path = dioxus_cli_config::base_path();
+            let base_path = dx_env::base_path();
             let base_path = base_path
                 .as_deref()
                 .map(|base_path| {

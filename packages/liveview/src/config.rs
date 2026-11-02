@@ -3,7 +3,23 @@ use dioxus_vdom::{LaunchConfig, VirtualDom};
 use crate::LiveviewRouter;
 
 pub(crate) fn app_title() -> String {
-    dioxus_cli_config::app_title().unwrap_or_else(|| "Dioxus Liveview App".to_string())
+    dx_app_title().unwrap_or_else(|| "Dioxus Liveview App".to_string())
+}
+
+/// The window title `dx` passes down from the app's `Dioxus.toml`.
+///
+/// `dx` sets this at runtime during development and at compile time for release builds, so bundled
+/// apps keep the title when run without `dx`.
+fn dx_app_title() -> Option<String> {
+    #[cfg(debug_assertions)]
+    {
+        std::env::var("DIOXUS_APP_TITLE").ok()
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        option_env!("DIOXUS_APP_TITLE").map(ToString::to_string)
+    }
 }
 
 /// A configuration for the LiveView server.
@@ -18,7 +34,7 @@ impl<R: LiveviewRouter + 'static> LaunchConfig for Config<R> {}
 impl<R: LiveviewRouter> Default for Config<R> {
     fn default() -> Self {
         Self {
-            address: dioxus_cli_config::fullstack_address_or_localhost(),
+            address: dx_env::fullstack_address_or_localhost(),
             router: R::create_default_liveview_router(),
             route: "/".to_string(),
         }

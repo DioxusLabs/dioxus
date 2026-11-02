@@ -9,6 +9,7 @@ members = [
     "packages/fuzz",
     "packages/dx",
     "packages/cli-config",
+    "packages/dx-env",
     "packages/cli-telemetry",
     "packages/vdom-macro",
     "packages/config-macro",
@@ -168,6 +169,7 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "=0.8.0-alpha.3" 
 
 # cli
 dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "=0.8.0-alpha.3" }
+dx-env = { path = "packages/dx-env", version = "=0.8.0-alpha.3" }
 dioxus-cli-config = { path = "packages/cli-config", version = "=0.8.0-alpha.3" }
 
 # subsecond
