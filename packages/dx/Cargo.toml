@@ -18,7 +18,7 @@ dioxus-html = { workspace = true, features = ["hot-reload"] }
 dioxus-vdom = { workspace = true, features = ["serialize"] }
 dioxus-devtools-types = { workspace = true }
 dioxus-cli-config = { workspace = true }
-dioxus-dx-wire-format = { workspace = true }
+dx-wire-format = { workspace = true }
 wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
 subsecond-types = { workspace = true }

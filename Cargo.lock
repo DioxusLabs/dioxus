@@ -3139,7 +3139,6 @@ dependencies = [
  "dioxus-cli-telemetry",
  "dioxus-component-manifest",
  "dioxus-devtools-types",
- "dioxus-dx-wire-format",
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-rsx-hotreload",
@@ -3148,6 +3147,7 @@ dependencies = [
  "dircpy",
  "dirs 6.0.0",
  "dunce",
+ "dx-wire-format",
  "escargot",
  "flate2",
  "fs2",
@@ -3403,17 +3403,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
-]
-
-[[package]]
-name = "dioxus-dx-wire-format"
-version = "0.8.0-alpha.3"
-dependencies = [
- "cargo_metadata",
- "manganis-core",
- "serde",
- "serde_json",
- "subsecond-types",
 ]
 
 [[package]]
@@ -4435,6 +4424,17 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "dx-wire-format"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "cargo_metadata",
+ "manganis-core",
+ "serde",
+ "serde_json",
+ "subsecond-types",
+]
 
 [[package]]
 name = "dyn-clone"

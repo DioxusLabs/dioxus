@@ -11,7 +11,7 @@ fn main() {
     let git_dir = find_git_dir(&manifest_dir);
 
     // Track the files that determine the current commit. Absolute paths are
-    // required because the build script runs from `packages/cli/`, not the
+    // required because the build script runs from `packages/dx/`, not the
     // workspace root where `.git` lives.
     if let Some(git_dir) = git_dir.as_deref() {
         emit_rerun(&git_dir.join("HEAD"));

@@ -118,11 +118,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
       - name: Check schema
-        run: cargo run -p dioxus-cli -- config schema --out packages/cli/schema.json
+        run: cargo run -p dioxus-cli -- config schema --out packages/dx/schema.json
       - name: Verify schema is up to date
         run: |
-          if ! git diff --exit-code packages/cli/schema.json; then
-            echo "::error::Schema is out of date. Run 'dx config schema --out packages/cli/schema.json' and commit the changes."
+          if ! git diff --exit-code packages/dx/schema.json; then
+            echo "::error::Schema is out of date. Run 'dx config schema --out packages/dx/schema.json' and commit the changes."
             exit 1
           fi
       - name: Verify MSRV
