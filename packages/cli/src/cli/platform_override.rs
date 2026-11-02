@@ -245,4 +245,40 @@ mod tests {
             "@server should override the platform"
         );
     }
+
+    #[test]
+    fn cli_parses_a_prebuilt_exe_per_platform_override() {
+        let cli = crate::Cli::try_parse_from([
+            "dx",
+            "bundle",
+            "--web",
+            "--release",
+            "@client",
+            "--prebuilt-exe",
+            "app.wasm",
+            "@server",
+            "--server",
+            "--prebuilt-exe",
+            "server",
+        ])
+        .expect("prebuilt executables should parse");
+
+        let crate::Commands::Bundle(bundle) = cli.action else {
+            panic!("expected bundle command");
+        };
+
+        let prebuilt_exe = |args: Option<&crate::BuildArgs>| {
+            args.and_then(|args| args.build_arguments.prebuilt_exe.clone())
+        };
+        assert_eq!(prebuilt_exe(Some(&bundle.args.shared)), None);
+        assert_eq!(
+            prebuilt_exe(bundle.args.client.as_ref()),
+            Some("app.wasm".into())
+        );
+        assert_eq!(
+            prebuilt_exe(bundle.args.server.as_ref()),
+            Some("server".into())
+        );
+        assert!(bundle.args.server.unwrap().build_arguments.release);
+    }
 }
