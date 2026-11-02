@@ -17,7 +17,7 @@ thiserror = { workspace = true }
 http = { workspace = true, optional = true }
 percent-encoding = { workspace = true, optional = true }
 infer = { workspace = true, optional = true }
-dioxus-cli-config = { workspace = true, optional = true }
+dx-env = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt"], optional = true }
 manganis-core = { workspace = true, optional = true }
 
@@ -40,4 +40,4 @@ manganis = { workspace = true }
 [features]
 default = []
 web = ["dep:web-sys", "dep:js-sys", "dep:wasm-bindgen-futures"]
-native = ["dep:http", "dep:percent-encoding", "dep:infer", "dep:dioxus-cli-config", "dep:tokio", "dep:manganis-core"]
+native = ["dep:http", "dep:percent-encoding", "dep:infer", "dep:dx-env", "dep:tokio", "dep:manganis-core"]

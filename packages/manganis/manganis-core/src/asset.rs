@@ -198,7 +198,7 @@ impl Asset {
             return PathBuf::from(bundled.absolute_source_path());
         }
 
-        if !dioxus_cli_config::is_bundled_app() {
+        if !dx_env::is_bundled_app() {
             return PathBuf::from(bundled.absolute_source_path());
         }
 
@@ -210,7 +210,7 @@ impl Asset {
 }
 
 fn bundle_root() -> PathBuf {
-    let base_path = dioxus_cli_config::base_path();
+    let base_path = dx_env::base_path();
     let base_path = base_path
         .as_deref()
         .map(|base_path| {
@@ -274,11 +274,11 @@ mod tests {
     #[test]
     fn resolve_processed_asset() {
         let asset = Asset::new(|| PROCESSED.as_slice());
-        if !dioxus_cli_config::is_bundled_app() {
+        if !dx_env::is_bundled_app() {
             assert_eq!(asset.resolve(), PathBuf::from("/source/style.css"));
             return;
         }
-        let root = dioxus_cli_config::base_path()
+        let root = dx_env::base_path()
             .map(|path| format!("/{}/assets", path.trim_matches('/')))
             .unwrap_or_else(|| "/assets".to_string());
         assert_eq!(asset.resolve(), PathBuf::from(root).join("style-hash.css"));

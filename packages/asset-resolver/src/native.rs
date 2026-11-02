@@ -195,7 +195,7 @@ fn get_asset_root() -> PathBuf {
             .map(|root| root.join("lib"))
         {
             // Try the product name from the compile-time env var first
-            if let Some(product_name) = dioxus_cli_config::product_name() {
+            if let Some(product_name) = dx_env::product_name() {
                 let path = lib_dir.join(&product_name);
                 if path.exists() {
                     return path;
@@ -275,7 +275,7 @@ pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
     // in debug mode, the asset might be under `/data/local/tmp/dx/` - attempt to read it from there if it exists
     #[cfg(debug_assertions)]
     {
-        let path = dioxus_cli_config::android_session_cache_dir().join(normalized);
+        let path = dx_env::android_session_cache_dir().join(normalized);
         if path.exists() {
             return std::fs::read(path).ok();
         }
