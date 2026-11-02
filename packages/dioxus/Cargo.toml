@@ -83,8 +83,8 @@ fullstack = [
   "dioxus-web?/mounted",
   "dioxus-web?/document"
 ]
-desktop = ["dep:dioxus-desktop", "dioxus-config-macro/desktop"]
-mobile = ["dep:dioxus-desktop", "dioxus-config-macro/mobile"]
+desktop = ["dep:dioxus-desktop", "dep:dioxus-cli-config", "dioxus-config-macro/desktop"]
+mobile = ["dep:dioxus-desktop", "dep:dioxus-cli-config", "dioxus-config-macro/mobile"]
 web = [
   "dep:dioxus-web",
   "dioxus-fullstack?/web",
@@ -95,7 +95,7 @@ web = [
 ]
 ssr = ["dioxus-core/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
-native = ["dep:dioxus-native", "dioxus-config-macro/native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
+native = ["dep:dioxus-native", "dep:dioxus-cli-config", "dioxus-config-macro/native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
 server = [
   "dep:dioxus-server",
   "dioxus-fullstack?/server",

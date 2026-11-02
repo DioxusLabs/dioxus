@@ -183,7 +183,7 @@ fn get_asset_root() -> PathBuf {
             }
 
             // Fall back to scanning lib/ for a directory containing an `assets/` subfolder.
-            // This handles debug builds where DIOXUS_PRODUCT_NAME isn't baked in.
+            // This handles debug builds where DX_PRODUCT_NAME isn't baked in.
             if let Ok(entries) = std::fs::read_dir(&lib_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
