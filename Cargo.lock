@@ -3072,7 +3072,7 @@ name = "dioxus-asset-resolver"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-cli-config",
+ "dx-env",
  "http",
  "infer",
  "jni 0.21.1",
@@ -3145,6 +3145,7 @@ dependencies = [
  "dircpy",
  "dirs 6.0.0",
  "dunce",
+ "dx-env",
  "dx-wire-format",
  "escargot",
  "flate2",
@@ -3234,7 +3235,7 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.8.0-alpha.3"
 dependencies = [
- "wasm-bindgen",
+ "dx-env",
 ]
 
 [[package]]
@@ -3361,10 +3362,10 @@ dependencies = [
 name = "dioxus-devtools"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-cli-config",
  "dioxus-devtools-types",
  "dioxus-signals",
  "dioxus-vdom",
+ "dx-env",
  "futures-channel",
  "futures-util",
  "serde",
@@ -3470,7 +3471,6 @@ dependencies = [
  "derive_more",
  "dioxus",
  "dioxus-asset-resolver",
- "dioxus-cli-config",
  "dioxus-fullstack-core",
  "dioxus-fullstack-macro",
  "dioxus-hooks",
@@ -3478,6 +3478,7 @@ dependencies = [
  "dioxus-server",
  "dioxus-signals",
  "dioxus-vdom",
+ "dx-env",
  "form_urlencoded",
  "futures",
  "futures-channel",
@@ -3681,7 +3682,7 @@ name = "dioxus-logger"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-cli-config",
+ "dx-env",
  "serde_json",
  "tracing",
  "tracing-subscriber",
@@ -3882,7 +3883,6 @@ dependencies = [
  "ciborium",
  "criterion",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
@@ -3892,6 +3892,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-vdom",
  "dioxus-vdom-macro",
+ "dx-env",
  "percent-encoding",
  "rustversion",
  "serde",
@@ -3973,7 +3974,6 @@ dependencies = [
  "ciborium",
  "dashmap 6.2.1",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-core",
@@ -3987,6 +3987,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-vdom",
  "dioxus-vdom-macro",
+ "dx-env",
  "enumset",
  "futures",
  "futures-channel",
@@ -4175,7 +4176,6 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "ciborium",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-core",
@@ -4186,6 +4186,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-vdom",
  "dioxus-web",
+ "dx-env",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -4422,6 +4423,13 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "dx-env"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "dx-wire-format"
@@ -8852,7 +8860,7 @@ name = "manganis-core"
 version = "0.8.0-alpha.3"
 dependencies = [
  "const-serialize",
- "dioxus-cli-config",
+ "dx-env",
  "manganis",
  "serde",
  "winnow 0.7.15",

@@ -6,11 +6,11 @@ authors = ["Jonathan Kelley", "Evan Almloff"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-description = "CLI Configuration for dioxus-cli"
+description = "Dioxus-specific settings that dx passes to Dioxus apps, on top of dx-env"
 keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 
 [dependencies]
-wasm-bindgen = { workspace = true, optional = true }
+dx-env = { workspace = true }
 
 [features]
-web = ["dep:wasm-bindgen"]
+web = ["dx-env/web"]

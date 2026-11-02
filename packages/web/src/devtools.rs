@@ -52,7 +52,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
             _ => "ws:",
         },
         host = location.host().unwrap(),
-        build_id = dioxus_cli_config::build_id(),
+        build_id = dx_env::build_id(),
     );
 
     let ws = WebSocket::new(&url).unwrap();
