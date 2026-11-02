@@ -36,7 +36,7 @@ use anyhow::{Context, Error, Result, bail};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEventData;
-use dioxus_dx_wire_format::StructuredOutput;
+use dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::FutureExt;
 use itertools::Itertools;

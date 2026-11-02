@@ -139,7 +139,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           archive: $bin-$target
           checksum: sha256
-          manifest_path: packages/cli/Cargo.toml
+          manifest_path: packages/dx/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
           zip: "all"
           locked: true

@@ -2075,7 +2075,7 @@ impl AppBuilder {
         use super::{BuildId, BuilderUpdate};
         use anyhow::Context;
         use dioxus_cli_config::{server_ip, server_port};
-        use dioxus_dx_wire_format::BuildStage;
+        use dx_wire_format::BuildStage;
         use futures_util::{StreamExt, stream::FuturesUnordered};
         use std::{
             net::{IpAddr, Ipv4Addr, SocketAddr},
