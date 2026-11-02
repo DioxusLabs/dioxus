@@ -905,7 +905,9 @@ impl BuildRequest {
         // Check if we already have a cached object file
         let out_ar_path = exe.with_file_name(format!("libdeps-{hash_id}.a",));
         let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
-        let mut archive_has_contents = out_ar_path.exists();
+        // An archive from an earlier run counts only if it has entries: an empty one (every
+        // rlib was a compiler rlib) must not be handed to `-force_load` ("file is empty").
+        let mut archive_has_contents = out_ar_path.metadata().is_ok_and(|m| m.len() > 0);
 
         // Use the rlibs list if it exists
         let mut compiler_rlibs = std::fs::read_to_string(&out_rlibs_list)
@@ -932,7 +934,11 @@ impl BuildRequest {
                 // https://github.com/rust-lang/rust/issues/94232#issuecomment-1048342201
                 //
                 // if the rlib is not in the target directory, we skip it.
-                if !rlib.starts_with(self.workspace_dir()) {
+                // Compiler rlibs are the toolchain's own (std, core, ...), found under the
+                // sysroot. Deciding by the workspace dir instead skipped EVERY dependency when
+                // the target dir lives outside the workspace (`CARGO_TARGET_DIR`), leaving an
+                // empty archive.
+                if rlib.starts_with(&self.workspace.sysroot) {
                     compiler_rlibs.push(rlib.clone());
                     tracing::trace!("Skipping rlib: {:?}", rlib);
                     continue;
