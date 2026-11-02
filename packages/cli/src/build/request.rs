@@ -1842,6 +1842,20 @@ impl BuildRequest {
                 cargo_args.push("-Clink-dead-code".to_string());
             }
 
+            // Patches are matched to the running binary by symbol name. Legacy mangling (the default
+            // before Rust 1.97) puts a hash in the name that changes with the function's signature,
+            // so a function whose signature changed no longer matches and the old one keeps running.
+            // v0 symbols have no such hash. Leave it alone if the user picked a mangling version.
+            if !self
+                .rustflags
+                .flags
+                .iter()
+                .chain(&self.extra_rustc_args)
+                .any(|flag| flag.contains("symbol-mangling-version"))
+            {
+                cargo_args.push("-Csymbol-mangling-version=v0".to_string());
+            }
+
             // We need to set some extra args that ensure all symbols make it into the final output
             // and that the linker doesn't strip them out.
             //
