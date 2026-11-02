@@ -193,7 +193,7 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
-use super::{APP_TITLE_ENV, HotpatchModuleCache};
+use super::HotpatchModuleCache;
 use crate::{
     AndroidTools, BuildContext, BuildId, BundleFormat, DX_RUSTC_WRAPPER_ENV_VAR, DioxusConfig,
     LinkAction, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
@@ -206,6 +206,7 @@ use anyhow::{Context, bail};
 use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{DebugSetting, Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
+use dioxus_cli_config::APP_TITLE_ENV;
 use dx_env::{ASSET_ROOT_ENV, PRODUCT_NAME_ENV};
 use krates::{NodeId, cm::TargetKind};
 use manganis::BundledAsset;

@@ -62,10 +62,10 @@ First, make sure your `axum` dependency is optional and enabled by the server fe
 dioxus = { version = "*", features = ["fullstack"] }
 axum = { version = "0.8.0", optional = true }
 tokio = { version = "1.0", features = ["full"], optional = true }
-dx-env = { version = "*", optional = true }
+dioxus-cli-config = { version = "*", optional = true }
 
 [features]
-server = ["dioxus/server", "dep:axum", "dep:tokio", "dx-env"]
+server = ["dioxus/server", "dep:axum", "dep:tokio", "dioxus-cli-config"]
 web = ["dioxus/web"]
 ```
 
@@ -83,7 +83,7 @@ async fn main() {
 
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
-    let address = dioxus::dx_env::fullstack_address_or_localhost();
+    let address = dioxus::cli_config::fullstack_address_or_localhost();
 
     // Set up the axum router
     let router = axum::Router::new()

@@ -17,7 +17,7 @@ impl LaunchConfig for Config {}
 impl Default for Config {
     fn default() -> Self {
         let window_attributes = WindowAttributes::default()
-            .with_title(dx_app_title().unwrap_or_else(|| "Dioxus App".to_string()));
+            .with_title(dioxus_cli_config::app_title().unwrap_or_else(|| "Dioxus App".to_string()));
 
         // On WASM, append the canvas to the document body. Surface size is
         // intentionally not seeded: winit-web's with_surface_size writes inline
@@ -77,21 +77,5 @@ impl Config {
     pub fn with_base_color(mut self, base_color: Color) -> Self {
         self.base_color = Some(base_color);
         self
-    }
-}
-
-/// The window title `dx` passes down from the app's `Dioxus.toml`.
-///
-/// `dx` sets this at runtime during development and at compile time for release builds, so bundled
-/// apps keep the title when run without `dx`.
-fn dx_app_title() -> Option<String> {
-    #[cfg(debug_assertions)]
-    {
-        std::env::var("DIOXUS_APP_TITLE").ok()
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-        option_env!("DIOXUS_APP_TITLE").map(ToString::to_string)
     }
 }

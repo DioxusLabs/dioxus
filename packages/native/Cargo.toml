@@ -93,7 +93,7 @@ dioxus-native-dom = { workspace = true }
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
-dx-env = { workspace = true }
+dioxus-cli-config = { workspace = true }
 
 # Dioxus hot reload
 dioxus-devtools = { workspace = true, optional = true }

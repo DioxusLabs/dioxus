@@ -94,10 +94,10 @@ impl WindowConfig {
     #[inline]
     pub fn new() -> Self {
         let mut window: WindowBuilder = WindowBuilder::new()
-            .with_title(dx_app_title().unwrap_or_else(|| "Dioxus App".to_string()));
+            .with_title(dioxus_cli_config::app_title().unwrap_or_else(|| "Dioxus App".to_string()));
 
         // During development we want the window to be on top so we can see it while we work
-        let always_on_top = dx_always_on_top().unwrap_or(true);
+        let always_on_top = dioxus_cli_config::always_on_top().unwrap_or(true);
 
         if cfg!(debug_assertions) {
             window = window.with_always_on_top(always_on_top);
@@ -577,27 +577,3 @@ impl Default for Config {
 //     file.write_all(icon.as_bytes()).unwrap();
 //     println!("({}, {})", icon.width(), icon.height())
 // }
-
-/// The window title `dx` passes down from the app's `Dioxus.toml`.
-///
-/// `dx` sets this at runtime during development and at compile time for release builds, so bundled
-/// apps keep the title when run without `dx`.
-fn dx_app_title() -> Option<String> {
-    #[cfg(debug_assertions)]
-    {
-        std::env::var("DIOXUS_APP_TITLE").ok()
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-        option_env!("DIOXUS_APP_TITLE").map(ToString::to_string)
-    }
-}
-
-/// Whether `dx` asked for the window to float on top of other windows, from its
-/// `--always-on-top` flag and settings.
-fn dx_always_on_top() -> Option<bool> {
-    std::env::var("DIOXUS_ALWAYS_ON_TOP")
-        .ok()
-        .and_then(|s| s.parse().ok())
-}

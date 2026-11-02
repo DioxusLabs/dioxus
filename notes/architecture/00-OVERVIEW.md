@@ -48,6 +48,7 @@ dioxus (umbrella crate)
 ├── CLI (dx command):
 │   ├── dioxus-cli (main binary)
 │   ├── dx-env (env vars dx sets for the app it launches)
+│   ├── dioxus-cli-config (Dioxus-specific settings on top of dx-env)
 │   └── dioxus-cli-opt (optimization passes)
 │
 ├── Hot Reload:

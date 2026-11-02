@@ -65,7 +65,7 @@ pub extern "C" fn start_app() {
                 //
                 // This is a slightly hacky way of being able to use std::env::var code in android apps without
                 // going through their custom java-based system.
-                let env_file = dx_env::android_session_cache_dir().join(".env");
+                let env_file = dioxus_cli_config::android_session_cache_dir().join(".env");
                 if let Ok(env_file) = std::fs::read_to_string(&env_file) {
                     for line in env_file.lines() {
                         if let Some((key, value)) = line.trim().split_once('=') {

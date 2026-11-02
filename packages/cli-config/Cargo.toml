@@ -6,7 +6,7 @@ authors = ["Jonathan Kelley", "Evan Almloff"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-description = "Deprecated: renamed to dx-env"
+description = "Dioxus-specific settings that dx passes to Dioxus apps, on top of dx-env"
 keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 
 [dependencies]

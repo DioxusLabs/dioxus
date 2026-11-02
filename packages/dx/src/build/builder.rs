@@ -25,9 +25,8 @@ use tokio::{
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use super::{
-    ALWAYS_ON_TOP_ENV, APP_TITLE_ENV, BuildContext, BuildId, BuildMode, HotpatchModuleCache,
-};
+use super::{BuildContext, BuildId, BuildMode, HotpatchModuleCache};
+use dioxus_cli_config::{ALWAYS_ON_TOP_ENV, APP_TITLE_ENV};
 
 /// The component of the serve engine that watches ongoing builds and manages their state, open handle,
 /// and progress.

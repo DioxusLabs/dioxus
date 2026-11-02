@@ -1,5 +1,5 @@
 # dioxus-cli-config
 
-This crate has been renamed to [`dx-env`](https://crates.io/crates/dx-env) and now only re-exports it. It will be removed in a future release.
+Dioxus-specific settings that `dx` passes to Dioxus apps at runtime, such as the window title and whether the window floats on top during development.
 
-`app_title` and `always_on_top` are Dioxus window settings rather than part of the `dx` environment contract, so they moved into the renderers that use them (`dioxus-desktop`, `dioxus-native` and `dioxus-liveview`). This crate keeps deprecated copies of them.
+The generic environment variable contract between `dx` and the app it launches (devserver address, server address, base path, build id, ...) lives in [`dx-env`](https://crates.io/crates/dx-env), which this crate re-exports.
