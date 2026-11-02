@@ -88,7 +88,7 @@ pub struct HotpatchModuleCache {
     /// On macOS, Mach-O nlist doesn't carry symbol sizes, so we compute them from
     /// adjacent symbol addresses in the `__thread_data` section. This lets us provide
     /// correctly-sized TLS init data in stubs instead of defaulting to pointer_width.
-    pub tls_init_sizes: HashMap<String, (u64, u64)>,
+    pub tls_init_sizes: HashMap<String, (Option<u64>, u64)>,
 }
 
 pub struct CachedSymbol {
@@ -306,44 +306,7 @@ impl HotpatchModuleCache {
                 // Extract TLS initialization data and section metadata.
                 // This is used to correctly initialize TLS symbols in the stub
                 // instead of writing bogus absolute addresses into .tdata.
-                let tls_section = obj
-                    .sections()
-                    .find(|s| matches!(s.name(), Ok(".tdata" | "__thread_data")));
-
-                let tls_init_data = tls_section
-                    .as_ref()
-                    .and_then(|s| s.data().ok())
-                    .unwrap_or(&[])
-                    .to_vec();
-
-                // Build TLS init size map for macOS. Mach-O nlist doesn't carry symbol
-                // sizes, so we compute them from adjacent symbols in __thread_data.
-                // LLVM/rustc names init data symbols as `FOO$tlv$init` in __thread_data.
-                let tls_data_addr = tls_section.as_ref().map(|s| s.address()).unwrap_or(0);
-                let tls_data_size = tls_section.as_ref().map(|s| s.size()).unwrap_or(0);
-                let tls_section_index = tls_section.as_ref().map(|s| s.index());
-
-                let mut tls_init_syms: Vec<(u64, String)> = Vec::new();
-                for sym in obj.symbols() {
-                    if let (Some(section_idx), Ok(sname)) = (sym.section_index(), sym.name()) {
-                        if Some(section_idx) == tls_section_index {
-                            let offset = sym.address().saturating_sub(tls_data_addr);
-                            tls_init_syms.push((offset, sname.to_string()));
-                        }
-                    }
-                }
-                tls_init_syms.sort_by_key(|(addr, _)| *addr);
-                tls_init_syms.dedup_by_key(|(addr, _)| *addr);
-
-                let mut tls_init_sizes: HashMap<String, (u64, u64)> = HashMap::new();
-                for (i, (offset, sname)) in tls_init_syms.iter().enumerate() {
-                    let size = if i + 1 < tls_init_syms.len() {
-                        tls_init_syms[i + 1].0 - offset
-                    } else {
-                        tls_data_size.saturating_sub(*offset)
-                    };
-                    tls_init_sizes.insert(sname.clone(), (*offset, size));
-                }
+                let (tls_init_data, tls_init_sizes) = tls_initializers(&obj);
 
                 HotpatchModuleCache {
                     symbol_table,
@@ -1208,26 +1171,25 @@ pub fn create_undefined_symbol_stub(
                         (offset, size)
                     } else if sym.size > 0 {
                         // ELF: sym.address is the TLS offset, sym.size is the data size
-                        (sym.address, sym.size)
+                        (Some(sym.address), sym.size)
                     } else if !cache.tls_init_sizes.is_empty() {
                         // macOS fallback: $tlv$init not found but map isn't empty (binary
                         // might be partially stripped). Use entire tdata as upper bound.
-                        (0, cache.tls_init_data.len() as u64)
+                        (Some(0), cache.tls_init_data.len() as u64)
                     } else {
                         // Last resort (ELF with size=0): use pointer width
-                        (sym.address, pointer_width)
+                        (Some(sym.address), pointer_width)
                     };
 
                 let align = size.min(pointer_width).next_power_of_two();
 
-                let start = tls_offset as usize;
-                let end = start + size as usize;
-                let init = if end <= cache.tls_init_data.len() {
-                    cache.tls_init_data[start..end].to_vec()
-                } else {
-                    // Beyond .tdata bounds (.tbss) or Mach-O fallback: zero-init
-                    vec![0u8; size as usize]
-                };
+                let init = tls_offset
+                    .and_then(|offset| {
+                        cache
+                            .tls_init_data
+                            .get(offset as usize..offset as usize + size as usize)
+                    })
+                    .map_or_else(|| vec![0u8; size as usize], |data| data.to_vec());
 
                 // Use add_symbol_data() so the object crate's Mach-O writer auto-creates
                 // __thread_vars TLV descriptors (via macho_add_thread_var). Without this,
@@ -1785,5 +1747,101 @@ fn main_sentinel(triple: &Triple) -> &'static str {
         }
 
         _ => "main",
+    }
+}
+
+fn tls_initializers(obj: &File<'_>) -> (Vec<u8>, HashMap<String, (Option<u64>, u64)>) {
+    let sections: Vec<_> = obj
+        .sections()
+        .filter(|section| {
+            matches!(
+                section.name(),
+                Ok(".tdata" | "__thread_data" | ".tbss" | "__thread_bss")
+            )
+        })
+        .collect();
+    let mut data = Vec::new();
+    let mut sizes = HashMap::new();
+    for section in sections {
+        let initialized = matches!(section.name(), Ok(".tdata" | "__thread_data"));
+        if initialized {
+            data = section.data().unwrap_or(&[]).to_vec();
+        }
+        let mut symbols: Vec<_> = obj
+            .symbols()
+            .filter_map(|symbol| {
+                (symbol.section_index() == Some(section.index()))
+                    .then(|| {
+                        symbol
+                            .name()
+                            .ok()
+                            .map(|name| (symbol.address() - section.address(), name.to_owned()))
+                    })
+                    .flatten()
+            })
+            .collect();
+        symbols.sort_by_key(|(offset, _)| *offset);
+        symbols.dedup_by_key(|(offset, _)| *offset);
+        for (index, (offset, name)) in symbols.iter().enumerate() {
+            let end = symbols
+                .get(index + 1)
+                .map_or(section.size(), |(offset, _)| *offset);
+            sizes.insert(name.clone(), (initialized.then_some(*offset), end - offset));
+        }
+    }
+    (data, sizes)
+}
+
+#[cfg(test)]
+mod tls_tests {
+    use super::*;
+
+    #[test]
+    fn macho_tls_initializers_keep_bss_zero_and_data_bytes() {
+        let mut object = object::write::Object::new(
+            object::BinaryFormat::MachO,
+            object::Architecture::Aarch64,
+            Endianness::Little,
+        );
+        let data_section = object.section_id(StandardSection::Tls);
+        let bss_section = object.section_id(StandardSection::UninitializedTls);
+        for (name, section, size, initialized) in [
+            ("initialized", data_section, 24, true),
+            ("owner", bss_section, 24, false),
+            ("next_owner", bss_section, 32, false),
+        ] {
+            let symbol = object.add_symbol(Symbol {
+                name: name.as_bytes().to_vec(),
+                value: 0,
+                size: 0,
+                scope: SymbolScope::Linkage,
+                kind: SymbolKind::Tls,
+                weak: false,
+                section: SymbolSection::Undefined,
+                flags: SymbolFlags::None,
+            });
+            if initialized {
+                object.add_symbol_data(symbol, section, &vec![0xa5; size], 8);
+            } else {
+                object.add_symbol_bss(symbol, section, size as u64, 8);
+            }
+        }
+        let bytes = object.write().unwrap();
+        let parsed = File::parse(bytes.as_slice()).unwrap();
+        let (data, sizes) = tls_initializers(&parsed);
+        for (name, expected) in [
+            ("initialized", vec![0xa5; 24]),
+            ("owner", vec![0; 24]),
+            ("next_owner", vec![0; 32]),
+        ] {
+            let (_, (offset, size)) = sizes
+                .iter()
+                .find(|(key, _)| key.trim_start_matches('_') == format!("{name}$tlv$init"))
+                .unwrap();
+            let actual = offset
+                .and_then(|offset| data.get(offset as usize..offset as usize + *size as usize))
+                .map_or_else(|| vec![0; *size as usize], |bytes| bytes.to_vec());
+            assert_eq!(actual, expected);
+        }
     }
 }
