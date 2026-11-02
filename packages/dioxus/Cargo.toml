@@ -23,7 +23,7 @@ dioxus-server = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack-macro = { workspace = true, optional = true }
 dioxus-asset-resolver = { workspace = true, optional = true }
-manganis = { workspace = true, features = ["dioxus"], optional = true }
+manganis = { workspace = true, optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
 subsecond = { workspace = true }
@@ -59,7 +59,7 @@ html = ["dioxus-core/html"]
 hooks = ["dioxus-core/hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
 mounted = ["dioxus-web?/mounted"]
-asset = ["dep:manganis", "dep:dioxus-asset-resolver"]
+asset = ["dep:manganis", "dep:dioxus-asset-resolver", "dioxus-core/manganis_08"]
 document = ["dioxus-web?/document", "dioxus-core/document", "dep:dioxus-history"]
 logger = ["dep:dioxus-logger"]
 cli-config = ["dep:dioxus-cli-config"]

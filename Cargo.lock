@@ -3103,10 +3103,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-base-types"
-version = "0.8.0-alpha.3"
-
-[[package]]
 name = "dioxus-cli"
 version = "0.8.0-alpha.3"
 dependencies = [
@@ -3137,7 +3133,6 @@ dependencies = [
  "ctrlc",
  "depinfo",
  "dioxus-autofmt",
- "dioxus-base-types",
  "dioxus-cli-config",
  "dioxus-cli-telemetry",
  "dioxus-component-manifest",
@@ -3395,7 +3390,6 @@ name = "dioxus-document"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-base-types",
  "dioxus-html",
  "dioxus-vdom",
  "dioxus-vdom-macro",
@@ -3615,10 +3609,9 @@ dependencies = [
  "async-trait",
  "bytes",
  "dioxus",
- "dioxus-base-types",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
- "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-vdom",
  "dioxus-vdom-macro",
  "dioxus-web",
@@ -3653,7 +3646,6 @@ dependencies = [
 name = "dioxus-interpreter-js"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-base-types",
  "dioxus-html",
  "dioxus-vdom",
  "js-sys",
@@ -3952,7 +3944,6 @@ dependencies = [
 name = "dioxus-rsx-hotreload"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-base-types",
  "dioxus-rsx",
  "dioxus-vdom",
  "dioxus-vdom-template",
@@ -4067,7 +4058,6 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "askama_escape",
  "dioxus",
- "dioxus-base-types",
  "dioxus-vdom",
  "rustc-hash 2.1.2",
 ]
@@ -4121,7 +4111,6 @@ dependencies = [
  "const_format",
  "criterion",
  "dioxus",
- "dioxus-base-types",
  "dioxus-const-vec",
  "dioxus-html",
  "dioxus-renderer-oracle",
@@ -4132,6 +4121,7 @@ dependencies = [
  "futures-util",
  "generational-box",
  "longest-increasing-subsequence",
+ "manganis-core",
  "pretty_assertions",
  "rand 0.9.4",
  "reqwest",
@@ -4196,7 +4186,6 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "ciborium",
  "dioxus",
- "dioxus-base-types",
  "dioxus-cli-config",
  "dioxus-devtools",
  "dioxus-document",
@@ -8863,7 +8852,6 @@ name = "manganis-core"
 version = "0.8.0-alpha.3"
 dependencies = [
  "const-serialize",
- "dioxus-base-types",
  "dioxus-cli-config",
  "manganis",
  "serde",

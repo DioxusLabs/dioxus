@@ -334,3 +334,26 @@ pub fn build_id() -> u64 {
 pub fn product_name() -> Option<String> {
     read_env_config!("DIOXUS_PRODUCT_NAME")
 }
+
+/// Check whether the app is running as a bundled app rather than through `cargo run`.
+///
+/// Returns true when the CLI launched the app (`DIOXUS_CLI_ENABLED` is set) or when
+/// `CARGO_MANIFEST_DIR` is unset or empty.
+pub fn is_bundled_app() -> bool {
+    static BUNDLED: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+        if std::env::var("DIOXUS_CLI_ENABLED").is_ok() {
+            return true;
+        }
+
+        // Generally only set by `cargo run`
+        if let Ok(path) = std::env::var("CARGO_MANIFEST_DIR")
+            && !path.is_empty()
+        {
+            return false;
+        }
+
+        true
+    });
+
+    *BUNDLED
+}
