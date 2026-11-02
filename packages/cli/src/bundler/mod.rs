@@ -6,7 +6,7 @@ mod updater;
 mod windows;
 
 use crate::PackageType;
-use crate::{BuildRequest, DebianSettings, MacOsSettings, WindowsSettings};
+use crate::{BuildRequest, DebianSettings, MacOsSettings, WindowsSettings, WindowsWixSettings};
 use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
@@ -428,6 +428,10 @@ impl<'a> BundleContext<'a> {
     /// Windows settings from config.
     pub(crate) fn windows(&self) -> WindowsSettings {
         self.build.config.bundle.windows.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn wix(&self) -> WindowsWixSettings {
+        self.build.config.windows.wix.clone().unwrap_or_default()
     }
 }
 

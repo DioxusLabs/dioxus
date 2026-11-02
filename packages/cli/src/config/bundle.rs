@@ -97,58 +97,6 @@ pub(crate) struct DebianSettings {
     pub post_remove_script: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
-pub(crate) struct WixSettings {
-    #[serde(default)]
-    pub(crate) language: Vec<(String, Option<PathBuf>)>,
-    #[serde(default)]
-    pub(crate) template: Option<PathBuf>,
-    #[serde(default)]
-    pub(crate) fragment_paths: Vec<PathBuf>,
-    #[serde(default)]
-    pub(crate) component_group_refs: Vec<String>,
-    #[serde(default)]
-    pub(crate) component_refs: Vec<String>,
-    #[serde(default)]
-    pub(crate) feature_group_refs: Vec<String>,
-    #[serde(default)]
-    pub(crate) feature_refs: Vec<String>,
-    #[serde(default)]
-    pub(crate) merge_refs: Vec<String>,
-    #[serde(default)]
-    pub(crate) skip_webview_install: bool,
-    #[serde(default)]
-    pub(crate) license: Option<PathBuf>,
-    #[serde(default)]
-    pub(crate) enable_elevated_update_task: bool,
-    #[serde(default)]
-    pub(crate) banner_path: Option<PathBuf>,
-    #[serde(default)]
-    pub(crate) dialog_image_path: Option<PathBuf>,
-    #[serde(default)]
-    pub(crate) fips_compliant: bool,
-    /// MSI installer version in the format `major.minor.patch.build` (build is optional).
-    ///
-    /// Because a valid version is required for MSI installer, it will be derived from the package version if this field is not set.
-    ///
-    /// The first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255.
-    /// The third and fourth fields have a maximum value of 65,535.
-    ///
-    /// See <https://learn.microsoft.com/en-us/windows/win32/msi/productversion> for more info.
-    #[serde(default)]
-    pub version: Option<String>,
-    /// A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**,
-    /// otherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.
-    ///
-    /// By default, this code is generated as a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace.
-    ///
-    /// It is recommended that you set this value in your Dioxus.toml to avoid accidental changes in your upgrade code
-    /// whenever you want to change your product name.
-    #[serde(default)]
-    #[schemars(with = "Option<String>")]
-    pub upgrade_code: Option<uuid::Uuid>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct MacOsSettings {
     #[serde(default)]
@@ -227,8 +175,6 @@ pub(crate) struct WindowsSettings {
     pub(crate) timestamp_url: Option<String>,
     #[serde(default)]
     pub(crate) tsp: bool,
-    #[serde(default)]
-    pub(crate) wix: Option<WixSettings>,
     #[serde(default)]
     pub(crate) icon_path: Option<PathBuf>,
     #[serde(default)]
