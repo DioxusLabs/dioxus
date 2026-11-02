@@ -19,4 +19,3 @@ quote = { workspace = true }
 syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
 tracing = { workspace = true }
 dioxus-vdom = { workspace = true }
-dioxus-base-types = { workspace = true }

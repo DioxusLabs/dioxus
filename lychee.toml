@@ -1,6 +1,6 @@
 # This is the configuration file for lychee, a link validator.
-# docs.rs/dioxus-vdom*, dioxus-base-types: not published yet (renamed from dioxus-core*); drop after the next release.
-exclude = ['file:///', 'https://github.com/DioxusLabs/dioxus/commit', 'freyaui.dev', '^https://docs\.rs/dioxus-(vdom|base-types)']
+# docs.rs/dioxus-vdom*: not published yet (renamed from dioxus-core*); drop after the next release.
+exclude = ['file:///', 'https://github.com/DioxusLabs/dioxus/commit', 'freyaui.dev', '^https://docs\.rs/dioxus-vdom']
 exclude_path = ['target']
 no_progress = false
 cache = true

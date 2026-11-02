@@ -157,13 +157,11 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
-        #[cfg(feature = "dioxus")]
         // If the asset is relative, we resolve the asset at the current directory
-        if !dioxus_base_types::is_bundled_app() {
+        if !dioxus_cli_config::is_bundled_app() {
             return PathBuf::from(self.bundled().absolute_source_path.as_str());
         }
 
-        #[cfg(feature = "dioxus")]
         let bundle_root = {
             let base_path = dioxus_cli_config::base_path();
             let base_path = base_path
@@ -175,8 +173,6 @@ impl Asset {
                 .unwrap_or_default();
             PathBuf::from(format!("{base_path}/assets/"))
         };
-        #[cfg(not(feature = "dioxus"))]
-        let bundle_root = PathBuf::from("/assets/");
 
         // Otherwise presumably we're bundled and we can use the bundled path
         bundle_root.join(PathBuf::from(
@@ -199,12 +195,5 @@ impl From<Asset> for Option<String> {
 impl std::fmt::Display for Asset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.resolve().display())
-    }
-}
-
-#[cfg(feature = "dioxus")]
-impl dioxus_base_types::DioxusFormattable for Asset {
-    fn format(&self) -> std::borrow::Cow<'static, str> {
-        std::borrow::Cow::Owned(self.to_string())
     }
 }

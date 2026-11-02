@@ -7,7 +7,7 @@
 //! by hot reload (rather than being silently dropped) and that the parent template's dynamic-node
 //! indices stay aligned with the boundaries.
 
-use dioxus_base_types::HotReloadingContext;
+use dioxus_rsx::HotReloadingContext;
 use dioxus_rsx::{BodyNode, CallBody};
 use dioxus_rsx_hotreload::HotReloadResult;
 use dioxus_vdom::internal::{HotReloadDynamicNode, HotReloadedTemplate};

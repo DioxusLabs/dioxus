@@ -28,7 +28,9 @@ pub mod elements;
 pub use elements::HtmlCtx;
 #[cfg(feature = "html-to-rsx")]
 pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
+mod bubbles;
 pub mod events;
+pub use bubbles::event_bubbles;
 pub(crate) mod file_data;
 pub use file_data::*;
 mod attribute_groups;
