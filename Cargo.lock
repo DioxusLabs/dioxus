@@ -3611,7 +3611,7 @@ dependencies = [
  "dioxus",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
- "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-vdom",
  "dioxus-vdom-macro",
  "dioxus-web",

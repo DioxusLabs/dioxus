@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use dioxus_rsx::CallBody;
-use dioxus_rsx::HotReloadingContext;
+use dioxus_rsx_hotreload::HotReloadingContext;
 use dioxus_rsx_hotreload::{self, ChangedRsx, HotReloadResult, diff_rsx};
 use dioxus_vdom::{
     Template, VNode,
