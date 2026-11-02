@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 
 [dependencies]
 dioxus-signals = { workspace = true }
-dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-vdom = { workspace = true, features = ["serialize"] }
 dioxus-devtools-types = { workspace = true }
 dioxus-cli-config = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

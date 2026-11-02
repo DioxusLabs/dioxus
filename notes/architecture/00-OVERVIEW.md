@@ -21,7 +21,7 @@ This directory contains comprehensive architecture documentation for the Dioxus 
 
 ```
 dioxus (umbrella crate)
-├── dioxus-core (VirtualDOM, runtime, scheduler)
+├── dioxus-vdom (VirtualDOM, runtime, scheduler)
 │   └── generational-box (Copy semantics for references)
 ├── dioxus-rsx (macro parsing)
 │   └── dioxus-autofmt (code formatting)

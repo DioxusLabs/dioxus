@@ -11,7 +11,7 @@ homepage = "https://dioxuslabs.com"
 rust-version = "1.85.0"
 
 [dependencies]
-dioxus-core = { workspace = true }
+dioxus-vdom = { workspace = true }
 pretty_assertions = { workspace = true }
 
 [dev-dependencies]

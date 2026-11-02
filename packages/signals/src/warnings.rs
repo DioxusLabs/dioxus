@@ -9,7 +9,7 @@ pub fn copy_value_hoisted<T: 'static, S: generational_box::Storage<T> + 'static>
     caller: &'static std::panic::Location<'static>,
 ) {
     let origin_scope = value.origin_scope;
-    let Some(rt) = dioxus_core::Runtime::try_current() else {
+    let Some(rt) = dioxus_vdom::Runtime::try_current() else {
         return;
     };
 

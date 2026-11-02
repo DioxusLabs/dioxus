@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 
 [dependencies]
-dioxus-core = { workspace = true }
+dioxus-vdom = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

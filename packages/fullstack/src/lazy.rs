@@ -1,6 +1,6 @@
 #![allow(clippy::needless_return)]
 
-use dioxus_core::CapturedError;
+use dioxus_vdom::CapturedError;
 use std::{hint::black_box, prelude::rust_2024::Future, sync::atomic::AtomicBool};
 
 /// `Lazy` is a thread-safe, lazily-initialized global variable.

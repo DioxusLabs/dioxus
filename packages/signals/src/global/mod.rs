@@ -1,4 +1,4 @@
-use dioxus_core::{Runtime, ScopeId, Subscribers};
+use dioxus_vdom::{Runtime, ScopeId, Subscribers};
 use generational_box::BorrowResult;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, panic::Location, rc::Rc};
 
@@ -198,7 +198,7 @@ where
         }
         // Otherwise, create it
         // Constructors are always run in the root scope
-        let signal = dioxus_core::Runtime::current().in_scope(ScopeId::ROOT, || {
+        let signal = dioxus_vdom::Runtime::current().in_scope(ScopeId::ROOT, || {
             T::initialize_from_function(self.constructor)
         });
         context

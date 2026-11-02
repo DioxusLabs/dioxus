@@ -1,4 +1,4 @@
-use dioxus_core::Event;
+use dioxus_vdom::Event;
 
 use crate::data_transfer::{DataTransfer, HasDataTransferData};
 use crate::file_data::{FileData, HasFileData};

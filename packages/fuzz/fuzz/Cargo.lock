@@ -247,8 +247,8 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-config-macro",
  "dioxus-config-macros",
- "dioxus-core",
- "dioxus-core-macro",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-history",
@@ -298,15 +298,15 @@ name = "dioxus-const-vec"
 version = "0.8.0-alpha.0"
 
 [[package]]
-name = "dioxus-core"
+name = "dioxus-vdom"
 version = "0.8.0-alpha.0"
 dependencies = [
  "anyhow",
  "const_format",
  "dioxus-const-vec",
- "dioxus-core-macro",
- "dioxus-core-template",
- "dioxus-core-types",
+ "dioxus-vdom-macro",
+ "dioxus-vdom-template",
+ "dioxus-base-types",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -322,7 +322,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-core-macro"
+name = "dioxus-vdom-macro"
 version = "0.8.0-alpha.0"
 dependencies = [
  "convert_case",
@@ -333,7 +333,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-core-template"
+name = "dioxus-vdom-template"
 version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus-const-vec",
@@ -342,7 +342,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-core-types"
+name = "dioxus-base-types"
 version = "0.8.0-alpha.0"
 
 [[package]]
@@ -350,7 +350,7 @@ name = "dioxus-devtools"
 version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus-cli-config",
- "dioxus-core",
+ "dioxus-vdom",
  "dioxus-devtools-types",
  "dioxus-signals",
  "serde",
@@ -365,7 +365,7 @@ dependencies = [
 name = "dioxus-devtools-types"
 version = "0.8.0-alpha.0"
 dependencies = [
- "dioxus-core",
+ "dioxus-vdom",
  "serde",
  "subsecond-types",
 ]
@@ -374,9 +374,9 @@ dependencies = [
 name = "dioxus-document"
 version = "0.8.0-alpha.0"
 dependencies = [
- "dioxus-core",
- "dioxus-core-macro",
- "dioxus-core-types",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
+ "dioxus-base-types",
  "dioxus-html",
  "futures-channel",
  "futures-util",
@@ -399,7 +399,7 @@ dependencies = [
 name = "dioxus-history"
 version = "0.8.0-alpha.0"
 dependencies = [
- "dioxus-core",
+ "dioxus-vdom",
  "tracing",
 ]
 
@@ -407,7 +407,7 @@ dependencies = [
 name = "dioxus-hooks"
 version = "0.8.0-alpha.0"
 dependencies = [
- "dioxus-core",
+ "dioxus-vdom",
  "dioxus-signals",
  "futures-channel",
  "futures-util",
@@ -423,9 +423,9 @@ version = "0.8.0-alpha.0"
 dependencies = [
  "async-trait",
  "bytes",
- "dioxus-core",
- "dioxus-core-macro",
- "dioxus-core-types",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
+ "dioxus-base-types",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
  "enumset",
@@ -477,7 +477,7 @@ dependencies = [
 name = "dioxus-renderer-oracle"
 version = "0.8.0-alpha.0"
 dependencies = [
- "dioxus-core",
+ "dioxus-vdom",
  "pretty_assertions",
 ]
 
@@ -485,7 +485,7 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.8.0-alpha.0"
 dependencies = [
- "dioxus-core-template",
+ "dioxus-vdom-template",
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
@@ -497,7 +497,7 @@ dependencies = [
 name = "dioxus-signals"
 version = "0.8.0-alpha.0"
 dependencies = [
- "dioxus-core",
+ "dioxus-vdom",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -512,8 +512,8 @@ name = "dioxus-ssr"
 version = "0.8.0-alpha.0"
 dependencies = [
  "askama_escape",
- "dioxus-core",
- "dioxus-core-types",
+ "dioxus-vdom",
+ "dioxus-base-types",
  "rustc-hash 2.1.2",
 ]
 
@@ -521,7 +521,7 @@ dependencies = [
 name = "dioxus-stores"
 version = "0.8.0-alpha.0"
 dependencies = [
- "dioxus-core",
+ "dioxus-vdom",
  "dioxus-signals",
  "dioxus-stores-macro",
  "generational-box",
@@ -542,8 +542,8 @@ name = "dioxus-vdom-fuzz"
 version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus",
- "dioxus-core",
- "dioxus-core-template",
+ "dioxus-vdom",
+ "dioxus-vdom-template",
  "dioxus-renderer-oracle",
  "dioxus-ssr",
  "mutatis",
@@ -556,8 +556,8 @@ name = "dioxus-web"
 version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus-cli-config",
- "dioxus-core",
- "dioxus-core-types",
+ "dioxus-vdom",
+ "dioxus-base-types",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-history",
@@ -986,7 +986,7 @@ version = "0.8.0-alpha.0"
 dependencies = [
  "const-serialize",
  "dioxus-cli-config",
- "dioxus-core-types",
+ "dioxus-base-types",
  "serde",
  "winnow 0.7.15",
 ]

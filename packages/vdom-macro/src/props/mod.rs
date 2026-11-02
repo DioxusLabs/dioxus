@@ -1,0 +1,1932 @@
+//! This code mostly comes from idanarye/rust-typed-builder
+//!
+//! However, it has been adopted to fit the Dioxus Props builder pattern.
+//!
+//! For Dioxus, we make a few changes:
+//! - [x] Automatically implement [`Into<Option>`] on the setters (IE the strip setter option)
+//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with [`Option<T>`])
+
+use proc_macro2::TokenStream;
+
+use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
+use syn::{PathArguments, parse::Error};
+
+use quote::quote;
+use syn::{GenericArgument, Ident, PathSegment, Type, parse_quote};
+
+pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
+    let data = match &ast.data {
+        syn::Data::Struct(data) => match &data.fields {
+            syn::Fields::Named(fields) => {
+                let struct_info = struct_info::StructInfo::new(ast, fields.named.iter())?;
+                let builder_creation = struct_info.builder_creation_impl()?;
+                let conversion_helper = struct_info.conversion_helper_impl()?;
+                let fields = struct_info
+                    .included_fields()
+                    .map(|f| struct_info.field_impl(f))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let extends = struct_info
+                    .extend_fields()
+                    .map(|f| struct_info.extends_impl(f))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let fields = quote!(#(#fields)*).into_iter();
+                let required_fields = struct_info
+                    .included_fields()
+                    .filter(|f| {
+                        f.builder_attr.default.is_none() && f.builder_attr.extends.is_empty()
+                    })
+                    .map(|f| struct_info.required_field_impl(f))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let build_method = struct_info.build_method_impl();
+
+                quote! {
+                    #builder_creation
+                    #conversion_helper
+                    #( #fields )*
+                    #( #extends )*
+                    #( #required_fields )*
+                    #build_method
+                }
+            }
+            syn::Fields::Unnamed(_) => {
+                return Err(Error::new(
+                    ast.span(),
+                    "Props is not supported for tuple structs",
+                ));
+            }
+            syn::Fields::Unit => {
+                return Err(Error::new(
+                    ast.span(),
+                    "Props is not supported for unit structs",
+                ));
+            }
+        },
+        syn::Data::Enum(_) => {
+            return Err(Error::new(ast.span(), "Props is not supported for enums"));
+        }
+        syn::Data::Union(_) => {
+            return Err(Error::new(ast.span(), "Props is not supported for unions"));
+        }
+    };
+    Ok(data)
+}
+
+mod util {
+    use quote::ToTokens;
+
+    pub fn path_to_single_string(path: &syn::Path) -> Option<String> {
+        if path.leading_colon.is_some() {
+            return None;
+        }
+        let mut it = path.segments.iter();
+        let segment = it.next()?;
+        if it.next().is_some() {
+            // Multipart path
+            return None;
+        }
+        if segment.arguments != syn::PathArguments::None {
+            return None;
+        }
+        Some(segment.ident.to_string())
+    }
+
+    pub fn expr_to_single_string(expr: &syn::Expr) -> Option<String> {
+        if let syn::Expr::Path(path) = expr {
+            path_to_single_string(&path.path)
+        } else {
+            None
+        }
+    }
+
+    pub fn ident_to_type(ident: syn::Ident) -> syn::Type {
+        let mut path = syn::Path {
+            leading_colon: None,
+            segments: Default::default(),
+        };
+        path.segments.push(syn::PathSegment {
+            ident,
+            arguments: Default::default(),
+        });
+        syn::Type::Path(syn::TypePath { qself: None, path })
+    }
+
+    pub fn empty_type() -> syn::Type {
+        syn::TypeTuple {
+            paren_token: Default::default(),
+            elems: Default::default(),
+        }
+        .into()
+    }
+
+    pub fn type_tuple(elems: impl Iterator<Item = syn::Type>) -> syn::TypeTuple {
+        let mut result = syn::TypeTuple {
+            paren_token: Default::default(),
+            elems: elems.collect(),
+        };
+        if !result.elems.empty_or_trailing() {
+            result.elems.push_punct(Default::default());
+        }
+        result
+    }
+
+    pub fn empty_type_tuple() -> syn::TypeTuple {
+        syn::TypeTuple {
+            paren_token: Default::default(),
+            elems: Default::default(),
+        }
+    }
+
+    pub fn make_punctuated_single<T, P: Default>(value: T) -> syn::punctuated::Punctuated<T, P> {
+        let mut punctuated = syn::punctuated::Punctuated::new();
+        punctuated.push(value);
+        punctuated
+    }
+
+    pub fn modify_types_generics_hack<F>(
+        ty_generics: &syn::TypeGenerics,
+        mut mutator: F,
+    ) -> syn::AngleBracketedGenericArguments
+    where
+        F: FnMut(&mut syn::punctuated::Punctuated<syn::GenericArgument, syn::token::Comma>),
+    {
+        let mut abga: syn::AngleBracketedGenericArguments =
+            syn::parse(ty_generics.clone().into_token_stream().into()).unwrap_or_else(|_| {
+                syn::AngleBracketedGenericArguments {
+                    colon2_token: None,
+                    lt_token: Default::default(),
+                    args: Default::default(),
+                    gt_token: Default::default(),
+                }
+            });
+        mutator(&mut abga.args);
+        abga
+    }
+
+    pub fn strip_raw_ident_prefix(mut name: String) -> String {
+        if name.starts_with("r#") {
+            name.replace_range(0..2, "");
+        }
+        name
+    }
+}
+
+mod field_info {
+    use crate::props::{looks_like_store_type, looks_like_write_type, type_from_inside_option};
+    use proc_macro2::TokenStream;
+    use quote::{format_ident, quote};
+    use syn::spanned::Spanned;
+    use syn::{Expr, Path, parse_quote};
+    use syn::{parse::Error, punctuated::Punctuated};
+
+    use super::util::{
+        expr_to_single_string, ident_to_type, path_to_single_string, strip_raw_ident_prefix,
+    };
+
+    #[derive(Debug)]
+    pub struct FieldInfo<'a> {
+        pub ordinal: usize,
+        pub name: &'a syn::Ident,
+        pub generic_ident: syn::Ident,
+        pub ty: &'a syn::Type,
+        pub builder_attr: FieldBuilderAttr,
+    }
+
+    impl FieldInfo<'_> {
+        pub fn new(
+            ordinal: usize,
+            field: &syn::Field,
+            field_defaults: FieldBuilderAttr,
+        ) -> Result<FieldInfo<'_>, Error> {
+            if let Some(ref name) = field.ident {
+                let mut builder_attr = field_defaults.with(&field.attrs)?;
+
+                let strip_option_auto = builder_attr.strip_option
+                    || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
+
+                // children field is automatically defaulted to an empty VNode unless it is marked as optional (in which case it defaults to None)
+                if name == "children" && !strip_option_auto {
+                    builder_attr.default =
+                        Some(syn::parse(quote!(dioxus_vdom::VNode::empty()).into()).unwrap());
+                }
+
+                // String fields automatically use impl Display
+                if field.ty == parse_quote!(::std::string::String)
+                    || field.ty == parse_quote!(std::string::String)
+                    || field.ty == parse_quote!(string::String)
+                    || field.ty == parse_quote!(String)
+                {
+                    builder_attr.from_displayable = true;
+                    // ToString is both more general and provides a more useful error message than From<String>. If the user tries to use `#[into]`, use ToString instead.
+                    if builder_attr.auto_into {
+                        builder_attr.auto_to_string = true;
+                    }
+                    builder_attr.auto_into = false;
+                }
+
+                // Write and Store fields automatically use impl Into
+                if looks_like_write_type(&field.ty) || looks_like_store_type(&field.ty) {
+                    builder_attr.auto_into = true;
+                }
+
+                // If this is a child field or extends, default to Default::default() if a default isn't set
+                if !builder_attr.extends.is_empty() {
+                    builder_attr.default.get_or_insert_with(|| {
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap()
+                    });
+                }
+
+                // auto detect optional
+                if !builder_attr.strip_option && strip_option_auto {
+                    builder_attr.strip_option = true;
+                    // only change the default if it isn't manually set above
+                    builder_attr.default.get_or_insert_with(|| {
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap()
+                    });
+                }
+
+                Ok(FieldInfo {
+                    ordinal,
+                    name,
+                    generic_ident: syn::Ident::new(
+                        &format!("__{}", strip_raw_ident_prefix(name.to_string())),
+                        name.span(),
+                    ),
+                    ty: &field.ty,
+                    builder_attr,
+                })
+            } else {
+                Err(Error::new(field.span(), "Nameless field in struct"))
+            }
+        }
+
+        pub fn generic_ty_param(&self) -> syn::GenericParam {
+            syn::GenericParam::Type(self.generic_ident.clone().into())
+        }
+
+        pub fn type_ident(&self) -> syn::Type {
+            ident_to_type(self.generic_ident.clone())
+        }
+
+        pub fn tuplized_type_ty_param(&self) -> syn::Type {
+            let mut types = syn::punctuated::Punctuated::default();
+            types.push(self.ty.clone());
+            types.push_punct(Default::default());
+            syn::TypeTuple {
+                paren_token: Default::default(),
+                elems: types,
+            }
+            .into()
+        }
+
+        pub fn extends_vec_ident(&self) -> Option<syn::Ident> {
+            (!self.builder_attr.extends.is_empty()).then(|| {
+                let ident = &self.name;
+                format_ident!("__{ident}_attributes")
+            })
+        }
+    }
+
+    #[derive(Debug, Default, Clone)]
+    pub struct FieldBuilderAttr {
+        pub default: Option<syn::Expr>,
+        pub docs: Vec<syn::Attribute>,
+        pub skip: bool,
+        pub auto_into: bool,
+        pub auto_to_string: bool,
+        pub from_displayable: bool,
+        pub strip_option: bool,
+        pub ignore_option: bool,
+        pub extends: Vec<Path>,
+    }
+
+    impl FieldBuilderAttr {
+        pub fn with(mut self, attrs: &[syn::Attribute]) -> Result<Self, Error> {
+            let mut skip_tokens = None;
+            for attr in attrs {
+                if attr.path().is_ident("doc") {
+                    self.docs.push(attr.clone());
+                    continue;
+                }
+
+                if path_to_single_string(attr.path()).as_deref() != Some("props") {
+                    continue;
+                }
+
+                match &attr.meta {
+                    syn::Meta::List(list) => {
+                        if list.tokens.is_empty() {
+                            continue;
+                        }
+                    }
+                    _ => {
+                        continue;
+                    }
+                }
+
+                let as_expr = attr.parse_args_with(
+                    Punctuated::<Expr, syn::Token![,]>::parse_separated_nonempty,
+                )?;
+
+                for expr in as_expr.into_iter() {
+                    self.apply_meta(expr)?;
+                }
+
+                // Stash its span for later (we don’t yet know if it’ll be an error)
+                if self.skip && skip_tokens.is_none() {
+                    skip_tokens = Some(attr.meta.clone());
+                }
+            }
+
+            if self.skip && self.default.is_none() {
+                return Err(Error::new_spanned(
+                    skip_tokens.unwrap(),
+                    "#[props(skip)] must be accompanied by default or default_code",
+                ));
+            }
+
+            Ok(self)
+        }
+
+        pub fn apply_meta(&mut self, expr: syn::Expr) -> Result<(), Error> {
+            match expr {
+                // #[props(default = "...")]
+                syn::Expr::Assign(assign) => {
+                    let name = expr_to_single_string(&assign.left)
+                        .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
+                    match name.as_str() {
+                        "extends" => {
+                            if let syn::Expr::Path(path) = *assign.right {
+                                self.extends.push(path.path);
+                                Ok(())
+                            } else {
+                                Err(Error::new_spanned(
+                                    assign.right,
+                                    "Expected simple identifier",
+                                ))
+                            }
+                        }
+                        "default" => {
+                            self.default = Some(*assign.right);
+                            Ok(())
+                        }
+                        "default_code" => {
+                            if let syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Str(code),
+                                ..
+                            }) = *assign.right
+                            {
+                                use std::str::FromStr;
+                                let tokenized_code = TokenStream::from_str(&code.value())?;
+                                self.default = Some(
+                                    syn::parse(tokenized_code.into())
+                                        .map_err(|e| Error::new_spanned(code, format!("{e}")))?,
+                                );
+                            } else {
+                                return Err(Error::new_spanned(assign.right, "Expected string"));
+                            }
+                            Ok(())
+                        }
+                        _ => Err(Error::new_spanned(
+                            &assign,
+                            format!("Unknown parameter {name:?}"),
+                        )),
+                    }
+                }
+
+                // #[props(default)]
+                syn::Expr::Path(path) => {
+                    let name = path_to_single_string(&path.path)
+                        .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
+                    match name.as_str() {
+                        "default" => {
+                            self.default = Some(
+                                syn::parse(quote!(::core::default::Default::default()).into())
+                                    .unwrap(),
+                            );
+                            Ok(())
+                        }
+
+                        "optional" => {
+                            self.default = Some(
+                                syn::parse(quote!(::core::default::Default::default()).into())
+                                    .unwrap(),
+                            );
+                            self.strip_option = true;
+                            Ok(())
+                        }
+
+                        "extend" => {
+                            self.extends.push(path.path);
+                            Ok(())
+                        }
+
+                        _ => {
+                            macro_rules! handle_fields {
+                                ( $( $flag:expr, $field:ident, $already:expr; )* ) => {
+                                    match name.as_str() {
+                                        $(
+                                            $flag => {
+                                                if self.$field {
+                                                    Err(Error::new(path.span(), concat!("Illegal setting - field is already ", $already)))
+                                                } else {
+                                                    self.$field = true;
+                                                    Ok(())
+                                                }
+                                            }
+                                        )*
+                                        _ => Err(Error::new_spanned(
+                                                &path,
+                                                format!("Unknown setter parameter {:?}", name),
+                                        ))
+                                    }
+                                }
+                            }
+                            handle_fields!(
+                                "skip", skip, "skipped";
+                                "into", auto_into, "calling into() on the argument";
+                                "displayable", from_displayable, "calling to_string() on the argument";
+                                "strip_option", strip_option, "putting the argument in Some(...)";
+                            )
+                        }
+                    }
+                }
+
+                syn::Expr::Unary(syn::ExprUnary {
+                    op: syn::UnOp::Not(_),
+                    expr,
+                    ..
+                }) => {
+                    if let syn::Expr::Path(path) = *expr {
+                        let name = path_to_single_string(&path.path)
+                            .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
+                        match name.as_str() {
+                            "default" => {
+                                self.default = None;
+                                Ok(())
+                            }
+                            "skip" => {
+                                self.skip = false;
+                                Ok(())
+                            }
+                            "auto_into" => {
+                                self.auto_into = false;
+                                Ok(())
+                            }
+                            "displayable" => {
+                                self.from_displayable = false;
+                                Ok(())
+                            }
+                            "optional" => {
+                                self.strip_option = false;
+                                self.ignore_option = true;
+                                Ok(())
+                            }
+                            _ => Err(Error::new_spanned(path, "Unknown setting".to_owned())),
+                        }
+                    } else {
+                        Err(Error::new_spanned(
+                            expr,
+                            "Expected simple identifier".to_owned(),
+                        ))
+                    }
+                }
+                _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
+            }
+        }
+    }
+}
+
+fn type_from_inside_option(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+
+    if type_path.qself.is_some() {
+        return None;
+    }
+
+    let path = &type_path.path;
+    let seg = path.segments.last()?;
+
+    // If the segment is a supported optional type, provide the inner type.
+    // Return the inner type if the pattern is `Option<T>` or `ReadSignal<Option<T>>``
+    if seg.ident == "ReadSignal" || seg.ident == "ReadOnlySignal" {
+        // Get the inner type. E.g. the `u16` in `ReadSignal<u16>` or `Option` in `ReadSignal<Option<bool>>`
+        let inner_type = extract_inner_type_from_segment(seg)?;
+        let Type::Path(inner_path) = inner_type else {
+            // If it isn't a path, the inner type isn't option
+            return None;
+        };
+
+        // If we're entering an `Option`, we must get the innermost type
+        let inner_seg = inner_path.path.segments.last()?;
+        if inner_seg.ident == "Option" {
+            // Get the innermost type.
+            let innermost_type = extract_inner_type_from_segment(inner_seg)?;
+            return Some(innermost_type);
+        }
+    } else if seg.ident == "Option" {
+        // Grab the inner time. E.g. Option<u16>
+        let inner_type = extract_inner_type_from_segment(seg)?;
+        return Some(inner_type);
+    }
+
+    None
+}
+
+// Extract the inner type from a path segment.
+fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&Type> {
+    let PathArguments::AngleBracketed(generic_args) = &segment.arguments else {
+        return None;
+    };
+
+    let GenericArgument::Type(final_type) = generic_args.args.first()? else {
+        return None;
+    };
+
+    Some(final_type)
+}
+
+mod struct_info {
+    use convert_case::{Case, Casing};
+    use proc_macro2::TokenStream;
+    use quote::{ToTokens, quote};
+    use syn::parse::Error;
+    use syn::punctuated::Punctuated;
+    use syn::spanned::Spanned;
+    use syn::{Expr, Ident, parse_quote};
+
+    use crate::props::strip_option;
+
+    use super::field_info::{FieldBuilderAttr, FieldInfo};
+    use super::util::{
+        empty_type, empty_type_tuple, expr_to_single_string, make_punctuated_single,
+        modify_types_generics_hack, path_to_single_string, strip_raw_ident_prefix, type_tuple,
+    };
+    use super::{child_owned_type, looks_like_callback_type, looks_like_signal_type};
+
+    #[derive(Debug)]
+    pub struct StructInfo<'a> {
+        pub vis: &'a syn::Visibility,
+        pub name: &'a syn::Ident,
+        pub generics: &'a syn::Generics,
+        pub fields: Vec<FieldInfo<'a>>,
+
+        pub builder_attr: TypeBuilderAttr,
+        pub builder_name: syn::Ident,
+        pub conversion_helper_trait_name: syn::Ident,
+    }
+
+    impl<'a> StructInfo<'a> {
+        pub fn included_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
+            self.fields.iter().filter(|f| !f.builder_attr.skip)
+        }
+
+        pub fn extend_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
+            self.fields
+                .iter()
+                .filter(|f| !f.builder_attr.extends.is_empty())
+        }
+
+        pub fn new(
+            ast: &'a syn::DeriveInput,
+            fields: impl Iterator<Item = &'a syn::Field>,
+        ) -> Result<StructInfo<'a>, Error> {
+            let builder_attr = TypeBuilderAttr::new(&ast.attrs)?;
+            let builder_name = strip_raw_ident_prefix(format!("{}Builder", ast.ident));
+            Ok(StructInfo {
+                vis: &ast.vis,
+                name: &ast.ident,
+                generics: &ast.generics,
+                fields: fields
+                    .enumerate()
+                    .map(|(i, f)| FieldInfo::new(i, f, builder_attr.field_defaults.clone()))
+                    .collect::<Result<_, _>>()?,
+                builder_attr,
+                builder_name: syn::Ident::new(&builder_name, ast.ident.span()),
+                conversion_helper_trait_name: syn::Ident::new(
+                    &format!("{builder_name}_Optional"),
+                    ast.ident.span(),
+                ),
+            })
+        }
+
+        fn modify_generics<F: FnMut(&mut syn::Generics)>(&self, mut mutator: F) -> syn::Generics {
+            let mut generics = self.generics.clone();
+            mutator(&mut generics);
+            generics
+        }
+
+        fn with_component_builder_params(&self, mut generics: syn::Generics) -> syn::Generics {
+            Self::insert_component_builder_params(&mut generics);
+            generics
+        }
+
+        fn insert_component_builder_params(generics: &mut syn::Generics) -> usize {
+            let index = generics
+                .params
+                .iter()
+                .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
+                .count();
+            generics.params.insert(index, parse_quote!(__RenderFn));
+            generics
+                .params
+                .insert(index + 1, parse_quote!(__ComponentMarker));
+            index + 2
+        }
+
+        fn insert_component_builder_type_args(
+            args: &mut Punctuated<syn::GenericArgument, syn::token::Comma>,
+            fields: syn::GenericArgument,
+            render_fn: syn::GenericArgument,
+            marker: syn::GenericArgument,
+        ) {
+            let index = args
+                .iter()
+                .filter(|arg| matches!(arg, syn::GenericArgument::Lifetime(_)))
+                .count();
+            args.insert(index, fields);
+            args.insert(index, marker);
+            args.insert(index, render_fn);
+        }
+
+        fn insert_component_builder_vec_args(
+            args: &mut Vec<syn::GenericArgument>,
+            fields: syn::GenericArgument,
+        ) {
+            let index = args
+                .iter()
+                .filter(|arg| matches!(arg, syn::GenericArgument::Lifetime(_)))
+                .count();
+            args.insert(index, fields);
+            args.insert(index, parse_quote!(__ComponentMarker));
+            args.insert(index, parse_quote!(__RenderFn));
+        }
+
+        fn component_builder_render_generics(&self, props_ty: TokenStream) -> syn::Generics {
+            let mut generics = self.with_component_builder_params(self.generics.clone());
+            let where_clause = generics.make_where_clause();
+            where_clause.predicates.push(
+                parse_quote!(__RenderFn: dioxus_vdom::ComponentFunction<#props_ty, __ComponentMarker>),
+            );
+            where_clause
+                .predicates
+                .push(parse_quote!(__ComponentMarker: 'static));
+            generics
+        }
+
+        /// Checks if the props have any fields that should be owned by the child. For example, when converting T to `ReadSignal<T>`, the new signal should be owned by the child
+        fn has_child_owned_fields(&self) -> bool {
+            self.fields.iter().any(|f| child_owned_type(f.ty))
+        }
+
+        fn memoize_impl(&self) -> Result<TokenStream, Error> {
+            // First check if there are any ReadSignal fields, if there are not, we can just use the partialEq impl
+            let signal_fields: Vec<_> = self
+                .included_fields()
+                .filter(|f| looks_like_signal_type(f.ty))
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name)
+                })
+                .collect();
+
+            let move_signal_fields = quote! {
+                trait NonPartialEq: Sized {
+                    fn compare(&self, other: &Self) -> bool;
+                }
+
+                impl<T> NonPartialEq for &&T {
+                    fn compare(&self, other: &Self) -> bool {
+                        false
+                    }
+                }
+
+                trait CanPartialEq: PartialEq {
+                    fn compare(&self, other: &Self) -> bool;
+                }
+
+                impl<T: PartialEq> CanPartialEq for T {
+                    fn compare(&self, other: &Self) -> bool {
+                        self == other
+                    }
+                }
+
+                // If they are equal, we don't need to rerun the component we can just update the existing signals
+                #(
+                    // Try to memo the signal
+                    let field_eq = match (#signal_fields.try_peek(), new.#signal_fields.try_peek()) {
+                        (Ok(old_ref), Ok(new_ref)) => {
+                            let old_value: &_ = &*old_ref;
+                            let new_value: &_ = &*new_ref;
+                            (&old_value).compare(&&new_value)
+                        }
+                        _ => false,
+                    };
+                    // Make the old fields point to the new fields
+                    #signal_fields.point_to(new.#signal_fields).unwrap();
+                    if !field_eq {
+                        // If the fields are not equal, mark the signal as dirty to rerun any subscribers
+                        (#signal_fields).mark_dirty();
+                    }
+                    // Move the old value back
+                    self.#signal_fields = #signal_fields;
+                )*
+            };
+
+            let event_handlers_fields: Vec<_> = self
+                .included_fields()
+                .filter(|f| looks_like_callback_type(f.ty))
+                .collect();
+
+            let regular_fields: Vec<_> = self
+                .included_fields()
+                .filter(|f| !looks_like_signal_type(f.ty) && !looks_like_callback_type(f.ty))
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name)
+                })
+                .collect();
+
+            let move_event_handlers: TokenStream = event_handlers_fields.iter().map(|field| {
+                // If this is an optional event handler, we need to check if it's None before we try to update it
+                let optional = strip_option(field.ty).is_some();
+                let name = field.name;
+                if optional {
+                    quote! {
+                        // If both event handler are Some, update them in place
+                        if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
+                            old_handler.__point_to(new_handler);
+                        }
+                        // Otherwise just move the new handler into self
+                        else {
+                            self.#name = new.#name;
+                        }
+                    }
+                } else {
+                    quote! {
+                        // Update the event handlers
+                        self.#name.__point_to(&new.#name);
+                    }
+                }
+            }).collect();
+
+            // If there are signals, we automatically try to memoize the signals
+            if !signal_fields.is_empty() {
+                Ok(quote! {
+                    // First check if the fields are equal. This will compare the signal fields by pointer
+                    let exactly_equal = self == new;
+                    if exactly_equal {
+                        // If they are return early, they can be memoized without any changes
+                        return true;
+                    }
+
+                    // If they are not, move the signal fields into self and check if they are equal now that the signal fields are equal
+                    #(
+                        let mut #signal_fields = self.#signal_fields;
+                        self.#signal_fields = new.#signal_fields;
+                    )*
+
+                    // Then check if the fields are equal now that we know the signal fields are equal
+                    // NOTE: we don't compare other fields individually because we want to let users opt-out of memoization for certain fields by implementing PartialEq themselves
+                    let non_signal_fields_equal = self == new;
+
+                    // If they are not equal, we need to move over all the fields that are not event handlers or signals to self
+                    if !non_signal_fields_equal {
+                        let new_clone = new.clone();
+                        #(
+                            self.#regular_fields = new_clone.#regular_fields;
+                        )*
+                    }
+                    // Move any signal and event fields into their old container.
+                    // We update signals and event handlers in place so that they are always up to date even if they were moved into a future in a previous render
+                    #move_signal_fields
+                    #move_event_handlers
+
+                    non_signal_fields_equal
+                })
+            } else {
+                Ok(quote! {
+                    let equal = self == new;
+                    // Move any signal and event fields into their old container.
+                    #move_event_handlers
+                    // If they are not equal, we need to move over all the fields that are not event handlers to self
+                    if !equal {
+                        let new_clone = new.clone();
+                        #(
+                            self.#regular_fields = new_clone.#regular_fields;
+                        )*
+                    }
+                    equal
+                })
+            }
+        }
+
+        pub fn builder_creation_impl(&self) -> Result<TokenStream, Error> {
+            let StructInfo {
+                ref vis,
+                ref name,
+                ref builder_name,
+                ..
+            } = *self;
+
+            let generics = self.generics.clone();
+            let (impl_generics, ty_generics, _where_clause) = generics.split_for_impl();
+            let (_, b_initial_generics, _) = self.generics.split_for_impl();
+            let all_fields_param = syn::GenericParam::Type(
+                syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site()).into(),
+            );
+            let b_generics = self.modify_generics(|g| {
+                let field_param_index = Self::insert_component_builder_params(g);
+                g.params.insert(field_param_index, all_fields_param.clone());
+            });
+            let empties_tuple = type_tuple(self.included_fields().map(|_| empty_type()));
+            let component_generics_with_empty =
+                modify_types_generics_hack(&b_initial_generics, |args| {
+                    Self::insert_component_builder_type_args(
+                        args,
+                        syn::GenericArgument::Type(empties_tuple.clone().into()),
+                        parse_quote!(RenderFn),
+                        parse_quote!(Marker),
+                    );
+                });
+            let phantom_generics = self.generics.params.iter().filter_map(|param| match param {
+                syn::GenericParam::Lifetime(lifetime) => {
+                    let lifetime = &lifetime.lifetime;
+                    Some(quote!(::core::marker::PhantomData<&#lifetime ()>))
+                }
+                syn::GenericParam::Type(ty) => {
+                    let ty = &ty.ident;
+                    Some(quote!(::core::marker::PhantomData<#ty>))
+                }
+                syn::GenericParam::Const(_cnst) => None,
+            });
+            let builder_type_doc = if self.builder_attr.doc {
+                match self.builder_attr.builder_type_doc {
+                    Some(ref doc) => quote!(#[doc = #doc]),
+                    None => {
+                        let doc = format!("Builder for [`{name}`] component props.");
+                        quote!(#[doc = #doc])
+                    }
+                }
+            } else {
+                quote!(#[doc(hidden)])
+            };
+
+            let (_, _, b_generics_where_extras_predicates) = b_generics.split_for_impl();
+            let mut b_generics_where: syn::WhereClause = syn::parse2(quote! {
+                where Self: Clone
+            })?;
+            if let Some(predicates) = b_generics_where_extras_predicates {
+                b_generics_where
+                    .predicates
+                    .extend(predicates.predicates.clone());
+            }
+
+            let memoize = self.memoize_impl()?;
+
+            let global_fields = self
+                .extend_fields()
+                .map(|f| {
+                    let name = f.extends_vec_ident();
+                    let ty = f.ty;
+                    quote!(#name: #ty)
+                })
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: dioxus_vdom::internal::generational_box::Owner)),
+                );
+            let global_fields_value = self
+                .extend_fields()
+                .map(|f| {
+                    let name = f.extends_vec_ident();
+                    quote!(#name: Vec::new())
+                })
+                .chain(self.has_child_owned_fields().then(
+                    || quote!(owner: dioxus_vdom::internal::generational_box::Owner::default()),
+                ))
+                .collect::<Vec<_>>();
+            let component_builder_render_generics =
+                self.component_builder_render_generics(quote!(#name #ty_generics));
+            let (component_builder_render_impl_generics, _, component_builder_render_where) =
+                component_builder_render_generics.split_for_impl();
+
+            Ok(quote! {
+                #[must_use]
+                #builder_type_doc
+                #[allow(dead_code, non_camel_case_types, non_snake_case)]
+                #vis struct #builder_name #b_generics {
+                    render_fn: __RenderFn,
+                    #(#global_fields,)*
+                    fields: #all_fields_param,
+                    _marker: ::core::marker::PhantomData<fn() -> __ComponentMarker>,
+                    _phantom: (#( #phantom_generics ),*),
+                }
+
+                impl #impl_generics dioxus_vdom::Properties for #name #ty_generics
+                #b_generics_where
+                {
+                    type ComponentBuilder<RenderFn, Marker> = #builder_name #component_generics_with_empty;
+
+                    fn component_builder<RenderFn, Marker>(
+                        render_fn: RenderFn,
+                    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+                        #builder_name {
+                            render_fn,
+                            #(#global_fields_value,)*
+                            fields: #empties_tuple,
+                            _marker: ::core::marker::PhantomData,
+                            _phantom: ::core::default::Default::default(),
+                        }
+                    }
+
+                    fn memoize(&mut self, new: &Self) -> bool {
+                        #memoize
+                    }
+                }
+
+                impl #component_builder_render_impl_generics dioxus_vdom::ComponentBuilderRender<__RenderFn, __ComponentMarker> for #name #ty_generics
+                #component_builder_render_where
+                {
+                    fn into_vcomponent(self, render_fn: __RenderFn) -> dioxus_vdom::VComponent {
+                        <Self as dioxus_vdom::Properties>::into_vcomponent(self, render_fn)
+                    }
+                }
+            })
+        }
+
+        // TODO: once the proc-macro crate limitation is lifted, make this an util trait of this
+        // crate.
+        pub fn conversion_helper_impl(&self) -> Result<TokenStream, Error> {
+            let trait_name = &self.conversion_helper_trait_name;
+            Ok(quote! {
+                #[doc(hidden)]
+                #[allow(dead_code, non_camel_case_types, non_snake_case)]
+                pub trait #trait_name<T> {
+                    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
+                }
+
+                impl<T> #trait_name<T> for () {
+                    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
+                        default()
+                    }
+                }
+
+                impl<T> #trait_name<T> for (T,) {
+                    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
+                        self.0
+                    }
+                }
+            })
+        }
+
+        pub fn extends_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
+            let StructInfo {
+                ref builder_name, ..
+            } = *self;
+
+            let field_name = field.extends_vec_ident().unwrap();
+
+            let destructuring = self.included_fields().map(|f| {
+                let name = f.name;
+                quote!(#name)
+            });
+            let reconstructing = self.included_fields().map(|f| f.name);
+
+            let mut ty_generics: Vec<syn::GenericArgument> = self
+                .generics
+                .params
+                .iter()
+                .map(|generic_param| match generic_param {
+                    syn::GenericParam::Type(type_param) => {
+                        let ident = type_param.ident.clone();
+                        syn::parse(quote!(#ident).into()).unwrap()
+                    }
+                    syn::GenericParam::Lifetime(lifetime_def) => {
+                        syn::GenericArgument::Lifetime(lifetime_def.lifetime.clone())
+                    }
+                    syn::GenericParam::Const(const_param) => {
+                        let ident = const_param.ident.clone();
+                        syn::parse(quote!(#ident).into()).unwrap()
+                    }
+                })
+                .collect();
+            let mut target_generics_tuple = empty_type_tuple();
+            let mut ty_generics_tuple = empty_type_tuple();
+            let generics = self.modify_generics(|g| {
+                let field_param_index = Self::insert_component_builder_params(g);
+                for f in self.included_fields() {
+                    if f.ordinal == field.ordinal {
+                        g.params.insert(
+                            field_param_index,
+                            syn::GenericParam::Type(self.generic_builder_param(f)),
+                        );
+                        let generic_argument: syn::Type = f.type_ident();
+                        ty_generics_tuple.elems.push_value(generic_argument.clone());
+                        target_generics_tuple
+                            .elems
+                            .push_value(f.tuplized_type_ty_param());
+                    } else {
+                        g.params.insert(field_param_index, f.generic_ty_param());
+                        let generic_argument: syn::Type = f.type_ident();
+                        ty_generics_tuple.elems.push_value(generic_argument.clone());
+                        target_generics_tuple.elems.push_value(generic_argument);
+                    }
+                    ty_generics_tuple.elems.push_punct(Default::default());
+                    target_generics_tuple.elems.push_punct(Default::default());
+                }
+            });
+            let mut target_generics = ty_generics.clone();
+            Self::insert_component_builder_vec_args(
+                &mut target_generics,
+                syn::GenericArgument::Type(target_generics_tuple.into()),
+            );
+            Self::insert_component_builder_vec_args(
+                &mut ty_generics,
+                syn::GenericArgument::Type(ty_generics_tuple.into()),
+            );
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+
+            let forward_extended_fields = self.extend_fields().map(|f| {
+                let name = f.extends_vec_ident();
+                quote!(#name: self.#name)
+            });
+
+            let forward_owner = self
+                .has_child_owned_fields()
+                .then(|| quote!(owner: self.owner))
+                .into_iter();
+
+            let extends_impl = field.builder_attr.extends.iter().map(|path| {
+                let name_str = path_to_single_string(path).unwrap();
+                let camel_name = name_str.to_case(Case::UpperCamel);
+                // A spread field accepts every attribute the extended element/group exposes, so
+                // the builder only implements this one marker "super trait". `html` blankets the
+                // umbrella and gated attribute extension traits over it, granting every method.
+                let spread_marker_name = Ident::new(
+                    format!("{}SpreadTarget", camel_name).as_str(),
+                    path.span(),
+                );
+                quote! {
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    impl #impl_generics #spread_marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
+                }
+            });
+
+            Ok(quote! {
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #impl_generics dioxus_vdom::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
+                    fn push_attribute<L>(
+                        mut self,
+                        ____name: &'static str,
+                        ____ns: Option<&'static str>,
+                        ____attr: impl dioxus_vdom::IntoAttributeValue<L>,
+                        ____volatile: bool
+                    ) -> Self {
+                        let ( #(#destructuring,)* ) = self.fields;
+                        self.#field_name.push(
+                            dioxus_vdom::Attribute::new(
+                                ____name,
+                                dioxus_vdom::IntoAttributeValue::<L>::into_value(____attr),
+                                ____ns,
+                                ____volatile,
+                            )
+                        );
+                        #builder_name {
+                            render_fn: self.render_fn,
+                            #(#forward_extended_fields,)*
+                            #(#forward_owner,)*
+                            fields: ( #(#reconstructing,)* ),
+                            _marker: self._marker,
+                            _phantom: self._phantom,
+                        }
+                    }
+                }
+
+                #(#extends_impl)*
+            })
+        }
+
+        pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
+            let FieldInfo {
+                name: field_name, ..
+            } = field;
+            if *field_name == "key" {
+                return Err(Error::new_spanned(
+                    field_name,
+                    "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.7/essentials/ui/iteration for more information about keys",
+                ));
+            }
+            let StructInfo {
+                ref builder_name, ..
+            } = *self;
+
+            let destructuring = self.included_fields().map(|f| {
+                if f.ordinal == field.ordinal {
+                    quote!(_)
+                } else {
+                    let name = f.name;
+                    quote!(#name)
+                }
+            });
+            let reconstructing = self.included_fields().map(|f| f.name);
+
+            let FieldInfo {
+                name: field_name,
+                ty: field_type,
+                ..
+            } = field;
+            let mut ty_generics: Vec<syn::GenericArgument> = self
+                .generics
+                .params
+                .iter()
+                .map(|generic_param| match generic_param {
+                    syn::GenericParam::Type(type_param) => {
+                        let ident = type_param.ident.clone();
+                        syn::parse(quote!(#ident).into()).unwrap()
+                    }
+                    syn::GenericParam::Lifetime(lifetime_def) => {
+                        syn::GenericArgument::Lifetime(lifetime_def.lifetime.clone())
+                    }
+                    syn::GenericParam::Const(const_param) => {
+                        let ident = const_param.ident.clone();
+                        syn::parse(quote!(#ident).into()).unwrap()
+                    }
+                })
+                .collect();
+            let mut target_generics_tuple = empty_type_tuple();
+            let mut ty_generics_tuple = empty_type_tuple();
+            let generics = self.modify_generics(|g| {
+                let field_param_index = Self::insert_component_builder_params(g);
+                for f in self.included_fields() {
+                    if f.ordinal == field.ordinal {
+                        ty_generics_tuple.elems.push_value(empty_type());
+                        target_generics_tuple
+                            .elems
+                            .push_value(f.tuplized_type_ty_param());
+                    } else {
+                        g.params.insert(field_param_index, f.generic_ty_param());
+                        let generic_argument: syn::Type = f.type_ident();
+                        ty_generics_tuple.elems.push_value(generic_argument.clone());
+                        target_generics_tuple.elems.push_value(generic_argument);
+                    }
+                    ty_generics_tuple.elems.push_punct(Default::default());
+                    target_generics_tuple.elems.push_punct(Default::default());
+                }
+            });
+            let mut target_generics = ty_generics.clone();
+            Self::insert_component_builder_vec_args(
+                &mut target_generics,
+                syn::GenericArgument::Type(target_generics_tuple.into()),
+            );
+            Self::insert_component_builder_vec_args(
+                &mut ty_generics,
+                syn::GenericArgument::Type(ty_generics_tuple.into()),
+            );
+
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+            let docs = &field.builder_attr.docs;
+
+            let arg_type = field_type;
+            // If the field is auto_into, we need to add a generic parameter to the builder for specialization
+            let mut marker = None;
+            let (arg_type, arg_expr) = if child_owned_type(arg_type) {
+                let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
+                marker = Some(marker_ident.clone());
+                (
+                    quote!(impl dioxus_vdom::SuperInto<#arg_type, #marker_ident>),
+                    // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
+                    quote!(dioxus_vdom::with_owner(self.owner.clone(), move || dioxus_vdom::SuperInto::super_into(#field_name))),
+                )
+            } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
+                let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
+                marker = Some(marker_ident.clone());
+                (
+                    quote!(impl dioxus_vdom::SuperInto<#arg_type, #marker_ident>),
+                    quote!(dioxus_vdom::SuperInto::super_into(#field_name)),
+                )
+            } else if field.builder_attr.from_displayable {
+                (
+                    quote!(impl ::core::fmt::Display),
+                    quote!(#field_name.to_string()),
+                )
+            } else {
+                (quote!(#arg_type), quote!(#field_name))
+            };
+
+            let repeated_fields_error_type_name = syn::Ident::new(
+                &format!(
+                    "{}_Error_Repeated_field_{}",
+                    builder_name,
+                    strip_raw_ident_prefix(field_name.to_string())
+                ),
+                builder_name.span(),
+            );
+            let repeated_fields_error_message = format!("Repeated field {field_name}");
+
+            let forward_fields = self
+                .extend_fields()
+                .map(|f| {
+                    let name = f.extends_vec_ident();
+                    quote!(#name: self.#name)
+                })
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: self.owner)),
+                );
+
+            Ok(quote! {
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
+                    #( #docs )*
+                    #[allow(clippy::type_complexity)]
+                    pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
+                        let #field_name = (#arg_expr,);
+                        let ( #(#destructuring,)* ) = self.fields;
+                        #builder_name {
+                            render_fn: self.render_fn,
+                            #(#forward_fields,)*
+                            fields: ( #(#reconstructing,)* ),
+                            _marker: self._marker,
+                            _phantom: self._phantom,
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(dead_code, non_camel_case_types, non_snake_case)]
+                pub enum #repeated_fields_error_type_name {}
+                #[doc(hidden)]
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #impl_generics #builder_name < #( #target_generics ),* > #where_clause {
+                    #[deprecated(
+                        note = #repeated_fields_error_message
+                    )]
+                    #[allow(clippy::type_complexity)]
+                    pub fn #field_name< #marker > (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
+                        self
+                    }
+                }
+            })
+        }
+
+        pub fn required_field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
+            let StructInfo {
+                name, builder_name, ..
+            } = self;
+
+            let FieldInfo {
+                name: field_name, ..
+            } = field;
+            let mut builder_generics: Vec<syn::GenericArgument> = self
+                .generics
+                .params
+                .iter()
+                .map(|generic_param| match generic_param {
+                    syn::GenericParam::Type(type_param) => {
+                        let ident = &type_param.ident;
+                        syn::parse(quote!(#ident).into()).unwrap()
+                    }
+                    syn::GenericParam::Lifetime(lifetime_def) => {
+                        syn::GenericArgument::Lifetime(lifetime_def.lifetime.clone())
+                    }
+                    syn::GenericParam::Const(const_param) => {
+                        let ident = &const_param.ident;
+                        syn::parse(quote!(#ident).into()).unwrap()
+                    }
+                })
+                .collect();
+            let mut builder_generics_tuple = empty_type_tuple();
+            let generics = self.modify_generics(|g| {
+                let field_param_index = Self::insert_component_builder_params(g);
+                for f in self.included_fields() {
+                    if f.builder_attr.default.is_some() {
+                        // `f` is not mandatory - it does not have it's own fake `build` method, so `field` will need
+                        // to warn about missing `field` whether or not `f` is set.
+                        assert!(
+                            f.ordinal != field.ordinal,
+                            "`required_field_impl` called for optional field {}",
+                            field.name
+                        );
+                        g.params.insert(field_param_index, f.generic_ty_param());
+                        builder_generics_tuple.elems.push_value(f.type_ident());
+                    } else if f.ordinal < field.ordinal {
+                        // Only add a `build` method that warns about missing `field` if `f` is set. If `f` is not set,
+                        // `f`'s `build` method will warn, since it appears earlier in the argument list.
+                        builder_generics_tuple
+                            .elems
+                            .push_value(f.tuplized_type_ty_param());
+                    } else if f.ordinal == field.ordinal {
+                        builder_generics_tuple.elems.push_value(empty_type());
+                    } else {
+                        // `f` appears later in the argument list after `field`, so if they are both missing we will
+                        // show a warning for `field` and not for `f` - which means this warning should appear whether
+                        // or not `f` is set.
+                        g.params.insert(field_param_index, f.generic_ty_param());
+                        builder_generics_tuple.elems.push_value(f.type_ident());
+                    }
+
+                    builder_generics_tuple.elems.push_punct(Default::default());
+                }
+            });
+
+            Self::insert_component_builder_vec_args(
+                &mut builder_generics,
+                syn::GenericArgument::Type(builder_generics_tuple.into()),
+            );
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+            let (_, ty_generics, _) = self.generics.split_for_impl();
+
+            let early_build_error_type_name = syn::Ident::new(
+                &format!(
+                    "{}_Error_Missing_required_field_{}",
+                    builder_name,
+                    strip_raw_ident_prefix(field_name.to_string())
+                ),
+                builder_name.span(),
+            );
+            let early_build_error_message = format!("Missing required field {field_name}");
+
+            Ok(quote! {
+                #[doc(hidden)]
+                #[allow(dead_code, non_camel_case_types, non_snake_case)]
+                pub enum #early_build_error_type_name {}
+                #[doc(hidden)]
+                #[allow(dead_code, non_camel_case_types, missing_docs, clippy::panic)]
+                impl #impl_generics #builder_name < #( #builder_generics ),* > #where_clause {
+                    #[deprecated(
+                        note = #early_build_error_message
+                    )]
+                    pub fn build(
+                        self,
+                        _: #early_build_error_type_name,
+                    ) -> dioxus_vdom::ComponentBuilderOutput<__RenderFn, #name #ty_generics, __ComponentMarker> {
+                        panic!()
+                    }
+                }
+            })
+        }
+
+        fn generic_builder_param(&self, field: &FieldInfo) -> syn::TypeParam {
+            let trait_ref = syn::TraitBound {
+                paren_token: None,
+                lifetimes: None,
+                modifier: syn::TraitBoundModifier::None,
+                path: syn::PathSegment {
+                    ident: self.conversion_helper_trait_name.clone(),
+                    arguments: syn::PathArguments::AngleBracketed(
+                        syn::AngleBracketedGenericArguments {
+                            colon2_token: None,
+                            lt_token: Default::default(),
+                            args: make_punctuated_single(syn::GenericArgument::Type(
+                                field.ty.clone(),
+                            )),
+                            gt_token: Default::default(),
+                        },
+                    ),
+                }
+                .into(),
+            };
+            let mut generic_param: syn::TypeParam = field.generic_ident.clone().into();
+            generic_param.bounds.push(trait_ref.into());
+            generic_param
+        }
+
+        pub fn build_method_impl(&self) -> TokenStream {
+            let StructInfo {
+                ref name,
+                ref builder_name,
+                ..
+            } = *self;
+
+            let generics = self.modify_generics(|g| {
+                let index_after_lifetime_in_generics = g
+                    .params
+                    .iter()
+                    .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
+                    .count();
+                for field in self.included_fields() {
+                    if field.builder_attr.default.is_some() {
+                        let generic_param = self.generic_builder_param(field);
+                        g.params
+                            .insert(index_after_lifetime_in_generics, generic_param.into());
+                    }
+                }
+            });
+            let (original_impl_generics, ty_generics, _) = self.generics.split_for_impl();
+
+            let modified_component_ty_generics = modify_types_generics_hack(&ty_generics, |args| {
+                Self::insert_component_builder_type_args(
+                    args,
+                    syn::GenericArgument::Type(
+                        type_tuple(self.included_fields().map(|field| {
+                            if field.builder_attr.default.is_some() {
+                                field.type_ident()
+                            } else {
+                                field.tuplized_type_ty_param()
+                            }
+                        }))
+                        .into(),
+                    ),
+                    parse_quote!(__RenderFn),
+                    parse_quote!(__ComponentMarker),
+                );
+            });
+
+            let destructuring = self
+                .included_fields()
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name)
+                })
+                .collect::<Vec<_>>();
+            let global_field_names = self
+                .extend_fields()
+                .filter_map(|f| f.extends_vec_ident())
+                .map(|name| quote!(#name))
+                .chain(self.has_child_owned_fields().then(|| quote!(owner)))
+                .collect::<Vec<_>>();
+
+            let helper_trait_name = &self.conversion_helper_trait_name;
+            // The default of a field can refer to earlier-defined fields, which we handle by
+            // writing out a bunch of `let` statements first, which can each refer to earlier ones.
+            // This means that field ordering may actually be significant, which isn’t ideal. We could
+            // relax that restriction by calculating a DAG of field default dependencies and
+            // reordering based on that, but for now this much simpler thing is a reasonable approach.
+            let assignments = self
+                .fields
+                .iter()
+                .map(|field| {
+                let name = &field.name;
+                if let Some(extends_vec) = field.extends_vec_ident() {
+                    quote!{
+                        let mut #name = #helper_trait_name::into_value(#name, || ::core::default::Default::default());
+                        #name.extend(#extends_vec);
+                    }
+                } else if let Some(ref default) = field.builder_attr.default {
+                    // If field has `into`, apply it to the default value.
+                    // Ignore any blank defaults as it causes type inference errors.
+                    let is_default = *default == parse_quote!(::core::default::Default::default());
+                    // If this is a signal type, we use super_into and the props struct as the owner
+                    let is_child_owned_type = child_owned_type(field.ty);
+
+
+                    let body = if !is_default {
+                        if is_child_owned_type {
+                            quote!{ dioxus_vdom::SuperInto::super_into(#default) }
+                        } else if field.builder_attr.auto_into {
+                            quote!{ (#default).into() }
+                        } else if field.builder_attr.auto_to_string {
+                            quote!{ (#default).to_string() }
+                        } else {
+                            default.to_token_stream()
+                        }
+                    } else {
+                        default.to_token_stream()
+                    };
+
+                    if field.builder_attr.skip {
+                        quote!(let #name = #body;)
+                    } else if is_child_owned_type {
+                        quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_vdom::with_owner(owner.clone(), move || #body));)
+                    } else {
+                        quote!(let #name = #helper_trait_name::into_value(#name, || #body);)
+                    }
+                } else {
+                    quote!(let #name = #name.0;)
+                }
+            })
+                .collect::<Vec<_>>();
+            let field_names = self
+                .fields
+                .iter()
+                .map(|field| {
+                    let name = field.name;
+                    quote!(#name)
+                })
+                .collect::<Vec<_>>();
+            let doc = if self.builder_attr.doc {
+                match self.builder_attr.build_method_doc {
+                    Some(ref doc) => quote!(#[doc = #doc]),
+                    None => {
+                        // I’d prefer “a” or “an” to “its”, but determining which is grammatically
+                        // correct is roughly impossible.
+                        let doc =
+                            format!("Finalize the builder and create its [`{name}`] instance");
+                        quote!(#[doc = #doc])
+                    }
+                }
+            } else {
+                quote!()
+            };
+
+            if self.has_child_owned_fields() {
+                let name = Ident::new(&format!("{}WithOwner", name), name.span());
+                let original_name = &self.name;
+                let vis = &self.vis;
+                let generics_with_bounds = &self.generics;
+                let where_clause = &self.generics.where_clause;
+                let component_builder_render_generics =
+                    self.component_builder_render_generics(quote!(#original_name #ty_generics));
+                let (component_builder_render_impl_generics, _, component_builder_render_where) =
+                    component_builder_render_generics.split_for_impl();
+                let component_builder_build_generics =
+                    self.with_component_builder_params(generics.clone());
+                let (component_builder_build_impl_generics, _, component_builder_build_where) =
+                    component_builder_build_generics.split_for_impl();
+
+                quote! {
+                    #[doc(hidden)]
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    #vis struct #name #generics_with_bounds #where_clause {
+                        inner: #original_name #ty_generics,
+                        owner: dioxus_vdom::internal::generational_box::Owner,
+                    }
+
+                    impl #original_impl_generics PartialEq for #name #ty_generics #where_clause {
+                        fn eq(&self, other: &Self) -> bool {
+                            self.inner.eq(&other.inner)
+                        }
+                    }
+
+                    impl #original_impl_generics Clone for #name #ty_generics #where_clause {
+                        fn clone(&self) -> Self {
+                            Self {
+                                inner: self.inner.clone(),
+                                owner: self.owner.clone(),
+                            }
+                        }
+                    }
+
+                    impl #original_impl_generics #name #ty_generics #where_clause {
+                        /// Create a component from the props.
+                        pub fn into_vcomponent<M: 'static>(
+                            self,
+                            render_fn: impl dioxus_vdom::ComponentFunction<#original_name #ty_generics, M>,
+                        ) -> dioxus_vdom::VComponent {
+                            use dioxus_vdom::ComponentFunction;
+                            let component_name = ::std::any::type_name_of_val(&render_fn);
+                            dioxus_vdom::VComponent::new(move |wrapper: Self| render_fn.rebuild(wrapper.inner), self, component_name)
+                        }
+                    }
+
+                    impl #component_builder_render_impl_generics dioxus_vdom::ComponentBuilderRender<__RenderFn, __ComponentMarker> for #name #ty_generics
+                    #component_builder_render_where
+                    {
+                        fn into_vcomponent(self, render_fn: __RenderFn) -> dioxus_vdom::VComponent {
+                            self.into_vcomponent(render_fn)
+                        }
+                    }
+
+                    impl #original_impl_generics dioxus_vdom::Properties for #name #ty_generics #where_clause {
+                        type ComponentBuilder<RenderFn, Marker> = ();
+
+                        fn component_builder<RenderFn, Marker>(
+                            _render_fn: RenderFn,
+                        ) -> Self::ComponentBuilder<RenderFn, Marker> {
+                            unreachable!()
+                        }
+
+                        fn memoize(&mut self, new: &Self) -> bool {
+                            self.inner.memoize(&new.inner)
+                        }
+                    }
+
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    impl #component_builder_build_impl_generics #builder_name #modified_component_ty_generics #component_builder_build_where {
+                        #doc
+                        pub fn build(self) -> dioxus_vdom::ComponentBuilderOutput<__RenderFn, #name #ty_generics, __ComponentMarker> {
+                            let #builder_name {
+                                render_fn,
+                                #(#global_field_names,)*
+                                fields,
+                                _marker: _,
+                                _phantom: _,
+                            } = self;
+                            let ( #(#destructuring,)* ) = fields;
+                            #( #assignments )*
+                            let props =
+                                #name {
+                                    inner: #original_name {
+                                        #( #field_names ),*
+                                    },
+                                    owner,
+                                };
+                            dioxus_vdom::ComponentBuilderOutput::new(render_fn, props)
+                        }
+                    }
+                }
+            } else {
+                let component_builder_build_generics =
+                    self.with_component_builder_params(generics.clone());
+                let (component_builder_build_impl_generics, _, component_builder_build_where) =
+                    component_builder_build_generics.split_for_impl();
+                quote!(
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    impl #component_builder_build_impl_generics #builder_name #modified_component_ty_generics #component_builder_build_where {
+                        #doc
+                        pub fn build(self) -> dioxus_vdom::ComponentBuilderOutput<__RenderFn, #name #ty_generics, __ComponentMarker> {
+                            let #builder_name {
+                                render_fn,
+                                #(#global_field_names,)*
+                                fields,
+                                _marker: _,
+                                _phantom: _,
+                            } = self;
+                            let ( #(#destructuring,)* ) = fields;
+                            #( #assignments )*
+                            let props =
+                                #name {
+                                    #( #field_names ),*
+                                };
+                            dioxus_vdom::ComponentBuilderOutput::new(render_fn, props)
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct TypeBuilderAttr {
+        /// Whether to show docs for the `TypeBuilder` type (rather than hiding them).
+        pub doc: bool,
+
+        /// Docs on the `TypeBuilder` type. Specifying this implies `doc`, but you can just specify
+        /// `doc` instead and a default value will be filled in here.
+        pub builder_type_doc: Option<syn::Expr>,
+
+        /// Docs on the `TypeBuilder.build()` method. Specifying this implies `doc`, but you can just
+        /// specify `doc` instead and a default value will be filled in here.
+        pub build_method_doc: Option<syn::Expr>,
+
+        pub field_defaults: FieldBuilderAttr,
+    }
+
+    impl TypeBuilderAttr {
+        pub fn new(attrs: &[syn::Attribute]) -> Result<TypeBuilderAttr, Error> {
+            let mut result = TypeBuilderAttr::default();
+            for attr in attrs {
+                if path_to_single_string(attr.path()).as_deref() != Some("builder") {
+                    continue;
+                }
+
+                match &attr.meta {
+                    syn::Meta::List(list) => {
+                        if list.tokens.is_empty() {
+                            continue;
+                        }
+                    }
+                    _ => {
+                        continue;
+                    }
+                }
+
+                let as_expr = attr.parse_args_with(
+                    Punctuated::<Expr, syn::Token![,]>::parse_separated_nonempty,
+                )?;
+
+                for expr in as_expr.into_iter() {
+                    result.apply_meta(expr)?;
+                }
+            }
+
+            Ok(result)
+        }
+
+        fn apply_meta(&mut self, expr: syn::Expr) -> Result<(), Error> {
+            match expr {
+                syn::Expr::Assign(assign) => {
+                    let name = expr_to_single_string(&assign.left)
+                        .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
+                    match name.as_str() {
+                        "builder_type_doc" => {
+                            self.builder_type_doc = Some(*assign.right);
+                            self.doc = true;
+                            Ok(())
+                        }
+                        "build_method_doc" => {
+                            self.build_method_doc = Some(*assign.right);
+                            self.doc = true;
+                            Ok(())
+                        }
+                        _ => Err(Error::new_spanned(
+                            &assign,
+                            format!("Unknown parameter {name:?}"),
+                        )),
+                    }
+                }
+                syn::Expr::Path(path) => {
+                    let name = path_to_single_string(&path.path)
+                        .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
+                    match name.as_str() {
+                        "doc" => {
+                            self.doc = true;
+                            Ok(())
+                        }
+                        _ => Err(Error::new_spanned(
+                            &path,
+                            format!("Unknown parameter {name:?}"),
+                        )),
+                    }
+                }
+                syn::Expr::Call(call) => {
+                    let subsetting_name = if let syn::Expr::Path(path) = &*call.func {
+                        path_to_single_string(&path.path)
+                    } else {
+                        None
+                    }
+                    .ok_or_else(|| {
+                        let call_func = &call.func;
+                        let call_func = quote!(#call_func);
+                        Error::new_spanned(
+                            &call.func,
+                            format!("Illegal builder setting group {call_func}"),
+                        )
+                    })?;
+                    match subsetting_name.as_str() {
+                        "field_defaults" => {
+                            for arg in call.args {
+                                self.field_defaults.apply_meta(arg)?;
+                            }
+                            Ok(())
+                        }
+                        _ => Err(Error::new_spanned(
+                            &call.func,
+                            format!("Illegal builder setting group name {subsetting_name}"),
+                        )),
+                    }
+                }
+                _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
+            }
+        }
+    }
+}
+
+/// A helper function for paring types with a single generic argument.
+fn extract_base_type_without_generics(ty: &Type) -> Option<syn::Path> {
+    let Type::Path(ty) = ty else {
+        return None;
+    };
+    if ty.qself.is_some() {
+        return None;
+    }
+
+    let path = &ty.path;
+
+    let mut path_segments_without_generics = Vec::new();
+
+    let mut generic_arg_count = 0;
+
+    for segment in &path.segments {
+        let mut segment = segment.clone();
+        match segment.arguments {
+            PathArguments::AngleBracketed(_) => generic_arg_count += 1,
+            PathArguments::Parenthesized(_) => {
+                return None;
+            }
+            _ => {}
+        }
+        segment.arguments = syn::PathArguments::None;
+        path_segments_without_generics.push(segment);
+    }
+
+    // If there is more than the type and the single generic argument, it doesn't look like the type we want
+    if generic_arg_count > 2 {
+        return None;
+    }
+
+    let path_without_generics = syn::Path {
+        leading_colon: None,
+        segments: Punctuated::from_iter(path_segments_without_generics),
+    };
+
+    Some(path_without_generics)
+}
+
+/// Returns the type inside the Option wrapper if it exists
+fn strip_option(type_: &Type) -> Option<Type> {
+    if let Type::Path(ty) = &type_ {
+        let mut segments_iter = ty.path.segments.iter().peekable();
+        // Strip any leading std||core::option:: prefix
+        let allowed_segments: &[&[&str]] = &[&["std", "core"], &["option"]];
+        let mut allowed_segments_iter = allowed_segments.iter();
+        while let Some(segment) = segments_iter.peek() {
+            let Some(allowed_segments) = allowed_segments_iter.next() else {
+                break;
+            };
+            if !allowed_segments.contains(&segment.ident.to_string().as_str()) {
+                break;
+            }
+            segments_iter.next();
+        }
+        // The last segment should be Option
+        let option_segment = segments_iter.next()?;
+        if option_segment.ident == "Option" && segments_iter.next().is_none() {
+            // It should have a single generic argument
+            if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments
+                && let Some(syn::GenericArgument::Type(ty)) = generic_arg.args.first()
+            {
+                return Some(ty.clone());
+            }
+        }
+    }
+    None
+}
+
+/// Remove the Option wrapper from a type
+fn remove_option_wrapper(type_: Type) -> Type {
+    strip_option(&type_).unwrap_or(type_)
+}
+
+/// Check if a type should be owned by the child component after conversion
+pub(crate) fn child_owned_type(ty: &Type) -> bool {
+    looks_like_signal_type(ty)
+        || looks_like_write_type(ty)
+        || looks_like_callback_type(ty)
+        || looks_like_store_type(ty)
+}
+
+/// Check if the path without generics matches the type we are looking for
+fn last_segment_matches(ty: &Type, expected: &Ident) -> bool {
+    extract_base_type_without_generics(ty).is_some_and(|path_without_generics| {
+        path_without_generics
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == *expected)
+    })
+}
+
+fn looks_like_signal_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(ReadOnlySignal))
+        || last_segment_matches(ty, &parse_quote!(ReadSignal))
+}
+
+fn looks_like_write_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(WriteSignal))
+}
+
+fn looks_like_store_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(Store))
+        || last_segment_matches(ty, &parse_quote!(ReadStore))
+        || last_segment_matches(ty, &parse_quote!(WriteStore))
+}
+
+fn looks_like_callback_type(ty: &Type) -> bool {
+    let type_without_option = remove_option_wrapper(ty.clone());
+    last_segment_matches(&type_without_option, &parse_quote!(EventHandler))
+        || last_segment_matches(&type_without_option, &parse_quote!(Callback))
+}
+
+#[test]
+fn test_looks_like_type() {
+    assert!(!looks_like_signal_type(&parse_quote!(
+        Option<ReadOnlySignal<i32>>
+    )));
+    assert!(looks_like_signal_type(&parse_quote!(ReadOnlySignal<i32>)));
+    assert!(looks_like_signal_type(
+        &parse_quote!(ReadOnlySignal<i32, SyncStorage>)
+    ));
+    assert!(looks_like_signal_type(&parse_quote!(
+        ReadOnlySignal<Option<i32>, UnsyncStorage>
+    )));
+
+    assert!(!looks_like_signal_type(&parse_quote!(
+        Option<ReadSignal<i32>>
+    )));
+    assert!(looks_like_signal_type(&parse_quote!(ReadSignal<i32>)));
+    assert!(looks_like_signal_type(
+        &parse_quote!(ReadSignal<i32, SyncStorage>)
+    ));
+    assert!(looks_like_signal_type(&parse_quote!(
+        ReadSignal<Option<i32>, UnsyncStorage>
+    )));
+
+    assert!(looks_like_callback_type(&parse_quote!(
+        Option<EventHandler>
+    )));
+    assert!(looks_like_callback_type(&parse_quote!(
+        std::option::Option<EventHandler<i32>>
+    )));
+    assert!(looks_like_callback_type(&parse_quote!(
+        Option<EventHandler<MouseEvent>>
+    )));
+
+    assert!(looks_like_callback_type(&parse_quote!(EventHandler<i32>)));
+    assert!(looks_like_callback_type(&parse_quote!(EventHandler)));
+
+    assert!(looks_like_callback_type(&parse_quote!(Callback<i32>)));
+    assert!(looks_like_callback_type(&parse_quote!(Callback<i32, u32>)));
+}
+
+#[test]
+fn test_remove_option_wrapper() {
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<i32>));
+    assert_eq!(type_without_option, parse_quote!(i32));
+
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<Option<i32>>));
+    assert_eq!(type_without_option, parse_quote!(Option<i32>));
+
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<Option<Option<i32>>>));
+    assert_eq!(type_without_option, parse_quote!(Option<Option<i32>>));
+}

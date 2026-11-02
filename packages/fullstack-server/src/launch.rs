@@ -9,7 +9,7 @@ use axum::{
     routing::IntoMakeService,
 };
 use dioxus_cli_config::base_path;
-use dioxus_core::{ComponentFunction, Element};
+use dioxus_vdom::{ComponentFunction, Element};
 
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use futures_util::{StreamExt, stream::FusedStream};
@@ -27,7 +27,7 @@ use tower::{Service, ServiceExt as _};
 
 #[cfg(not(target_arch = "wasm32"))]
 use {
-    dioxus_core::{RenderError, VNode},
+    dioxus_vdom::{RenderError, VNode},
     tokio::net::TcpListener,
 };
 

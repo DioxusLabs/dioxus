@@ -681,7 +681,7 @@ impl RouteEnum {
                     #(#site_map,)*
                 ];
 
-                fn render(&self, level: usize) -> dioxus_core::Element {
+                fn render(&self, level: usize) -> dioxus_vdom::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*
@@ -785,5 +785,22 @@ impl<'a> From<&'a RouteSegment> for SegmentType {
             RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
             RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
         }
+    }
+}
+
+fn dioxus_root() -> proc_macro2::TokenStream {
+    use proc_macro_crate::{FoundCrate, crate_name};
+    let found = crate_name("dioxus")
+        .map(|found| (found, "dioxus"))
+        .or_else(|_| crate_name("dioxus-core").map(|found| (found, "dioxus_core")));
+    match found.map(|(found, name)| match found {
+        FoundCrate::Itself => name.to_string(),
+        FoundCrate::Name(name) => name,
+    }) {
+        Ok(name) => {
+            let name = quote::format_ident!("{}", name);
+            quote::quote!(::#name)
+        }
+        Err(_) => quote::quote!(::dioxus),
     }
 }
