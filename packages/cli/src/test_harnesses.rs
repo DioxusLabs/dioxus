@@ -407,6 +407,7 @@ fn main() {
             trace: true,
             json_output: false,
             log_to_file: None,
+            manifest_path: None,
             locked: false,
             offline: false,
             frozen: false,
