@@ -609,6 +609,15 @@ impl AppBuilder {
             envs.push((dx_env::ASSET_ROOT_ENV.into(), base_path.to_string()));
         }
 
+        // Also set the legacy `DIOXUS_*` names for apps built against older versions of dx-env
+        let legacy_envs: Vec<_> = envs
+            .iter()
+            .filter_map(|(name, value)| {
+                dx_env::legacy_env_name(name).map(|legacy| (legacy.to_string(), value.clone()))
+            })
+            .collect();
+        envs.extend(legacy_envs);
+
         if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
             envs.push(("RUST_LOG".into(), env_filter));
         }

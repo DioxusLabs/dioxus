@@ -56,29 +56,61 @@ use std::{
     path::PathBuf,
 };
 
-pub const CLI_ENABLED_ENV: &str = "DIOXUS_CLI_ENABLED";
+pub const CLI_ENABLED_ENV: &str = "DX_CLI_ENABLED";
 pub const SERVER_IP_ENV: &str = "IP";
 pub const SERVER_PORT_ENV: &str = "PORT";
-pub const DEVSERVER_IP_ENV: &str = "DIOXUS_DEVSERVER_IP";
-pub const DEVSERVER_PORT_ENV: &str = "DIOXUS_DEVSERVER_PORT";
-pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
-pub const PRODUCT_NAME_ENV: &str = "DIOXUS_PRODUCT_NAME";
+pub const DEVSERVER_IP_ENV: &str = "DX_DEVSERVER_IP";
+pub const DEVSERVER_PORT_ENV: &str = "DX_DEVSERVER_PORT";
+pub const ASSET_ROOT_ENV: &str = "DX_ASSET_ROOT";
+pub const PRODUCT_NAME_ENV: &str = "DX_PRODUCT_NAME";
 
 #[deprecated(since = "0.6.0", note = "The CLI currently does not set this.")]
 #[doc(hidden)]
-pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
-pub const SESSION_CACHE_DIR: &str = "DIOXUS_SESSION_CACHE_DIR";
-pub const BUILD_ID: &str = "DIOXUS_BUILD_ID";
+pub const OUT_DIR: &str = "DX_OUT_DIR";
+pub const SESSION_CACHE_DIR: &str = "DX_SESSION_CACHE_DIR";
+pub const BUILD_ID: &str = "DX_BUILD_ID";
+
+/// The `DIOXUS_*` names these variables had before they were renamed to `DX_*`.
+///
+/// `dx` sets both names, and the accessors in this crate fall back to the legacy name when the
+/// `DX_*` name is unset, so apps and tools built against older versions keep working.
+const LEGACY_ENV_NAMES: &[(&str, &str)] = &[
+    (CLI_ENABLED_ENV, "DIOXUS_CLI_ENABLED"),
+    (DEVSERVER_IP_ENV, "DIOXUS_DEVSERVER_IP"),
+    (DEVSERVER_PORT_ENV, "DIOXUS_DEVSERVER_PORT"),
+    (ASSET_ROOT_ENV, "DIOXUS_ASSET_ROOT"),
+    (PRODUCT_NAME_ENV, "DIOXUS_PRODUCT_NAME"),
+    (SESSION_CACHE_DIR, "DIOXUS_SESSION_CACHE_DIR"),
+    (BUILD_ID, "DIOXUS_BUILD_ID"),
+    ("DX_OUT_DIR", "DIOXUS_OUT_DIR"),
+];
+
+/// Get the legacy `DIOXUS_*` name of a `DX_*` environment variable, if it has one.
+///
+/// `dx` uses this to also set the legacy names for apps built against older versions of this crate.
+pub fn legacy_env_name(name: &str) -> Option<&'static str> {
+    LEGACY_ENV_NAMES
+        .iter()
+        .find(|(new, _)| *new == name)
+        .map(|(_, legacy)| *legacy)
+}
+
+/// Read an environment variable at runtime, falling back to its legacy `DIOXUS_*` name.
+fn env_var(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .or_else(|| std::env::var(legacy_env_name(name)?).ok())
+}
 
 /// Reads an environment variable at runtime in debug mode or at compile time in
 /// release mode. When bundling in release mode, we will not be running under the
 /// environment variables that the CLI sets, so we need to read them at compile time.
 macro_rules! read_env_config {
-    ($name:expr) => {{
+    ($name:literal, $legacy:literal) => {{
         #[cfg(debug_assertions)]
         {
             // In debug mode, read the environment variable set by the CLI at runtime
-            std::env::var($name).ok()
+            env_var($name)
         }
 
         #[cfg(not(debug_assertions))]
@@ -88,7 +120,9 @@ macro_rules! read_env_config {
             // standalone.
             // We don't always read the environment variable at compile time to avoid rebuilding
             // this crate when the environment variable changes.
-            option_env!($name).map(ToString::to_string)
+            option_env!($name)
+                .or(option_env!($legacy))
+                .map(ToString::to_string)
         }
     }};
 }
@@ -101,7 +135,7 @@ macro_rules! read_env_config {
 /// For reference, the devserver typically lives on `127.0.0.1:8080` and serves the devserver websocket
 /// on `127.0.0.1:8080/_dioxus`.
 pub fn devserver_raw_addr() -> Option<SocketAddr> {
-    let port = std::env::var(DEVSERVER_PORT_ENV).ok();
+    let port = env_var(DEVSERVER_PORT_ENV);
 
     if cfg!(target_os = "android") {
         // Since `adb reverse` is used for Android, the 127.0.0.1 will always be
@@ -111,7 +145,7 @@ pub fn devserver_raw_addr() -> Option<SocketAddr> {
     }
 
     let port = port?;
-    let ip = std::env::var(DEVSERVER_IP_ENV).ok()?;
+    let ip = env_var(DEVSERVER_IP_ENV)?;
 
     format!("{}:{}", ip, port).parse().ok()
 }
@@ -195,7 +229,7 @@ pub fn fullstack_address_or_localhost() -> SocketAddr {
 /// pass off the CLI environment variables to the application.
 pub fn is_cli_enabled() -> bool {
     // todo: (jon) - on android and web we should fix this...
-    std::env::var(CLI_ENABLED_ENV).is_ok()
+    env_var(CLI_ENABLED_ENV).is_some()
 }
 
 /// Get the path where the application will be served from.
@@ -214,7 +248,7 @@ pub fn base_path() -> Option<String> {
         return web_base_path();
     }
 
-    read_env_config!("DIOXUS_ASSET_ROOT")
+    read_env_config!("DX_ASSET_ROOT", "DIOXUS_ASSET_ROOT")
 }
 
 #[cfg(feature = "web")]
@@ -243,20 +277,32 @@ pub fn web_base_path() -> Option<String> {
         thread_local! {
             static BASE_PATH: std::cell::OnceCell<Option<String>> = const { std::cell::OnceCell::new() };
         }
-        BASE_PATH.with(|f| f.get_or_init(|| get_meta_contents(ASSET_ROOT_ENV)).clone())
+        BASE_PATH.with(|f| {
+            f.get_or_init(|| {
+                get_meta_contents(ASSET_ROOT_ENV)
+                    .or_else(|| legacy_env_name(ASSET_ROOT_ENV).and_then(get_meta_contents))
+            })
+            .clone()
+        })
     }
 
     // In release mode, we get the base path from the environment variable
     #[cfg(not(debug_assertions))]
     {
-        option_env!("DIOXUS_ASSET_ROOT").map(ToString::to_string)
+        option_env!("DX_ASSET_ROOT")
+            .or(option_env!("DIOXUS_ASSET_ROOT"))
+            .map(ToString::to_string)
     }
 }
 
 /// Format a meta element for the base path to be used in the output HTML
 #[doc(hidden)]
 pub fn format_base_path_meta_element(base_path: &str) -> String {
-    format!(r#"<meta name="{ASSET_ROOT_ENV}" content="{base_path}">"#,)
+    let mut meta = format!(r#"<meta name="{ASSET_ROOT_ENV}" content="{base_path}">"#);
+    if let Some(legacy) = legacy_env_name(ASSET_ROOT_ENV) {
+        meta.push_str(&format!(r#"<meta name="{legacy}" content="{base_path}">"#));
+    }
+    meta
 }
 
 /// Get the path to the output directory where the application is being built.
@@ -270,7 +316,7 @@ pub fn format_base_path_meta_element(base_path: &str) -> String {
 pub fn out_dir() -> Option<PathBuf> {
     #[allow(deprecated)]
     {
-        std::env::var(OUT_DIR).ok().map(PathBuf::from)
+        env_var(OUT_DIR).map(PathBuf::from)
     }
 }
 
@@ -287,7 +333,7 @@ pub fn session_cache_dir() -> Option<PathBuf> {
         return Some(android_session_cache_dir());
     }
 
-    std::env::var(SESSION_CACHE_DIR).ok().map(PathBuf::from)
+    env_var(SESSION_CACHE_DIR).map(PathBuf::from)
 }
 
 /// The session cache directory for android
@@ -305,25 +351,22 @@ pub fn build_id() -> u64 {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        std::env::var(BUILD_ID)
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0)
+        env_var(BUILD_ID).and_then(|s| s.parse().ok()).unwrap_or(0)
     }
 }
 
 /// The product name of the bundled application.
 pub fn product_name() -> Option<String> {
-    read_env_config!("DIOXUS_PRODUCT_NAME")
+    read_env_config!("DX_PRODUCT_NAME", "DIOXUS_PRODUCT_NAME")
 }
 
 /// Check whether the app is running as a bundled app rather than through `cargo run`.
 ///
-/// Returns true when the CLI launched the app (`DIOXUS_CLI_ENABLED` is set) or when
+/// Returns true when the CLI launched the app (`DX_CLI_ENABLED` is set) or when
 /// `CARGO_MANIFEST_DIR` is unset or empty.
 pub fn is_bundled_app() -> bool {
     static BUNDLED: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
-        if std::env::var("DIOXUS_CLI_ENABLED").is_ok() {
+        if is_cli_enabled() {
             return true;
         }
 
@@ -338,4 +381,27 @@ pub fn is_bundled_app() -> bool {
     });
 
     *BUNDLED
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_names() {
+        assert_eq!(legacy_env_name(CLI_ENABLED_ENV), Some("DIOXUS_CLI_ENABLED"));
+        assert_eq!(legacy_env_name(BUILD_ID), Some("DIOXUS_BUILD_ID"));
+        assert_eq!(legacy_env_name(SERVER_PORT_ENV), None);
+        for (new, legacy) in LEGACY_ENV_NAMES {
+            assert!(new.starts_with("DX_"));
+            assert_eq!(legacy.strip_prefix("DIOXUS_"), new.strip_prefix("DX_"));
+        }
+    }
+
+    #[test]
+    fn base_path_meta_has_both_names() {
+        let meta = format_base_path_meta_element("app");
+        assert!(meta.contains(r#"name="DX_ASSET_ROOT" content="app""#));
+        assert!(meta.contains(r#"name="DIOXUS_ASSET_ROOT" content="app""#));
+    }
 }
