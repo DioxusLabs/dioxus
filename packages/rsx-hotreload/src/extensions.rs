@@ -1,4 +1,4 @@
-use dioxus_base_types::HotReloadingContext;
+use crate::HotReloadingContext;
 use dioxus_rsx::*;
 use dioxus_vdom::Template;
 use dioxus_vdom_template::RuntimeTemplateBuilder;

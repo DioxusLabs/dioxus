@@ -1,6 +1,6 @@
 use dioxus_html_internal_macro::impl_extension_attributes;
 
-#[cfg(feature = "hot-reload-context")]
+#[cfg(feature = "hot-reload")]
 macro_rules! mod_method_mapping {
     (
         $matching:ident;
@@ -91,7 +91,7 @@ macro_rules! attribute_group {
             $name:ident $(: $(no-$alias:ident)? $js_name:literal)? $(in $ns:literal)?;
         )+
     ) => {
-        #[cfg(feature = "hot-reload-context")]
+        #[cfg(feature = "hot-reload")]
         pub(crate) fn $fn(attr: &str) -> Option<(&'static str, Option<&'static str>)> {
             $(
                 mod_method_mapping! {

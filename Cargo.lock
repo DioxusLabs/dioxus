@@ -3043,25 +3043,17 @@ dependencies = [
  "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-config-macro",
- "dioxus-config-macros",
+ "dioxus-core",
  "dioxus-desktop",
  "dioxus-devtools",
- "dioxus-document",
  "dioxus-fullstack",
  "dioxus-fullstack-macro",
  "dioxus-history",
- "dioxus-hooks",
- "dioxus-html",
  "dioxus-liveview",
  "dioxus-logger",
  "dioxus-native",
  "dioxus-router",
  "dioxus-server",
- "dioxus-signals",
- "dioxus-ssr",
- "dioxus-stores",
- "dioxus-vdom",
- "dioxus-vdom-macro",
  "dioxus-web",
  "env_logger",
  "futures-util",
@@ -3073,7 +3065,6 @@ dependencies = [
  "tokio",
  "tracing",
  "warnings",
- "wasm-splitter",
 ]
 
 [[package]]
@@ -3114,10 +3105,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-base-types"
-version = "0.8.0-alpha.3"
-
-[[package]]
 name = "dioxus-cli"
 version = "0.8.0-alpha.3"
 dependencies = [
@@ -3148,7 +3135,6 @@ dependencies = [
  "ctrlc",
  "depinfo",
  "dioxus-autofmt",
- "dioxus-base-types",
  "dioxus-cli-config",
  "dioxus-cli-telemetry",
  "dioxus-component-manifest",
@@ -3189,6 +3175,7 @@ dependencies = [
  "manganis",
  "manganis-core",
  "md5",
+ "mimalloc",
  "mozjpeg",
  "notify",
  "nucleo",
@@ -3295,6 +3282,22 @@ name = "dioxus-const-vec"
 version = "0.8.0-alpha.3"
 
 [[package]]
+name = "dioxus-core"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "dioxus-config-macros",
+ "dioxus-document",
+ "dioxus-hooks",
+ "dioxus-html",
+ "dioxus-signals",
+ "dioxus-ssr",
+ "dioxus-stores",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
+ "wasm-splitter",
+]
+
+[[package]]
 name = "dioxus-desktop"
 version = "0.8.0-alpha.3"
 dependencies = [
@@ -3389,7 +3392,6 @@ name = "dioxus-document"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-base-types",
  "dioxus-html",
  "dioxus-vdom",
  "dioxus-vdom-macro",
@@ -3609,10 +3611,9 @@ dependencies = [
  "async-trait",
  "bytes",
  "dioxus",
- "dioxus-base-types",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
- "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-vdom",
  "dioxus-vdom-macro",
  "dioxus-web",
@@ -3624,7 +3625,6 @@ dependencies = [
  "js-sys",
  "keyboard-types",
  "lazy-js-bundle",
- "manganis",
  "rustversion",
  "serde",
  "serde_json",
@@ -3648,7 +3648,6 @@ dependencies = [
 name = "dioxus-interpreter-js"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-base-types",
  "dioxus-html",
  "dioxus-vdom",
  "js-sys",
@@ -3947,7 +3946,6 @@ dependencies = [
 name = "dioxus-rsx-hotreload"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-base-types",
  "dioxus-rsx",
  "dioxus-vdom",
  "dioxus-vdom-template",
@@ -4062,7 +4060,6 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "askama_escape",
  "dioxus",
- "dioxus-base-types",
  "dioxus-vdom",
  "rustc-hash 2.1.2",
 ]
@@ -4116,7 +4113,6 @@ dependencies = [
  "const_format",
  "criterion",
  "dioxus",
- "dioxus-base-types",
  "dioxus-const-vec",
  "dioxus-html",
  "dioxus-renderer-oracle",
@@ -4127,6 +4123,7 @@ dependencies = [
  "futures-util",
  "generational-box",
  "longest-increasing-subsequence",
+ "manganis-core",
  "pretty_assertions",
  "rand 0.9.4",
  "reqwest",
@@ -4191,7 +4188,6 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "ciborium",
  "dioxus",
- "dioxus-base-types",
  "dioxus-cli-config",
  "dioxus-devtools",
  "dioxus-document",
@@ -8543,6 +8539,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8849,7 +8854,6 @@ name = "manganis-core"
 version = "0.8.0-alpha.3"
 dependencies = [
  "const-serialize",
- "dioxus-base-types",
  "dioxus-cli-config",
  "manganis",
  "serde",
@@ -8980,6 +8984,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.48"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]

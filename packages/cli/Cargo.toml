@@ -14,9 +14,8 @@ dioxus-autofmt = { workspace = true }
 dioxus-rsx-rosetta = { workspace = true }
 dioxus-rsx = { workspace = true }
 dioxus-rsx-hotreload = { workspace = true }
-dioxus-html = { workspace = true, features = ["hot-reload-context"] }
+dioxus-html = { workspace = true, features = ["hot-reload"] }
 dioxus-vdom = { workspace = true, features = ["serialize"] }
-dioxus-base-types = { workspace = true }
 dioxus-devtools-types = { workspace = true }
 dioxus-cli-config = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
@@ -177,6 +176,7 @@ clap_complete = { version = "4.5.65", features = ["unstable-dynamic"] }
 
 [target.'cfg(target_env = "musl")'.dependencies]
 git2 = { version = "0.21.0", features = ["vendored-libgit2"] }
+mimalloc = "0.1.48"
 
 [features]
 default = []

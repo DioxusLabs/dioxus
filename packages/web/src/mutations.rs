@@ -1,5 +1,5 @@
 use crate::dom::WebsysDom;
-use dioxus_base_types::event_bubbles;
+use dioxus_html::event_bubbles;
 use dioxus_vdom::{BorrowedAttributeValue, ElementId, WriteMutations};
 #[cfg(feature = "mounted")]
 use wasm_bindgen::JsCast;

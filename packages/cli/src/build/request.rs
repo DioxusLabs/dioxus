@@ -783,6 +783,10 @@ impl BuildRequest {
                 "-Clink-arg=-lOpenSLES".to_string(),
                 "-Clink-arg=-lc++abi".to_string(),
                 "-Clink-arg=-Wl,--export-dynamic".to_string(),
+                // Android 15+ devices can use 16 KB pages. NDK r28+ aligns to 16 KB by default,
+                // but older NDK versions use 4 KB, so set it explicitly.
+                "-Clink-arg=-Wl,-z,max-page-size=16384".to_string(),
+                "-Clink-arg=-Wl,-z,common-page-size=16384".to_string(),
                 format!(
                     "-Clink-arg=-Wl,--sysroot={}",
                     workspace.android_tools()?.sysroot().display()

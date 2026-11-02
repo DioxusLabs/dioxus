@@ -1,5 +1,5 @@
 use crate::unified_bindings::Interpreter as Channel;
-use dioxus_base_types::event_bubbles;
+use dioxus_html::event_bubbles;
 use dioxus_vdom::WriteMutations;
 
 /// The state needed to apply mutations to a channel. This state should be kept across all mutations for the app

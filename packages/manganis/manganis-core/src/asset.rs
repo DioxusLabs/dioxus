@@ -198,8 +198,7 @@ impl Asset {
             return PathBuf::from(bundled.absolute_source_path());
         }
 
-        #[cfg(feature = "dioxus")]
-        if !dioxus_base_types::is_bundled_app() {
+        if !dioxus_cli_config::is_bundled_app() {
             return PathBuf::from(bundled.absolute_source_path());
         }
 
@@ -211,22 +210,15 @@ impl Asset {
 }
 
 fn bundle_root() -> PathBuf {
-    #[cfg(feature = "dioxus")]
-    let bundle_root = {
-        let base_path = dioxus_cli_config::base_path();
-        let base_path = base_path
-            .as_deref()
-            .map(|base_path| {
-                let trimmed = base_path.trim_matches('/');
-                format!("/{trimmed}")
-            })
-            .unwrap_or_default();
-        PathBuf::from(format!("{base_path}/assets/"))
-    };
-    #[cfg(not(feature = "dioxus"))]
-    let bundle_root = PathBuf::from("/assets/");
-
-    bundle_root
+    let base_path = dioxus_cli_config::base_path();
+    let base_path = base_path
+        .as_deref()
+        .map(|base_path| {
+            let trimmed = base_path.trim_matches('/');
+            format!("/{trimmed}")
+        })
+        .unwrap_or_default();
+    PathBuf::from(format!("{base_path}/assets/"))
 }
 
 impl From<Asset> for String {
@@ -243,13 +235,6 @@ impl From<Asset> for Option<String> {
 impl std::fmt::Display for Asset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.resolve().display())
-    }
-}
-
-#[cfg(feature = "dioxus")]
-impl dioxus_base_types::DioxusFormattable for Asset {
-    fn format(&self) -> std::borrow::Cow<'static, str> {
-        std::borrow::Cow::Owned(self.to_string())
     }
 }
 
@@ -289,17 +274,13 @@ mod tests {
     #[test]
     fn resolve_processed_asset() {
         let asset = Asset::new(|| PROCESSED.as_slice());
-        #[cfg(feature = "dioxus")]
-        if !dioxus_base_types::is_bundled_app() {
+        if !dioxus_cli_config::is_bundled_app() {
             assert_eq!(asset.resolve(), PathBuf::from("/source/style.css"));
             return;
         }
-        #[cfg(feature = "dioxus")]
         let root = dioxus_cli_config::base_path()
             .map(|path| format!("/{}/assets", path.trim_matches('/')))
             .unwrap_or_else(|| "/assets".to_string());
-        #[cfg(not(feature = "dioxus"))]
-        let root = "/assets";
         assert_eq!(asset.resolve(), PathBuf::from(root).join("style-hash.css"));
     }
 }
