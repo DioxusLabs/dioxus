@@ -33,28 +33,22 @@ pub struct Bundle {
 }
 
 impl Bundle {
-    // todo: make sure to run pre-render static routes! we removed this from the other bundling step
     pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
         tracing::info!("Bundling project...");
 
         self.force_ios_bundle_device_target_if_needed()?;
+        let ssg = self.args.shared.ssg;
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
         let client_artifacts = AppBuilder::started(&client, BuildMode::Base, BuildId::PRIMARY)?
             .finish_build()
             .await?;
-        let mut server_artifacts = None;
-
-        if let Some(server) = server.as_ref() {
-            // If the server is present, we need to build it as well
-            server_artifacts = Some(
-                AppBuilder::started(server, BuildMode::Base, BuildId::SECONDARY)?
-                    .finish_build()
-                    .await?,
-            );
-
-            tracing::info!(path = ?client.root_dir(), "Server build completed successfully! 🚀");
-        }
+        let server_artifacts = CommandWithPlatformOverrides::<BuildArgs>::build_server_inner(
+            &server,
+            BuildMode::Base,
+            ssg,
+        )
+        .await?;
 
         // Fill platform-specific defaults for package types when omitted.
         if self.package_types.is_none() {
