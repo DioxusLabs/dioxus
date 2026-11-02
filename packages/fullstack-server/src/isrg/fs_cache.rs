@@ -3,13 +3,17 @@
 use chrono::{DateTime, Utc};
 
 use super::{IncrementalRendererError, RenderFreshness};
-use std::{path::PathBuf, sync::Arc, time::SystemTime};
+use std::{
+    path::{Component, Path, PathBuf},
+    sync::Arc,
+    time::SystemTime,
+};
 
 pub(crate) type PathMapFn = Arc<dyn Fn(&str) -> PathBuf + Send + Sync>;
 
 pub(crate) struct FileSystemCache {
     static_dir: PathBuf,
-    map_path: PathMapFn,
+    map_path: Option<PathMapFn>,
     invalidate_after: Option<std::time::Duration>,
 }
 
@@ -20,17 +24,8 @@ impl FileSystemCache {
         invalidate_after: Option<std::time::Duration>,
     ) -> Self {
         Self {
-            static_dir: static_dir.clone(),
-            map_path: map_path.unwrap_or_else(move || {
-                Arc::new(move |route: &str| {
-                    let (before_query, _) = route.split_once('?').unwrap_or((route, ""));
-                    let mut path = static_dir.clone();
-                    for segment in before_query.split('/') {
-                        path.push(segment);
-                    }
-                    path
-                })
-            }),
+            static_dir,
+            map_path,
             invalidate_after,
         }
     }
@@ -42,7 +37,13 @@ impl FileSystemCache {
         data: Vec<u8>,
     ) -> Result<(), IncrementalRendererError> {
         use std::io::Write;
-        let file_path = self.route_as_path(&route, timestamp);
+        let Some(file_path) = self.route_as_path(&route, timestamp) else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("route {route:?} cannot be mapped to a path inside the static directory"),
+            )
+            .into());
+        };
         if let Some(parent) = file_path.parent()
             && !parent.exists()
         {
@@ -76,8 +77,10 @@ impl FileSystemCache {
     }
 
     pub fn invalidate(&mut self, route: &str) {
-        let file_path = self.find_file(route).unwrap().full_path;
-        if let Err(err) = std::fs::remove_file(file_path) {
+        let Some(cached) = self.find_file(route) else {
+            return;
+        };
+        if let Err(err) = std::fs::remove_file(cached.full_path) {
             tracing::error!("Failed to remove file: {}", err);
         }
     }
@@ -100,8 +103,16 @@ impl FileSystemCache {
         Ok(None)
     }
 
+    /// The directory the cached `index.html` for `route` lives in, or `None` if the route can't be cached.
+    fn route_dir(&self, route: &str) -> Option<PathBuf> {
+        match &self.map_path {
+            Some(map_path) => Some(map_path(route)),
+            None => default_route_dir(&self.static_dir, route),
+        }
+    }
+
     fn find_file(&self, route: &str) -> Option<ValidCachedPath> {
-        let mut file_path = (self.map_path)(route);
+        let mut file_path = self.route_dir(route)?;
         if let Some(deadline) = self.invalidate_after {
             // find the first file that matches the route and is a html file
             file_path.push("index");
@@ -135,8 +146,8 @@ impl FileSystemCache {
         }
     }
 
-    fn route_as_path(&self, route: &str, timestamp: DateTime<Utc>) -> PathBuf {
-        let mut file_path = (self.map_path)(route);
+    fn route_as_path(&self, route: &str, timestamp: DateTime<Utc>) -> Option<PathBuf> {
+        let mut file_path = self.route_dir(route)?;
         if self.track_timestamps() {
             file_path.push("index");
             file_path.push(timestamp_to_string(timestamp));
@@ -144,12 +155,30 @@ impl FileSystemCache {
             file_path.push("index");
         }
         file_path.set_extension("html");
-        file_path
+        Some(file_path)
     }
 
     fn track_timestamps(&self) -> bool {
         self.invalidate_after.is_some()
     }
+}
+
+/// Map a route to a directory inside `static_dir`. Returns `None` if any segment of the route
+/// could resolve outside of `static_dir` (`.`, `..`, a path separator or a drive prefix).
+fn default_route_dir(static_dir: &Path, route: &str) -> Option<PathBuf> {
+    let (before_query, _) = route.split_once('?').unwrap_or((route, ""));
+    let mut path = static_dir.to_path_buf();
+    for segment in before_query
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+    {
+        let mut components = Path::new(segment).components();
+        match (components.next(), components.next()) {
+            (Some(Component::Normal(name)), None) if name == segment => path.push(name),
+            _ => return None,
+        }
+    }
+    Some(path)
 }
 
 pub(crate) struct ValidCachedPath {
@@ -187,4 +216,59 @@ pub(crate) fn timestamp_to_string(timestamp: DateTime<Utc>) -> String {
         .signed_duration_since(DateTime::<Utc>::from(std::time::UNIX_EPOCH))
         .num_seconds();
     format!("{:x}", timestamp)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_route_dir_stays_inside_static_dir() {
+        let static_dir = Path::new("/srv/static");
+        assert_eq!(
+            default_route_dir(static_dir, "/"),
+            Some(static_dir.to_path_buf())
+        );
+        assert_eq!(
+            default_route_dir(static_dir, "/blog/1/?q=../x"),
+            Some(static_dir.join("blog").join("1"))
+        );
+        assert_eq!(
+            default_route_dir(static_dir, "/%2e%2e/x"),
+            Some(static_dir.join("%2e%2e").join("x"))
+        );
+        for route in [
+            "/../victim",
+            "/a/../../victim",
+            "../victim",
+            "/./a",
+            "/a/..",
+        ] {
+            assert_eq!(default_route_dir(static_dir, route), None, "{route}");
+        }
+    }
+
+    #[test]
+    fn put_rejects_routes_outside_static_dir() {
+        let root = std::env::temp_dir().join(format!("dioxus-isr-{}", std::process::id()));
+        let static_dir = root.join("static");
+        std::fs::create_dir_all(&static_dir).unwrap();
+        let mut cache = FileSystemCache::new(static_dir.clone(), None, None);
+
+        assert!(
+            cache
+                .put("/../victim".to_string(), Utc::now(), b"pwned".to_vec())
+                .is_err()
+        );
+        assert!(!root.join("victim").exists());
+        assert!(cache.get("/../victim").unwrap().is_none());
+        cache.invalidate("/../victim");
+
+        cache
+            .put("/blog".to_string(), Utc::now(), b"ok".to_vec())
+            .unwrap();
+        assert!(static_dir.join("blog").join("index.html").exists());
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
