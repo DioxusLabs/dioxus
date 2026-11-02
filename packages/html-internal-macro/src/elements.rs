@@ -335,10 +335,10 @@ impl DefineElements {
             .map(ElementDef::extension_export_tokens);
 
         quote! {
-            #[cfg(feature = "hot-reload-context")]
+            #[cfg(feature = "hot-reload")]
             pub struct HtmlCtx;
 
-            #[cfg(feature = "hot-reload-context")]
+            #[cfg(feature = "hot-reload")]
             impl ::dioxus_rsx_hotreload::HotReloadingContext for HtmlCtx {
                 fn map_attribute(
                     element: &str,
