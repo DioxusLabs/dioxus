@@ -45,6 +45,11 @@ pub(crate) use tailwind::*;
 pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
+// musl's malloc is slow under multithreaded load
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[tokio::main]
 async fn main() -> ExitCode {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)

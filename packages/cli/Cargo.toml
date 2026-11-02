@@ -177,6 +177,7 @@ clap_complete = { version = "4.5.65", features = ["unstable-dynamic"] }
 
 [target.'cfg(target_env = "musl")'.dependencies]
 git2 = { version = "0.21.0", features = ["vendored-libgit2"] }
+mimalloc = "0.1.48"
 
 [features]
 default = []
