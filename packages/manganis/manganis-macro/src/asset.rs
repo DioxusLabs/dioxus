@@ -107,7 +107,7 @@ impl AssetParser {
             quote! { None }
         } else {
             quote! {
-                if manganis::macro_helpers::embed_assets(option_env!("MANGANIS_EMBED_ASSETS"), cfg!(not(debug_assertions))) {
+                if manganis::macro_helpers::embed_assets(option_env!("MANGANIS_EMBED_ASSETS")) {
                     Some(include_bytes!(#asset_str))
                 } else {
                     None

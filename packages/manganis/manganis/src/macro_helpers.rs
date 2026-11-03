@@ -6,20 +6,14 @@ use manganis_core::{
     AndroidArtifactMetadata, AssetOptions, BundledAsset, SwiftPackageMetadata, SymbolData,
 };
 
-/// Select whether to embed assets for the invoking crate's build profile.
-pub const fn embed_assets(value: Option<&str>, release: bool) -> bool {
+/// Select whether to embed assets for the invoking crate.
+pub const fn embed_assets(value: Option<&str>) -> bool {
     match value {
         Some(value) => {
             let bytes = value.as_bytes();
-            if bytes_equal(bytes, b"1") || bytes_equal(bytes, b"true") {
-                true
-            } else if bytes_equal(bytes, b"0") || bytes_equal(bytes, b"false") {
-                false
-            } else {
-                release
-            }
+            !bytes_equal(bytes, b"0") && !bytes_equal(bytes, b"false")
         }
-        None => release,
+        None => true,
     }
 }
 
@@ -43,16 +37,15 @@ mod embed_tests {
 
     #[test]
     fn select_embedding() {
-        assert!(embed_assets(None, true));
-        assert!(!embed_assets(None, false));
+        assert!(embed_assets(None));
         for value in ["1", "true"] {
-            assert!(embed_assets(Some(value), false));
+            assert!(embed_assets(Some(value)));
         }
         for value in ["0", "false"] {
-            assert!(!embed_assets(Some(value), true));
+            assert!(!embed_assets(Some(value)));
         }
-        assert!(embed_assets(Some("other"), true));
-        assert!(!embed_assets(Some("other"), false));
+        assert!(embed_assets(Some("other")));
+        assert!(embed_assets(Some("")));
     }
 }
 
