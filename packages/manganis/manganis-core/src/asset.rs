@@ -1,6 +1,20 @@
 use crate::AssetOptions;
 use const_serialize::{ConstStr, SerializeConst, deserialize_const};
-use std::{fmt::Debug, hash::Hash, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    hash::{DefaultHasher, Hash, Hasher},
+    path::{Path, PathBuf},
+    sync::{LazyLock, RwLock},
+};
+
+static EMBEDDED_ASSETS: LazyLock<RwLock<HashMap<String, &'static [u8]>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// Get the bytes of an embedded asset by its resolved path.
+pub fn embedded_asset(path: &str) -> Option<&'static [u8]> {
+    EMBEDDED_ASSETS.read().unwrap().get(path).copied()
+}
 
 /// An asset that should be copied by the bundler with some options. This type will be
 /// serialized into the binary.
@@ -110,6 +124,7 @@ pub struct Asset {
     /// the data for this is filled in by the CLI after the binary is built. Instead, use
     /// [`std::ptr::read_volatile`] to read the data.
     bundled: fn() -> &'static [u8],
+    embedded: Option<&'static [u8]>,
 }
 
 impl Debug for Asset {
@@ -126,7 +141,16 @@ impl Asset {
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
     pub const fn new(bundled: extern "Rust" fn() -> &'static [u8]) -> Self {
-        Self { bundled }
+        Self::new_with_embedded(bundled, None)
+    }
+
+    #[doc(hidden)]
+    /// Create an asset with optional embedded bytes.
+    pub const fn new_with_embedded(
+        bundled: extern "Rust" fn() -> &'static [u8],
+        embedded: Option<&'static [u8]>,
+    ) -> Self {
+        Self { bundled, embedded }
     }
 
     /// Get the bundled asset
@@ -157,28 +181,44 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
-        // If the asset is relative, we resolve the asset at the current directory
-        if !dx_env::is_bundled_app() {
-            return PathBuf::from(self.bundled().absolute_source_path.as_str());
+        let bundled = self.bundled();
+        if bundled.bundled_path() == BundledAsset::PLACEHOLDER_HASH {
+            if let Some(bytes) = self.embedded {
+                let mut hasher = DefaultHasher::new();
+                bundled.hash(&mut hasher);
+                let name = Path::new(bundled.absolute_source_path())
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                let path = bundle_root().join(format!("{:016x}-{name}", hasher.finish()));
+                let path = path.to_string_lossy().into_owned();
+                EMBEDDED_ASSETS.write().unwrap().insert(path.clone(), bytes);
+                return PathBuf::from(path);
+            }
+            return PathBuf::from(bundled.absolute_source_path());
         }
 
-        let bundle_root = {
-            let base_path = dx_env::base_path();
-            let base_path = base_path
-                .as_deref()
-                .map(|base_path| {
-                    let trimmed = base_path.trim_matches('/');
-                    format!("/{trimmed}")
-                })
-                .unwrap_or_default();
-            PathBuf::from(format!("{base_path}/assets/"))
-        };
+        if !dx_env::is_bundled_app() {
+            return PathBuf::from(bundled.absolute_source_path());
+        }
 
         // Otherwise presumably we're bundled and we can use the bundled path
-        bundle_root.join(PathBuf::from(
-            self.bundled().bundled_path.as_str().trim_start_matches('/'),
+        bundle_root().join(PathBuf::from(
+            bundled.bundled_path().trim_start_matches('/'),
         ))
     }
+}
+
+fn bundle_root() -> PathBuf {
+    let base_path = dx_env::base_path();
+    let base_path = base_path
+        .as_deref()
+        .map(|base_path| {
+            let trimmed = base_path.trim_matches('/');
+            format!("/{trimmed}")
+        })
+        .unwrap_or_default();
+    PathBuf::from(format!("{base_path}/assets/"))
 }
 
 impl From<Asset> for String {
@@ -195,5 +235,52 @@ impl From<Asset> for Option<String> {
 impl std::fmt::Display for Asset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.resolve().display())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use const_serialize::{ConstVec, serialize_const};
+
+    const OPTIONS: AssetOptions = AssetOptions::builder().into_asset_options();
+    static UNPROCESSED: ConstVec<u8> = serialize_const(
+        &BundledAsset::new("/source/style.css", BundledAsset::PLACEHOLDER_HASH, OPTIONS),
+        ConstVec::new(),
+    );
+    static PROCESSED: ConstVec<u8> = serialize_const(
+        &BundledAsset::new("/source/style.css", "/style-hash.css", OPTIONS),
+        ConstVec::new(),
+    );
+
+    #[test]
+    fn resolve_unprocessed_asset() {
+        let asset = Asset::new(|| UNPROCESSED.as_slice());
+        assert_eq!(asset.resolve(), PathBuf::from("/source/style.css"));
+    }
+
+    #[test]
+    fn resolve_embedded_asset() {
+        let asset = Asset::new_with_embedded(|| UNPROCESSED.as_slice(), Some(b"embedded"));
+        let path = asset.resolve();
+        assert!(path.to_string_lossy().ends_with("-style.css"));
+        assert_eq!(
+            embedded_asset(path.to_str().unwrap()),
+            Some(&b"embedded"[..])
+        );
+        assert_eq!(embedded_asset("/missing"), None);
+    }
+
+    #[test]
+    fn resolve_processed_asset() {
+        let asset = Asset::new(|| PROCESSED.as_slice());
+        if !dx_env::is_bundled_app() {
+            assert_eq!(asset.resolve(), PathBuf::from("/source/style.css"));
+            return;
+        }
+        let root = dx_env::base_path()
+            .map(|path| format!("/{}/assets", path.trim_matches('/')))
+            .unwrap_or_else(|| "/assets".to_string());
+        assert_eq!(asset.resolve(), PathBuf::from(root).join("style-hash.css"));
     }
 }

@@ -103,6 +103,12 @@ impl AssetParser {
             self.options.clone()
         };
 
+        let embedded = if asset.is_dir() || !embed_assets(env!("MANGANIS_EMBED_ASSETS_RESOLVED")) {
+            quote! { None }
+        } else {
+            quote! { Some(include_bytes!(#asset_str)) }
+        };
+
         quote! {
             {
                 // The source is used by the CLI to copy the asset
@@ -116,11 +122,13 @@ impl AssetParser {
                 // Create the asset that the crate will use. This is used both in the return value and
                 // added to the linker for the bundler to copy later
                 const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_OPTIONS);
+                const __ASSET_EMBEDDED: Option<&'static [u8]> = #embedded;
 
                 #link_section
 
-                manganis::Asset::new(
+                manganis::Asset::new_with_embedded(
                     || unsafe { std::ptr::read_volatile(&__LINK_SECTION) },
+                    __ASSET_EMBEDDED,
                 )
             }
         }
@@ -142,5 +150,24 @@ impl AssetParser {
     fn error_tokens(&self, err: &AssetParseError) -> proc_macro2::TokenStream {
         let err = err.to_string();
         quote! { compile_error!(#err) }
+    }
+}
+
+fn embed_assets(value: &str) -> bool {
+    !matches!(value, "0" | "false")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::embed_assets;
+
+    #[test]
+    fn select_embedding() {
+        for value in ["", "1", "true", "other"] {
+            assert!(embed_assets(value));
+        }
+        for value in ["0", "false"] {
+            assert!(!embed_assets(value));
+        }
     }
 }
