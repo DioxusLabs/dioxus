@@ -18,7 +18,6 @@ pub struct IncrementalRendererConfig {
     memory_cache_limit: usize,
     invalidate_after: Option<Duration>,
     clear_cache: bool,
-    pre_render: bool,
 
     #[cfg(not(target_arch = "wasm32"))]
     map_path: Option<PathMapFn>,
@@ -38,7 +37,6 @@ impl IncrementalRendererConfig {
             memory_cache_limit: 10000,
             invalidate_after: None,
             clear_cache: false,
-            pre_render: false,
             #[cfg(not(target_arch = "wasm32"))]
             map_path: None,
         }
@@ -73,12 +71,6 @@ impl IncrementalRendererConfig {
     /// Set the invalidation time.
     pub fn invalidate_after(mut self, invalidate_after: Duration) -> Self {
         self.invalidate_after = Some(invalidate_after);
-        self
-    }
-
-    /// Set whether to include hydration ids in the pre-rendered html.
-    pub fn pre_render(mut self, pre_render: bool) -> Self {
-        self.pre_render = pre_render;
         self
     }
 

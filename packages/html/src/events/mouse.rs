@@ -1,8 +1,9 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
 use crate::*;
-use dioxus_core::Event;
+use dioxus_vdom::Event;
 use keyboard_types::Modifiers;
+use std::option::Option;
 
 pub type MouseEvent = Event<MouseData>;
 

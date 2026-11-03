@@ -3,68 +3,6 @@
 use std::any::Any;
 use std::sync::RwLock;
 
-macro_rules! impl_event {
-    (
-        $data:ty;
-        $(
-            $( #[$attr:meta] )*
-            $name:ident $( : $js_name:expr )?;
-        )*
-    ) => {
-        $(
-            $( #[$attr] )*
-            /// <details open>
-            /// <summary>General Event Handler Information</summary>
-            ///
-            #[doc = include_str!("../../docs/event_handlers.md")]
-            ///
-            /// </details>
-            ///
-            #[doc = include_str!("../../docs/common_event_handler_errors.md")]
-            #[inline]
-            pub fn $name<__Marker>(mut _f: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<$data>, __Marker>) -> ::dioxus_core::Attribute {
-                let event_handler = _f.super_into();
-                ::dioxus_core::Attribute::new(
-                    impl_event!(@name $name $($js_name)?),
-                    ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        let event: ::dioxus_core::Event<$data> = e.map(|data| {
-                            data.into()
-                        });
-                        event_handler.call(event.into_any());
-                    }),
-                    None,
-                    false,
-                ).into()
-            }
-
-            #[doc(hidden)]
-            $( #[$attr] )*
-            pub mod $name {
-                use super::*;
-
-                // When expanding the macro, we use this version of the function if we see an inline closure to give better type inference
-                $( #[$attr] )*
-                pub fn call_with_explicit_closure<
-                    __Marker,
-                    Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
-                >(
-                    event_handler: impl FnMut(::dioxus_core::Event<$data>) -> Return + 'static,
-                ) -> ::dioxus_core::Attribute {
-                    #[allow(deprecated)]
-                    super::$name(event_handler)
-                }
-            }
-        )*
-    };
-
-    (@name $name:ident $js_name:expr) => {
-        $js_name
-    };
-    (@name $name:ident) => {
-        stringify!($name)
-    };
-}
-
 static EVENT_CONVERTER: RwLock<Option<Box<dyn HtmlEventConverter>>> = RwLock::new(None);
 
 #[inline]
@@ -108,9 +46,87 @@ impl PlatformEventData {
     }
 }
 
+/// Marker for event handlers provided as closures.
+pub struct EventClosureMarker<Marker>(std::marker::PhantomData<Marker>);
+
+/// Marker for event handlers provided as listener callbacks.
+#[doc(hidden)]
+pub struct EventListenerMarker;
+
+/// Marker for event handlers provided as callbacks.
+#[doc(hidden)]
+pub struct EventCallbackMarker;
+
+/// A value that can be converted into a platform event listener.
+pub trait EventHandlerValue<Data, Marker>
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    /// Convert this handler into a platform event listener.
+    fn into_platform_listener(self) -> ::dioxus_vdom::ListenerCallback<PlatformEventData>;
+}
+
+impl<Data, Function, Spawn, Marker> EventHandlerValue<Data, EventClosureMarker<Marker>> for Function
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+    Function: FnMut(::dioxus_vdom::Event<Data>) -> Spawn + 'static,
+    Spawn: ::dioxus_vdom::SpawnIfAsync<Marker> + 'static,
+{
+    fn into_platform_listener(mut self) -> ::dioxus_vdom::ListenerCallback<PlatformEventData> {
+        ::dioxus_vdom::ListenerCallback::new(
+            move |event: ::dioxus_vdom::Event<PlatformEventData>| {
+                self(event.map(|data| Data::from(data)))
+            },
+        )
+    }
+}
+
+impl<Data> EventHandlerValue<Data, EventListenerMarker> for ::dioxus_vdom::ListenerCallback<Data>
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    fn into_platform_listener(self) -> ::dioxus_vdom::ListenerCallback<PlatformEventData> {
+        ::dioxus_vdom::ListenerCallback::new(
+            move |event: ::dioxus_vdom::Event<PlatformEventData>| {
+                self.call(event.map(|data| Data::from(data)).into_any());
+            },
+        )
+    }
+}
+
+impl<Data> EventHandlerValue<Data, EventCallbackMarker>
+    for ::dioxus_vdom::Callback<::dioxus_vdom::Event<Data>>
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    fn into_platform_listener(self) -> ::dioxus_vdom::ListenerCallback<PlatformEventData> {
+        ::dioxus_vdom::ListenerCallback::new(
+            move |event: ::dioxus_vdom::Event<PlatformEventData>| {
+                self.call(event.map(|data| Data::from(data)));
+            },
+        )
+    }
+}
+
+pub(crate) fn event_attribute<Data, Marker>(
+    name: &'static str,
+    event_handler: impl EventHandlerValue<Data, Marker>,
+) -> ::dioxus_vdom::Attribute
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    ::dioxus_vdom::Attribute::new(
+        name,
+        ::dioxus_vdom::AttributeValue::Listener(event_handler.into_platform_listener().erase()),
+        None,
+        false,
+    )
+}
+
 mod generated;
 
 mod animation;
+mod before_input;
 mod cancel;
 mod clipboard;
 mod composition;
@@ -133,6 +149,7 @@ mod visible;
 mod wheel;
 
 pub use animation::*;
+pub use before_input::*;
 pub use cancel::*;
 pub use clipboard::*;
 pub use composition::*;

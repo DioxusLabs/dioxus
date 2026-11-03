@@ -9,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::*,
 };
-use dioxus_core::{ComponentFunction, VirtualDom};
+use dioxus_vdom::{ComponentFunction, VirtualDom};
 use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -406,7 +406,7 @@ where
     use tower_http::services::{ServeDir, ServeFile};
 
     let dir = std::fs::read_dir(directory)
-        .unwrap_or_else(|e| panic!("Couldn't read public directory at {:?}: {}", &directory, e));
+        .unwrap_or_else(|e| panic!("Couldn't read public directory at {:?}: {}", directory, e));
 
     for entry in dir.flatten() {
         let path = entry.path();

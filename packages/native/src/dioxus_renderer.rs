@@ -2,7 +2,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::{any::Any, cell::RefCell};
 
-use anyrender::{RenderContext, WindowRenderer};
+use anyrender::{CompositeAlphaMode, RenderContext, RendererConfig, WindowRenderer};
+use peniko::Color;
 
 // Renderer imports
 cfg_if::cfg_if! {
@@ -15,7 +16,9 @@ cfg_if::cfg_if! {
         use anyrender_vello_cpu::VelloCpuWindowRenderer as InnerRenderer;
     } else if #[cfg(feature = "skia")] {
         use anyrender_skia::SkiaWindowRenderer as InnerRenderer;
-        } else if #[cfg(feature = "vello-hybrid")] {
+    } else if #[cfg(feature = "skia-raster-base")] {
+        use anyrender_skia::raster::SkiaRasterWindowRenderer as InnerRenderer;
+    } else if #[cfg(feature = "vello-hybrid")] {
         pub use anyrender_vello_hybrid::{
             VelloHybridRendererOptions as InnerRendererOptions, VelloHybridWindowRenderer as InnerRenderer,
             wgpu::{Features, Limits},
@@ -23,6 +26,24 @@ cfg_if::cfg_if! {
     } else {
         compile_error!("At least one renderer feature must be enabled");
     }
+}
+
+/// Renderer configuration for [`DioxusNativeWindowRenderer`].
+///
+/// Fields that only apply to the GPU-backed `vello`/`vello-hybrid` renderers
+/// (`features`/`limits`) are only present when one of those features is enabled.
+#[derive(Default)]
+pub struct RendererOptions {
+    /// Base (background) color used to clear each frame.
+    pub base_color: Option<Color>,
+    /// Alpha mode used when compositing the window surface.
+    pub alpha_mode: Option<CompositeAlphaMode>,
+    /// wgpu features to request from the GPU adapter.
+    #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
+    pub features: Option<Features>,
+    /// wgpu limits to request from the GPU adapter.
+    #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
+    pub limits: Option<Limits>,
 }
 
 #[derive(Clone)]
@@ -38,23 +59,50 @@ impl Default for DioxusNativeWindowRenderer {
 
 impl DioxusNativeWindowRenderer {
     pub fn new() -> Self {
-        let vello_renderer = InnerRenderer::new();
-        Self::with_inner_renderer(vello_renderer)
+        Self::with_options(RendererOptions::default())
     }
 
     #[cfg(any(feature = "vello-hybrid", feature = "vello"))]
     pub fn with_features_and_limits(features: Option<Features>, limits: Option<Limits>) -> Self {
-        let vello_renderer = InnerRenderer::with_options(InnerRendererOptions {
+        Self::with_options(RendererOptions {
             features,
             limits,
             ..Default::default()
-        });
-        Self::with_inner_renderer(vello_renderer)
+        })
     }
 
-    fn with_inner_renderer(vello_renderer: InnerRenderer) -> Self {
+    /// Build a renderer from the given [`RendererOptions`].
+    ///
+    /// `base_color` and `alpha_mode` are forwarded to the active renderer via
+    /// [`anyrender::RendererConfig`]; renderers that don't support a particular
+    /// option simply ignore it. `features`/`limits` are only applied by the
+    /// GPU-backed `vello`/`vello-hybrid` renderers.
+    pub fn with_options(options: RendererOptions) -> Self {
+        let mut config = RendererConfig::default();
+        config.base_color = options.base_color;
+        config.composite_alpha_mode = options.alpha_mode;
+
+        cfg_if::cfg_if! {
+            if #[cfg(any(feature = "vello", feature = "vello-hybrid"))] {
+                let mut inner_options: InnerRendererOptions = config.into();
+                if let Some(features) = options.features {
+                    inner_options = inner_options.features(features);
+                }
+                if let Some(limits) = options.limits {
+                    inner_options = inner_options.limits(limits);
+                }
+                let inner_renderer = InnerRenderer::with_options(inner_options);
+            } else {
+                let inner_renderer = InnerRenderer::with_options(config);
+            }
+        }
+
+        Self::with_inner_renderer(inner_renderer)
+    }
+
+    fn with_inner_renderer(inner_renderer: InnerRenderer) -> Self {
         Self {
-            inner: Rc::new(RefCell::new(vello_renderer)),
+            inner: Rc::new(RefCell::new(inner_renderer)),
         }
     }
 }

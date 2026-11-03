@@ -1,5 +1,0 @@
-# borrowed from tauri - only allow core maintainers to approve PRs
-
-* @DioxusLabs/core
-
-.github @DioxusLabs/core

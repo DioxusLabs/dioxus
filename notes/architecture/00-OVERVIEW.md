@@ -21,7 +21,7 @@ This directory contains comprehensive architecture documentation for the Dioxus 
 
 ```
 dioxus (umbrella crate)
-├── dioxus-core (VirtualDOM, runtime, scheduler)
+├── dioxus-vdom (VirtualDOM, runtime, scheduler)
 │   └── generational-box (Copy semantics for references)
 ├── dioxus-rsx (macro parsing)
 │   └── dioxus-autofmt (code formatting)
@@ -47,7 +47,8 @@ dioxus (umbrella crate)
 │
 ├── CLI (dx command):
 │   ├── dioxus-cli (main binary)
-│   ├── dioxus-cli-config (Dioxus.toml parsing)
+│   ├── dx-env (env vars dx sets for the app it launches)
+│   ├── dioxus-cli-config (Dioxus-specific settings on top of dx-env)
 │   └── dioxus-cli-opt (optimization passes)
 │
 ├── Hot Reload:

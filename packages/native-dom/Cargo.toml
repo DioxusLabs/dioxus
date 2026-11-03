@@ -10,16 +10,19 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "svg", "system-fonts"]
+default = ["accessibility", "svg", "system-fonts", "text-transform-icu"]
 
 # DOM features
 svg = ["blitz-dom/svg"]
 floats = ["blitz-dom/floats"]
-incremental = ["blitz-dom/incremental"]
 accessibility = ["blitz-dom/accessibility"]
 tracing = ["dep:tracing", "blitz-dom/tracing"]
-system-fonts = ["blitz-dom/system_fonts"]
+system-fonts = ["blitz-dom/system-fonts"]
+# complex-scripts: enable dictionary-based line-breaking
+complex-scripts = ["blitz-dom/complex-scripts"]
 autofocus = ["blitz-dom/autofocus"]
+text-transform-icu = ["blitz-dom/text-transform-icu"]
+writing-mode = ["blitz-dom/writing-mode"]
 
 [dependencies]
 # Blitz dependencies
@@ -27,7 +30,7 @@ blitz-dom = { workspace = true, default-features = false, features = ["custom-wi
 blitz-traits = { workspace = true }
 
 # DioxusLabs dependencies
-dioxus-core = { workspace = true }
+dioxus-vdom = { workspace = true }
 dioxus-html = { workspace = true }
 
 # Windowing & Input

@@ -4,8 +4,9 @@ use crate::{
     data_transfer::DataTransfer,
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
 };
+use std::option::Option;
 
-use dioxus_core::Event;
+use dioxus_vdom::Event;
 use keyboard_types::Modifiers;
 
 use crate::HasMouseData;
@@ -151,11 +152,7 @@ mod ser {
 
     impl crate::file_data::HasFileData for SerializedDragData {
         fn files(&self) -> Vec<FileData> {
-            self.data_transfer
-                .files
-                .iter()
-                .map(|f| FileData::new(f.clone()))
-                .collect()
+            self.data_transfer().files()
         }
     }
 

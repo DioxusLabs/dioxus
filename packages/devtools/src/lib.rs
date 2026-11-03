@@ -1,6 +1,6 @@
-use dioxus_core::internal::HotReloadedTemplate;
-use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_signals::{GlobalKey, Signal, WritableExt};
+use dioxus_vdom::internal::HotReloadedTemplate;
+use dioxus_vdom::{ScopeId, VirtualDom};
 
 pub use dioxus_devtools_types::*;
 pub use subsecond;
@@ -35,7 +35,7 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
 
         // 2. Attempt to hotpatch
         if let Some(jump_table) = msg.jump_table.as_ref().cloned()
-            && msg.for_build_id == Some(dioxus_cli_config::build_id())
+            && msg.for_build_id == Some(dx_env::build_id())
         {
             let our_pid = if cfg!(target_family = "wasm") {
                 None
@@ -44,9 +44,20 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
             };
 
             if msg.for_pid == our_pid {
+                tracing::trace!(
+                    "Applying hot-patch jump table with {} entries ({} templates in message)",
+                    jump_table.map.len(),
+                    msg.templates.len()
+                );
                 unsafe { subsecond::apply_patch(jump_table) }?;
                 dom.runtime().force_all_dirty();
                 ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
+            } else {
+                tracing::warn!(
+                    "Ignoring hot-patch intended for pid {:?} (this process is pid {:?})",
+                    msg.for_pid,
+                    our_pid
+                );
             }
         }
 
@@ -59,7 +70,7 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
 /// This doesn't use any form of security or protocol, so it's not safe to expose to the internet.
 #[cfg(not(target_family = "wasm"))]
 pub fn connect(callback: impl FnMut(DevserverMsg) + Send + 'static) {
-    let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() else {
+    let Some(endpoint) = dx_env::devserver_ws_endpoint() else {
         return;
     };
 
@@ -90,20 +101,37 @@ pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Sen
         let uri = format!(
             "{endpoint}?aslr_reference={}&build_id={}&pid={}",
             subsecond::aslr_reference(),
-            dioxus_cli_config::build_id(),
+            dx_env::build_id(),
             std::process::id()
         );
 
         let (mut websocket, _req) = match tungstenite::connect(uri) {
             Ok((websocket, req)) => (websocket, req),
-            Err(_) => return,
+            Err(err) => {
+                tracing::warn!("Failed to connect to devserver websocket: {err}");
+                return;
+            }
         };
 
-        while let Ok(msg) = websocket.read() {
-            if let tungstenite::Message::Text(text) = msg
-                && let Ok(msg) = serde_json::from_str(&text)
-            {
-                callback(msg);
+        loop {
+            match websocket.read() {
+                Ok(tungstenite::Message::Text(text)) => match serde_json::from_str(&text) {
+                    Ok(msg) => callback(msg),
+                    Err(err) => {
+                        tracing::warn!("Failed to deserialize devserver message: {err}");
+                    }
+                },
+                Ok(_) => {}
+                Err(tungstenite::Error::ConnectionClosed) => {
+                    tracing::debug!("Devserver websocket closed");
+                    return;
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "Devserver websocket closed - no more hot-reloads or hot-patches will be received: {err}"
+                    );
+                    return;
+                }
             }
         }
     });

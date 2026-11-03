@@ -8,7 +8,6 @@ use std::{
     num::ParseIntError,
     str::FromStr,
 };
-use svg_attributes::to;
 
 fn main() {
     LaunchBuilder::new()

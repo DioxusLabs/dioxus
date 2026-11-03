@@ -10,23 +10,25 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog", "vello-hybrid", "incremental", "woff", "apple-font-embolden"]
-prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "woff", "text-transform-icu", "apple-font-embolden"]
+prelude = ["dep:dioxus-vdom-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis", "dioxus-vdom/manganis_08"]
 
 # DOM features
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
 floats = ["blitz-dom/floats"]
-incremental = ["blitz-dom/incremental"]
 autofocus = ["blitz-dom/autofocus"]
-system-fonts = ["blitz-dom/system_fonts"]
+system-fonts = ["blitz-dom/system-fonts"]
+# complex-scripts: enable dictionary-based line-breaking
+complex-scripts = ["blitz-dom/complex-scripts"]
 # WOFF/WOFF2 decoder. Default-on so wasm callers (which can't use system fonts)
 # can bundle compressed fonts without extra setup.
 woff = ["blitz-dom/woff"]
+text-transform-icu = ["blitz-dom/text-transform-icu"]
+writing-mode = ["blitz-dom/writing-mode", "dioxus-native-dom/writing-mode"]
 
 # Shell Features
 clipboard = ["blitz-shell/clipboard"]
-file_dialog = ["file-dialog"] # Backwards compat. Remove in next breaking version
-file-dialog = ["blitz-shell/file_dialog"]
+file-dialog = ["blitz-shell/file-dialog"]
 accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 data-uri = ["blitz-shell/data-uri"]
 
@@ -34,6 +36,9 @@ data-uri = ["blitz-shell/data-uri"]
 vello = ["dep:anyrender_vello", "dep:wgpu_context"]
 vello-hybrid = ["dep:anyrender_vello_hybrid", "dep:wgpu_context"]
 skia = ["dep:anyrender_skia"]
+skia-pixels = ["skia-raster-base", "anyrender_skia/pixels_window_renderer"]
+skia-softbuffer = ["skia-raster-base", "anyrender_skia/softbuffer_window_renderer"]
+skia-raster-base = ["dep:anyrender_skia"]
 vello-cpu = ["vello-cpu-pixels"]
 vello-cpu-pixels = ["vello-cpu-base", "anyrender_vello_cpu/pixels_window_renderer"]
 vello-cpu-softbuffer = ["vello-cpu-base", "anyrender_vello_cpu/softbuffer_window_renderer"]
@@ -41,6 +46,7 @@ vello-cpu-base = ["dep:anyrender_vello_cpu"]
 
 font-embolden = ["blitz-paint/font-embolden"]
 apple-font-embolden = ["blitz-paint/apple-font-embolden"]
+scrollbars = ["blitz-paint/scrollbars"]
 
 # Other features
 # No-op on wasm32 (blitz_net::Provider needs tokio's threaded runtime); launch_cfg
@@ -53,7 +59,7 @@ hot-reload = ["dep:dioxus-devtools"]
 
 # Debug/Logging
 log-times = ["log-phase-times", "log-frame-times"]
-log-phase-times = ["blitz-dom/log_phase_times"]
+log-phase-times = ["blitz-dom/log-phase-times"]
 log-frame-times = [
   "anyrender_vello_cpu?/log_frame_times",
   "anyrender_vello?/log_frame_times",
@@ -73,6 +79,7 @@ blitz-shell = { workspace = true }
 
 # AnyRender dependencies
 anyrender = { workspace = true }
+peniko = { workspace = true }
 anyrender_vello = { workspace = true, optional = true}
 anyrender_vello_hybrid = { workspace = true, optional = true}
 anyrender_vello_cpu = { workspace = true, optional = true}
@@ -80,7 +87,7 @@ anyrender_skia = { workspace = true, optional = true}
 wgpu_context = { workspace = true, optional = true}
 
 # DioxusLabs dependencies
-dioxus-core = { workspace = true }
+dioxus-vdom = { workspace = true }
 dioxus-html = { workspace = true }
 dioxus-native-dom = { workspace = true }
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
@@ -95,8 +102,8 @@ dioxus-devtools = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-stores = { workspace = true, optional = true }
-dioxus-core-macro = { workspace = true, optional = true }
-manganis = { workspace = true, features = ["dioxus"], optional = true }
+dioxus-vdom-macro = { workspace = true, optional = true }
+manganis = { workspace = true, optional = true }
 
 # Windowing & Input
 winit = { workspace = true }
@@ -111,6 +118,7 @@ tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
 cfg-if = "1.0.4"
+slotmap = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }

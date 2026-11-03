@@ -4,7 +4,7 @@ use jni::{
     sys::jlong,
 };
 
-use crate::android::java::Result;
+use crate::android::java::JniResult;
 
 /// Generic callback system for loading DEX classes and registering native methods
 pub struct CallbackSystem {
@@ -47,7 +47,7 @@ impl CallbackSystem {
     /// # Returns
     ///
     /// Returns a `GlobalRef` to the loaded class, or an error if loading fails
-    pub fn load_and_register(&self, env: &mut JNIEnv<'_>) -> Result<GlobalRef> {
+    pub fn load_and_register(&self, env: &mut JNIEnv<'_>) -> JniResult<GlobalRef> {
         let callback_class = self.load_dex_class(env)?;
         self.register_native_callback(env, &callback_class)?;
         let global = env.new_global_ref(callback_class)?;
@@ -55,7 +55,7 @@ impl CallbackSystem {
     }
 
     /// Load the DEX class from bytecode
-    fn load_dex_class<'a>(&self, env: &mut JNIEnv<'a>) -> Result<JClass<'a>> {
+    fn load_dex_class<'a>(&self, env: &mut JNIEnv<'a>) -> JniResult<JClass<'a>> {
         const IN_MEMORY_LOADER: &str = "dalvik/system/InMemoryDexClassLoader";
 
         // Create a ByteBuffer from our DEX bytecode
@@ -92,7 +92,7 @@ impl CallbackSystem {
         &self,
         env: &mut JNIEnv<'a>,
         callback_class: &JClass<'a>,
-    ) -> Result<()> {
+    ) -> JniResult<()> {
         env.register_native_methods(
             callback_class,
             &[NativeMethod {
@@ -117,10 +117,12 @@ unsafe extern "C" fn rust_callback<'a>(
     handler_ptr_low: jlong,
     location: JObject<'a>,
 ) {
-    // Reconstruct the pointer from two i64 values (for 64-bit pointers)
-    #[cfg(not(target_pointer_width = "64"))]
-    compile_error!("Only 64-bit Android targets are supported");
-
+    // Reconstruct the handler pointer from the two `jlong` halves it was split
+    // into for the JNI boundary. On 64-bit targets both halves are significant;
+    // on 32-bit targets (e.g. `armv7-linux-androideabi`) the pointer fits in the
+    // low half and the high half is zero, so casting the recombined value to a
+    // pointer-width `usize` drops the unused high bits and yields the original
+    // pointer either way.
     let handler_ptr_raw: usize =
         ((handler_ptr_high as u64) << 32 | handler_ptr_low as u64) as usize;
 

@@ -115,7 +115,7 @@ fn WebSysClosure() -> Element {
 
         // Make sure passing the runtime into the closure works
         let callback = Callback::new(|_| {
-            assert!(!dioxus::dioxus_core::Runtime::current().vdom_is_rendering());
+            assert!(!dioxus::dioxus_vdom::Runtime::current().vdom_is_rendering());
             *TRIGGERED.write() = true;
         });
         let closure: Closure<dyn Fn()> = Closure::new({
@@ -221,10 +221,6 @@ fn SelectMultiple() -> Element {
 }
 
 fn main() {
-    tracing_wasm::set_as_global_default_with_config(
-        tracing_wasm::WASMLayerConfigBuilder::default()
-            .set_max_level(tracing::Level::TRACE)
-            .build(),
-    );
+    dioxus::logger::init(tracing::Level::TRACE).expect("failed to initialize logger");
     dioxus::launch(app);
 }

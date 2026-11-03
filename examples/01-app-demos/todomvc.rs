@@ -57,7 +57,7 @@ fn app() -> Element {
     // If all todos are checked, uncheck them all. If any are unchecked, check them all.
     let toggle_all = move |_| {
         let check = active_todo_count() != 0;
-        for (_, item) in todos.write().iter_mut() {
+        for item in todos.write().values_mut() {
             item.checked = check;
         }
     };
@@ -115,7 +115,7 @@ fn TodoHeader(mut todos: WriteSignal<HashMap<u32, TodoItem>>) -> Element {
     let mut todo_id = use_signal(|| 0);
 
     let onkeydown = move |evt: KeyboardEvent| {
-        if evt.key() == Key::Enter && !draft.is_empty() {
+        if evt.key() == Key::Named(NamedKey::Enter) && !draft.is_empty() {
             let id = todo_id();
             let todo = TodoItem {
                 checked: false,
@@ -195,9 +195,8 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {
-                        match evt.key() {
-                            Key::Enter | Key::Escape | Key::Tab => is_editing.set(false),
-                            _ => {}
+                        if matches!(evt.key(), Key::Named(NamedKey::Enter | NamedKey::Escape | NamedKey::Tab)) {
+                            is_editing.set(false);
                         }
                     }
                 }

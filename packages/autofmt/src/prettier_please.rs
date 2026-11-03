@@ -39,10 +39,10 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 // once we've written out the unparsed expr from prettyplease, we can replace
                 // this dummy block with the actual formatted block
                 let body = CallBody::parse_strict.parse2(i.tokens.clone()).unwrap();
-                let multiline = !Writer::is_short_rsx_call(&body.body.roots);
+                let multiline = !Writer::is_short_rsx_call(&body.body().roots);
                 let mut formatted = {
                     let mut writer = Writer::new(self.src, self.cfg.clone());
-                    _ = writer.write_body_nodes(&body.body.roots).ok();
+                    _ = writer.write_body_nodes(&body.body().roots).ok();
                     writer.consume()
                 }
                 .unwrap();
@@ -236,7 +236,7 @@ mod tests {
     fn fmt_block_from_expr(raw: &str, tokens: TokenStream, cfg: IndentOptions) -> Option<String> {
         let body = CallBody::parse_strict.parse2(tokens).unwrap();
         let mut writer = Writer::new(raw, cfg);
-        writer.write_body_nodes(&body.body.roots).ok()?;
+        writer.write_body_nodes(&body.body().roots).ok()?;
         writer.consume()
     }
 

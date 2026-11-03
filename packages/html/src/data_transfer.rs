@@ -105,6 +105,32 @@ mod ser {
         pub data: String,
     }
 
+    impl SerializedDataTransfer {
+        pub(crate) fn from_data_transfer(data_transfer: &DataTransfer) -> Self {
+            // This abstraction exposes transfer formats by lookup, not enumeration. Real
+            // browser events get their full item list from the JS serializer; this Rust-side
+            // path captures the common text payload plus files/effects.
+            Self {
+                items: data_transfer
+                    .get_as_text()
+                    .into_iter()
+                    .map(|data| SerializedDataTransferItem {
+                        kind: "string".to_string(),
+                        type_: "text/plain".to_string(),
+                        data,
+                    })
+                    .collect(),
+                files: data_transfer
+                    .files()
+                    .iter()
+                    .map(crate::file_data::SerializedFileData::from_file_data)
+                    .collect(),
+                effect_allowed: data_transfer.effect_allowed(),
+                drop_effect: data_transfer.drop_effect(),
+            }
+        }
+    }
+
     impl NativeDataTransfer for SerializedDataTransfer {
         fn get_data(&self, format: &str) -> Option<String> {
             self.items
@@ -150,14 +176,9 @@ mod ser {
     }
 
     impl From<&DragData> for SerializedDataTransfer {
-        fn from(_drag: &DragData) -> Self {
-            // todo!()
-            Self {
-                items: vec![],
-                files: vec![],
-                effect_allowed: "all".into(),
-                drop_effect: "none".into(),
-            }
+        fn from(drag: &DragData) -> Self {
+            let data_transfer = drag.data_transfer();
+            Self::from_data_transfer(&data_transfer)
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::{HotReloadFormattedSegment, IfmtInput, literal::HotLiteral, location::DynIdx};
+use crate::{HotReloadFormattedSegment, IfmtInput, literal::HotLiteral};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use quote::{TokenStreamExt, quote};
@@ -11,14 +11,12 @@ use syn::{
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
     pub input: HotReloadFormattedSegment,
-    pub dyn_idx: DynIdx,
 }
 
 impl Parse for TextNode {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self {
             input: input.parse()?,
-            dyn_idx: DynIdx::default(),
         })
     }
 }
@@ -29,7 +27,7 @@ impl ToTokens for TextNode {
 
         if txt.is_static() {
             tokens.append_all(quote! {
-                dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string()))
+                dioxus_vdom::DynamicNode::Text(dioxus_vdom::VText::new(#txt.to_string()))
             })
         } else {
             // todo:
@@ -38,7 +36,7 @@ impl ToTokens for TextNode {
             let as_lit = HotLiteral::Fmted(txt.clone());
 
             tokens.append_all(quote! {
-                dioxus_core::DynamicNode::Text(dioxus_core::VText::new( #as_lit ))
+                dioxus_vdom::DynamicNode::Text(dioxus_vdom::VText::new( #as_lit ))
             })
         }
     }
@@ -50,10 +48,7 @@ impl TextNode {
             source: LitStr::new(text, Span::call_site()),
             segments: vec![],
         };
-        Self {
-            input: ifmt.into(),
-            dyn_idx: Default::default(),
-        }
+        Self { input: ifmt.into() }
     }
 
     pub fn is_static(&self) -> bool {

@@ -4,12 +4,13 @@
 //! (this example is not really intended to be run as-is, and requires you to fill
 //! in the missing pieces)
 use anyrender_vello::VelloScenePainter;
+use atomic_refcell::AtomicRefCell;
 use blitz_dom::{Document as _, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::{
     events::{
-        BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, PointerCoords,
-        PointerDetails, UiEvent,
+        BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, Point,
+        PointerCoords, PointerDetails, UiEvent,
     },
     shell::{ColorScheme, Viewport},
 };
@@ -160,6 +161,8 @@ fn main() {
         buttons: MouseEventButtons::Primary, // keep track of all pressed buttons
         mods: Modifiers::empty(),            // ctrl, alt, shift, etc
         details: PointerDetails::default(),
+        element: Point::default(),
+        active_pointers: Arc::new(AtomicRefCell::new(Vec::new())),
     });
     dioxus_doc.handle_ui_event(event);
 

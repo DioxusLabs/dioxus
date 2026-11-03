@@ -527,17 +527,17 @@ impl RouteEnum {
 
                 fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
                     let route = s;
-                    let (route, hash) = route.split_once('#').unwrap_or((route, ""));
-                    let (route, query) = route.split_once('?').unwrap_or((route, ""));
+                    let (route, raw_hash) = route.split_once('#').unwrap_or((route, ""));
+                    let (route, raw_query) = route.split_once('?').unwrap_or((route, ""));
                     // Remove any trailing slashes. We parse /route/ and /route in the same way
                     // Note: we don't use trim because it includes more code
                     let route = route.strip_suffix('/').unwrap_or(route);
-                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(query)
+                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(raw_query)
                         .decode_utf8()
-                        .unwrap_or(query.into());
-                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(hash)
+                        .unwrap_or(raw_query.into());
+                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(raw_hash)
                         .decode_utf8()
-                        .unwrap_or(hash.into());
+                        .unwrap_or(raw_hash.into());
                     let mut segments = route.split('/').map(|s| {
                         dioxus_router::exports::percent_encoding::percent_decode_str(s)
                             .decode_utf8()
@@ -681,7 +681,7 @@ impl RouteEnum {
                     #(#site_map,)*
                 ];
 
-                fn render(&self, level: usize) -> dioxus_core::Element {
+                fn render(&self, level: usize) -> dioxus_vdom::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*
@@ -785,5 +785,22 @@ impl<'a> From<&'a RouteSegment> for SegmentType {
             RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
             RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
         }
+    }
+}
+
+fn dioxus_root() -> proc_macro2::TokenStream {
+    use proc_macro_crate::{FoundCrate, crate_name};
+    let found = crate_name("dioxus")
+        .map(|found| (found, "dioxus"))
+        .or_else(|_| crate_name("dioxus-core").map(|found| (found, "dioxus_core")));
+    match found.map(|(found, name)| match found {
+        FoundCrate::Itself => name.to_string(),
+        FoundCrate::Name(name) => name,
+    }) {
+        Ok(name) => {
+            let name = quote::format_ident!("{}", name);
+            quote::quote!(::#name)
+        }
+        Err(_) => quote::quote!(::dioxus),
     }
 }

@@ -1,3 +1,6 @@
 playwright-report
 web-config-watcher-temp
 /web/dist/
+/web-hot-patch-temp
+/web-hot-patch-fullstack-temp
+/windows-hotpatch-fullstack-temp

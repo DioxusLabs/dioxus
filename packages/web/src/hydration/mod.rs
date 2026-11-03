@@ -1,9 +1,17 @@
 #[cfg(feature = "hydrate")]
+mod cursor;
+#[cfg(feature = "hydrate")]
 mod hydrate;
+#[cfg(feature = "hydrate")]
+mod suspense;
+#[cfg(feature = "hydrate")]
+mod walk;
 
 #[cfg(feature = "hydrate")]
 #[allow(unused)]
 pub use hydrate::*;
+#[cfg(feature = "hydrate")]
+pub(crate) use suspense::SuspenseHydrationIds;
 
 /// The message sent from the server to the client to hydrate a suspense boundary
 #[derive(Debug)]

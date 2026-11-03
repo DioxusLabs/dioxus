@@ -2,7 +2,7 @@ use crate::{
     CopyValue, Global, GlobalMemo, GlobalSignal, Memo, ReadableRef, WritableRef, default_impl,
     fmt_impls, read::*, write::*, write_impls,
 };
-use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
+use dioxus_vdom::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 use std::{collections::HashSet, ops::Deref, sync::Arc, sync::Mutex};
 
@@ -142,7 +142,7 @@ impl<T: PartialEq + 'static> Signal<T> {
 impl<T, S: Storage<SignalData<T>>> Signal<T, S> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
     #[track_caller]
-    #[tracing::instrument(skip(value))]
+    #[tracing::instrument(skip(value), level = "trace")]
     pub fn new_maybe_sync(value: T) -> Self
     where
         T: 'static,
@@ -201,13 +201,13 @@ impl<T, S: Storage<SignalData<T>>> Signal<T, S> {
 
     /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
     #[track_caller]
-    #[tracing::instrument(skip(value))]
+    #[tracing::instrument(skip(value), level = "trace")]
     pub fn new_maybe_sync_in_scope(value: T, owner: ScopeId) -> Self {
         Self::new_maybe_sync_in_scope_with_caller(value, owner, std::panic::Location::caller())
     }
 
     /// Create a new signal with a custom owner scope and a custom caller. The signal will be dropped when the owner scope is dropped instead of the current scope.
-    #[tracing::instrument(skip(value))]
+    #[tracing::instrument(skip(value), level = "trace")]
     pub fn new_maybe_sync_in_scope_with_caller(
         value: T,
         owner: ScopeId,
@@ -464,7 +464,7 @@ impl<T> IntoAttributeValue for Signal<T>
 where
     T: Clone + IntoAttributeValue + 'static,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
+    fn into_value(self) -> dioxus_vdom::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
@@ -473,7 +473,7 @@ impl<T> IntoDynNode for Signal<T>
 where
     T: Clone + IntoDynNode + 'static,
 {
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+    fn into_dyn_node(self) -> dioxus_vdom::DynamicNode {
         self().into_dyn_node()
     }
 }

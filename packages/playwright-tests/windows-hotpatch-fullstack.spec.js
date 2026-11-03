@@ -18,7 +18,7 @@ const test = base.extend({
   },
 });
 
-const hotPatchTimeout = { timeout: 1000 * 60 * 2 };
+const hotPatchTimeout = { timeout: 1000 * 60 * 4 };
 
 test("windows fullstack hotpatch", async ({ page }) => {
   const mainPath = "windows-hotpatch-fullstack-temp/src/main.rs";

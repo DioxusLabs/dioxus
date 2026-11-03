@@ -1,10 +1,16 @@
-use dioxus_html::{DragData, FormData, HtmlEventConverter, ImageData, PlatformEventData};
+use before_input::WebBeforeInputData;
+use clipboard::WebClipboardData;
+use dioxus_html::{
+    BeforeInputData, ClipboardData, DragData, FormData, HtmlEventConverter, ImageData,
+    PlatformEventData,
+};
 use form::WebFormData;
 use load::WebImageEvent;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, Event};
 
 mod animation;
+mod before_input;
 mod cancel;
 mod clipboard;
 mod composition;
@@ -50,12 +56,62 @@ fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent
         .expect("event should be a GenericWebSysEvent")
 }
 
+/// Read the textual value of an editable element.
+///
+/// Mirrors what the wasm renderer reports for `value` across the input-shaped events
+/// (`oninput`, `onchange`, `onbeforeinput`, …): the element's `value` for
+/// `<input>`/`<textarea>`/`<select>` (with checkboxes coerced to `"true"`/`"false"`),
+/// falling back to `textContent` for `contenteditable` elements. Returns `None` only
+/// when the target is none of these.
+pub(crate) fn editable_element_value(element: &Element) -> Option<String> {
+    element
+        .dyn_ref()
+        .map(
+            |input: &web_sys::HtmlInputElement| match input.type_().as_str() {
+                // todo: special case more input types
+                "checkbox" => match input.checked() {
+                    true => "true".to_string(),
+                    false => "false".to_string(),
+                },
+                _ => input.value(),
+            },
+        )
+        .or_else(|| {
+            element
+                .dyn_ref()
+                .map(|input: &web_sys::HtmlTextAreaElement| input.value())
+        })
+        // select elements are NOT input events - because - why woudn't they be??
+        .or_else(|| {
+            element
+                .dyn_ref()
+                .map(|input: &web_sys::HtmlSelectElement| input.value())
+        })
+        .or_else(|| {
+            element
+                .dyn_ref::<web_sys::HtmlElement>()
+                .and_then(|el| el.text_content())
+        })
+}
+
 macro_rules! with_web_event_converters {
     ($macro:ident) => {
         $macro! {
             convert_animation_data(AnimationData) => web_sys::AnimationEvent;
+            convert_before_input_data(BeforeInputData) => web_sys::InputEvent => |event| {
+                let event = downcast_event(event);
+                BeforeInputData::new(WebBeforeInputData::new(
+                    event.element.clone(),
+                    event.raw.clone().unchecked_into::<web_sys::InputEvent>(),
+                ))
+            };
             convert_cancel_data(CancelData) => web_sys::Event;
-            convert_clipboard_data(ClipboardData) => web_sys::Event;
+            convert_clipboard_data(ClipboardData) => web_sys::ClipboardEvent => |event| {
+                let event = downcast_event(event);
+                ClipboardData::new(WebClipboardData::new(
+                    event.raw.clone().unchecked_into::<web_sys::ClipboardEvent>(),
+                ))
+            };
             convert_composition_data(CompositionData) => web_sys::CompositionEvent;
             convert_drag_data(DragData) => web_sys::DragEvent => |event| {
                 let event = downcast_event(event);

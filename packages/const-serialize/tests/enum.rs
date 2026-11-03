@@ -196,7 +196,7 @@ fn test_serialize_corrupted_enum() {
     };
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
-    buf = buf.set(0, 2);
+    buf.set(0, 2);
     println!("{:?}", buf.as_ref());
     let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf), None);

@@ -50,13 +50,8 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
         _ => "ws:",
     };
     let host = location.host().unwrap();
-    let base_path = dioxus_cli_config::base_path();
-    let url = devserver_ws_url(
-        protocol,
-        &host,
-        dioxus_cli_config::build_id(),
-        base_path.as_deref(),
-    );
+    let base_path = dx_env::base_path();
+    let url = devserver_ws_url(protocol, &host, dx_env::build_id(), base_path.as_deref());
 
     let ws = WebSocket::new(&url).unwrap();
 

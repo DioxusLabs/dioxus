@@ -174,11 +174,15 @@ pub fn default_icon<T: DioxusIconTrait>() -> Result<T> {
 }
 
 /// Helper function to load image from include_bytes!("image.png")
+///
+/// Supports PNG and ICO. Enable the matching `image` crate features in your app for other formats.
 pub fn icon_from_memory<T: DioxusIconTrait>(value: &[u8]) -> Result<T> {
     T::from_memory(value)
 }
 
 /// Helper function to load image from path
+///
+/// Supports PNG and ICO. Enable the matching `image` crate features in your app for other formats.
 pub fn icon_from_path<T: DioxusIconTrait, P: AsRef<Path>>(
     path: P,
     size: Option<(u32, u32)>,

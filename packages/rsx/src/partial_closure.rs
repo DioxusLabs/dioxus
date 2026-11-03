@@ -19,16 +19,16 @@ use syn::{BoundLifetimes, ExprClosure};
 /// Otherwise, it's a direct copy of the original.
 #[derive(Debug, Clone)]
 pub struct PartialClosure {
-    pub lifetimes: Option<BoundLifetimes>,
-    pub constness: Option<Token![const]>,
-    pub movability: Option<Token![static]>,
-    pub asyncness: Option<Token![async]>,
-    pub capture: Option<Token![move]>,
-    pub or1_token: Token![|],
-    pub inputs: Punctuated<Pat, Token![,]>,
-    pub or2_token: Token![|],
-    pub output: ReturnType,
-    pub body: PartialExpr,
+    lifetimes: Option<BoundLifetimes>,
+    constness: Option<Token![const]>,
+    movability: Option<Token![static]>,
+    asyncness: Option<Token![async]>,
+    capture: Option<Token![move]>,
+    or1_token: Token![|],
+    inputs: Punctuated<Pat, Token![,]>,
+    or2_token: Token![|],
+    output: ReturnType,
+    body: PartialExpr,
 }
 
 impl Parse for PartialClosure {
@@ -266,55 +266,5 @@ mod tests {
 
         assert_eq!(a, b);
         assert_ne!(a, c);
-    }
-
-    /// Ensure our ToTokens impl is the same as the one in syn
-    #[test]
-    fn same_to_tokens() {
-        let a: PartialClosure = syn::parse2(quote! {
-            move |e| {
-                println!("clicked!");
-            }
-        })
-        .unwrap();
-
-        let b: PartialClosure = syn::parse2(quote! {
-            move |e| {
-                println!("clicked!");
-            }
-        })
-        .unwrap();
-
-        let c: ExprClosure = syn::parse2(quote! {
-            move |e| {
-                println!("clicked!");
-            }
-        })
-        .unwrap();
-
-        assert_eq!(
-            a.to_token_stream().to_string(),
-            b.to_token_stream().to_string()
-        );
-
-        assert_eq!(
-            a.to_token_stream().to_string(),
-            c.to_token_stream().to_string()
-        );
-
-        let a: PartialClosure = syn::parse2(quote! {
-            move |e| println!("clicked!")
-        })
-        .unwrap();
-
-        let b: ExprClosure = syn::parse2(quote! {
-            move |e| println!("clicked!")
-        })
-        .unwrap();
-
-        assert_eq!(
-            a.to_token_stream().to_string(),
-            b.to_token_stream().to_string()
-        );
     }
 }

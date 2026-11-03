@@ -1,9 +1,8 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
-use dioxus::html::p;
 use dioxus::prelude::*;
-use dioxus_core::{ElementId, generation};
-use dioxus_core::{NoOpMutations, ScopeState};
 use dioxus_signals::*;
+use dioxus_vdom::{ElementId, generation};
+use dioxus_vdom::{NoOpMutations, ScopeState};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -142,7 +141,7 @@ fn memos_prevents_component_rerun() {
         assert_eq!(current_counter.memo, 3);
     }
 
-    dom.in_scope(ScopeId(3), || {
+    dom.in_scope(ScopeId::APP, || {
         assert!(consume_context::<ErrorContext>().error().is_none())
     });
 }

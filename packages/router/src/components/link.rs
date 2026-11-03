@@ -2,11 +2,13 @@
 
 use std::fmt::Debug;
 
-use dioxus_core::{Attribute, Element, EventHandler, VNode};
-use dioxus_core_macro::{Props, rsx};
 use dioxus_html::{
-    self as dioxus_elements, ModifiersInteraction, MountedEvent, MouseEvent, PointerInteraction,
+    self as dioxus_html, ModifiersInteraction, MountedEvent, MouseEvent, PointerInteraction,
+    elements::{prelude::*, *},
+    extensions::*,
 };
+use dioxus_vdom::{Attribute, Element, EventHandler, VNode};
+use dioxus_vdom_macro::{Props, rsx};
 
 use tracing::error;
 
@@ -207,7 +209,7 @@ pub fn Link(props: LinkProps) -> Element {
             return;
         }
         // Only handle left clicks
-        if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
+        if event.trigger_button() != Some(dioxus_html::input_data::MouseButton::Primary) {
             return;
         }
 

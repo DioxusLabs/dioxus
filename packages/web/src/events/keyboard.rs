@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use dioxus_html::{
-    Code, HasKeyboardData, Key, Location, Modifiers, ModifiersInteraction,
+    Code, HasKeyboardData, Key, Location, Modifiers, ModifiersInteraction, NamedKey,
     input_data::decode_key_location,
 };
 use web_sys::KeyboardEvent;
@@ -10,7 +10,7 @@ use super::{Synthetic, WebEventExt};
 
 impl HasKeyboardData for Synthetic<KeyboardEvent> {
     fn key(&self) -> Key {
-        Key::from_str(self.event.key().as_str()).unwrap_or(Key::Unidentified)
+        Key::from_str(self.event.key().as_str()).unwrap_or(Key::Named(NamedKey::Unidentified))
     }
 
     fn code(&self) -> Code {

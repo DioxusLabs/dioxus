@@ -478,7 +478,7 @@ impl<'a> Splitter<'a> {
 
         // Export any tables
         for (idx, table) in out.tables.iter().enumerate() {
-            if table.element_ty != RefType::Funcref {
+            if table.element_ty != RefType::FUNCREF {
                 let table_name = format!("__imported_table_{}", idx);
                 out.exports.add(&table_name, table.id());
             }
@@ -698,7 +698,7 @@ impl<'a> Splitter<'a> {
         // Should be as simple as adding a new import and then writing the `.import` field
         for (idx, table) in out.tables.iter_mut().enumerate() {
             let name = table.name.clone().unwrap_or_else(|| {
-                if table.element_ty == RefType::Funcref {
+                if table.element_ty == RefType::FUNCREF {
                     "__indirect_function_table".to_string()
                 } else {
                     format!("__imported_table_{}", idx)
@@ -750,11 +750,12 @@ impl<'a> Splitter<'a> {
                 continue;
             }
 
-            let DataKind::Active { memory, offset } = data.kind else {
+            let DataKind::Active { memory, offset } = &data.kind else {
                 continue;
             };
+            let memory = *memory;
 
-            let ConstExpr::Value(ir::Value::I32(data_offset)) = offset else {
+            let ConstExpr::Value(ir::Value::I32(data_offset)) = *offset else {
                 continue;
             };
 
@@ -785,13 +786,13 @@ impl<'a> Splitter<'a> {
         let ifunc_table = out
             .tables
             .iter()
-            .find(|t| t.element_ty == RefType::Funcref)
+            .find(|t| t.element_ty == RefType::FUNCREF)
             .map(|t| t.id());
 
         if let Some(table) = ifunc_table {
             table
         } else {
-            out.tables.add_local(false, 0, None, RefType::Funcref)
+            out.tables.add_local(false, 0, None, RefType::FUNCREF)
         }
     }
 

@@ -1,7 +1,7 @@
 //! A simple little clock that updates the time every few milliseconds.
 
-use async_std::task::sleep;
 use dioxus::prelude::*;
+use futures_timer::Delay;
 use web_time::Instant;
 
 fn main() {
@@ -16,7 +16,7 @@ fn app() -> Element {
         let start = Instant::now();
 
         loop {
-            sleep(std::time::Duration::from_millis(27)).await;
+            Delay::new(std::time::Duration::from_millis(27)).await;
 
             // Update the time, using a more precise approach of getting the duration since we started the timer
             millis.set(start.elapsed().as_millis() as i64);

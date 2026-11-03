@@ -1,7 +1,5 @@
 # dioxus-cli-config
 
-A crate that provides key/value names and types for configuring Dioxus applications at runtime.
+Dioxus-specific settings that `dx` passes to Dioxus apps at runtime, such as the window title and whether the window floats on top during development.
 
-This crate exists for us to very cleanly define the exact fields we want to pass down to Dioxus applications at runtime but without exposing the entire config object.
-
-This leads to faster compile times, smaller binaries, and a clearer distinction between the config and the application.
+The generic environment variable contract between `dx` and the app it launches (devserver address, server address, base path, build id, ...) lives in [`dx-env`](https://crates.io/crates/dx-env), which this crate re-exports.

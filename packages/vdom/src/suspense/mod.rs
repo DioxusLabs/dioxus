@@ -1,0 +1,220 @@
+//! Suspense allows you to render a placeholder while nodes are waiting for data in the background
+//!
+//! During suspense on the server:
+//! - Rebuild once
+//! - Send page with loading placeholders down to the client
+//! - loop
+//!   - Poll (only) suspended futures
+//!   - If a scope is marked as dirty and that scope is a suspense boundary, under a suspended boundary, or the suspense placeholder, rerun the scope
+//!     - If it is a different scope, ignore it and warn the user
+//!   - Rerender the scope on the server and send down the nodes under a hidden div with serialized data
+//!
+//! During suspense on the web:
+//! - Rebuild once without running server futures
+//! - Rehydrate the placeholders that were initially sent down. At this point, no suspense nodes are resolved so the client and server pages should be the same
+//! - loop
+//!   - Wait for work or suspense data
+//!   - If suspense data comes in
+//!     - replace the suspense placeholder
+//!     - get any data associated with the suspense placeholder and rebuild nodes under the suspense that was resolved
+//!     - rehydrate the suspense placeholders that were at that node
+//!   - If work comes in
+//!     - Just do the work; this may remove suspense placeholders that the server hasn't yet resolved. If we see new data come in from the server about that node, ignore it
+//!
+//! Generally suspense placeholders should not be stateful because they are driven from the server. If they are stateful and the client renders something different, hydration will fail.
+
+mod component;
+pub use component::*;
+
+use crate::innerlude::*;
+use crate::mount::SuspenseBranch;
+use std::{
+    cell::{Cell, Ref, RefCell},
+    fmt::Debug,
+    rc::Rc,
+};
+
+/// A task that has been suspended which may have an optional loading placeholder
+#[derive(Clone, PartialEq, Debug)]
+pub struct SuspendedFuture {
+    origin: ScopeId,
+    task: TaskId,
+}
+
+impl SuspendedFuture {
+    /// Create a new suspended future
+    pub fn new(task: Task) -> Self {
+        Self {
+            task: task.id,
+            origin: current_scope_id(),
+        }
+    }
+
+    /// Get the task that was suspended
+    pub fn task(&self) -> Task {
+        Task::from_id(self.task)
+    }
+}
+
+impl std::fmt::Display for SuspendedFuture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SuspendedFuture {{ task: {:?} }}", self.task)
+    }
+}
+
+/// A context with information about suspended components
+#[derive(Debug, Clone)]
+pub struct SuspenseContext {
+    inner: Rc<SuspenseBoundaryInner>,
+}
+
+impl PartialEq for SuspenseContext {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl SuspenseContext {
+    /// Create a new suspense boundary in a specific scope
+    pub(crate) fn new() -> Self {
+        Self {
+            inner: Rc::new(SuspenseBoundaryInner {
+                rt: Runtime::current(),
+                suspended_tasks: RefCell::new(vec![]),
+                id: Cell::new(ScopeId::ROOT),
+                suspended_branch: Default::default(),
+                frozen: Default::default(),
+                after_suspense_resolved: Default::default(),
+            }),
+        }
+    }
+
+    /// Mount the context in a specific scope
+    pub(crate) fn mount(&self, scope: ScopeId) {
+        self.inner.id.set(scope);
+    }
+
+    /// Get the suspense boundary's suspended nodes
+    pub fn suspended_nodes(&self) -> Option<VNode> {
+        self.suspended_branch().map(|branch| branch.root())
+    }
+
+    /// Run a callback with the suspense boundary's retained primary branch and
+    /// its mounted identity.
+    pub fn with_suspended_mounted_root<R>(
+        &self,
+        with_root: impl FnOnce(MountedVNode<'_>) -> R,
+    ) -> Option<R> {
+        let branch = self.inner.suspended_branch.borrow();
+        let branch = branch.as_ref()?;
+        Some(with_root(branch.mounted_root()))
+    }
+
+    /// Get the retained primary branch for this boundary.
+    pub(crate) fn suspended_branch(&self) -> Option<SuspenseBranch> {
+        self.inner.suspended_branch.borrow().clone()
+    }
+
+    /// Set the retained primary branch for this boundary.
+    pub(crate) fn set_suspended_branch(&self, branch: SuspenseBranch) {
+        self.inner.suspended_branch.borrow_mut().replace(branch);
+    }
+
+    /// Take the retained primary branch for this boundary.
+    pub(crate) fn take_suspended_branch(&self) -> Option<SuspenseBranch> {
+        self.inner.suspended_branch.borrow_mut().take()
+    }
+
+    /// Check if the suspense boundary is resolved and frozen
+    pub fn frozen(&self) -> bool {
+        self.inner.frozen.get()
+    }
+
+    /// Resolve the suspense boundary on the server and freeze it to prevent future reruns of any child nodes of the suspense boundary
+    pub fn freeze(&self) {
+        self.inner.frozen.set(true);
+    }
+
+    /// Check if there are any suspended tasks
+    pub fn has_suspended_tasks(&self) -> bool {
+        !self.inner.suspended_tasks.borrow().is_empty()
+    }
+
+    /// Check if the suspense boundary is currently rendered as suspended
+    pub fn is_suspended(&self) -> bool {
+        self.inner.suspended_branch.borrow().is_some()
+    }
+
+    /// Add a suspended task
+    pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) {
+        self.inner.suspended_tasks.borrow_mut().push(task);
+        self.inner.rt.needs_update(self.inner.id.get());
+    }
+
+    /// Remove a suspended task
+    pub(crate) fn remove_suspended_task(&self, task: Task) {
+        self.inner
+            .suspended_tasks
+            .borrow_mut()
+            .retain(|t| t.task != task.id);
+        if let Some(scope) = self.inner.rt.try_get_state(self.inner.id.get()) {
+            scope.needs_update_any(scope.id);
+        }
+    }
+
+    /// Get all suspended tasks
+    pub fn suspended_futures(&self) -> Ref<'_, [SuspendedFuture]> {
+        Ref::map(self.inner.suspended_tasks.borrow(), |tasks| {
+            tasks.as_slice()
+        })
+    }
+
+    /// Run a closure after suspense is resolved
+    pub fn after_suspense_resolved(&self, callback: impl FnOnce() + 'static) {
+        let mut closures = self.inner.after_suspense_resolved.borrow_mut();
+        closures.push(Box::new(callback));
+    }
+
+    /// Run all closures that were queued to run after suspense is resolved
+    pub(crate) fn run_resolved_closures(&self, runtime: &Runtime) {
+        runtime.while_not_rendering(|| {
+            self.inner
+                .after_suspense_resolved
+                .borrow_mut()
+                .drain(..)
+                .for_each(|f| f());
+        })
+    }
+}
+
+/// A boundary that will capture any errors from child components
+pub(crate) struct SuspenseBoundaryInner {
+    rt: Rc<Runtime>,
+
+    suspended_tasks: RefCell<Vec<SuspendedFuture>>,
+
+    id: Cell<ScopeId>,
+
+    /// The retained primary branch that is hidden while the fallback is visible.
+    suspended_branch: RefCell<Option<SuspenseBranch>>,
+
+    /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
+    frozen: Cell<bool>,
+
+    /// Closures queued to run after the suspense boundary is resolved
+    after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
+}
+
+impl Debug for SuspenseBoundaryInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SuspenseBoundaryInner")
+            .field("suspended_tasks", &self.suspended_tasks)
+            .field("id", &self.id)
+            .field(
+                "has_suspended_branch",
+                &self.suspended_branch.borrow().is_some(),
+            )
+            .field("frozen", &self.frozen)
+            .finish()
+    }
+}

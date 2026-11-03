@@ -48,8 +48,11 @@ fn forward_spreads() {
     };
     let dom = VirtualDom::prebuilt(merged);
     let html = dioxus_ssr::render(&dom);
+    // Both forwarded spreads carry width and height through the component chain
+    // to both divs (the #3844 regression). The dynamic-attribute slot is
+    // normalized by (name, namespace), so the style declarations are sorted.
     assert_eq!(
         html,
-        r#"<div style="width:100%;height:100%;"></div><div style="width:100%;height:100%;"></div>"#
+        r#"<div style="height:100%;width:100%;"></div><div style="height:100%;width:100%;"></div>"#
     );
 }

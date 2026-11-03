@@ -1,5 +1,5 @@
-use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
 use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable, WritableExt};
+use dioxus_vdom::{ReactiveContext, SubscriberList, Subscribers};
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::BuildHasher;
@@ -451,13 +451,13 @@ impl SubscriberList for StoreSubscribers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dioxus_core::{ScopeId, VNode, VirtualDom};
+    use dioxus_vdom::{ScopeId, VNode, VirtualDom};
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
 
-    fn empty_app() -> dioxus_core::Element {
+    fn empty_app() -> dioxus_vdom::Element {
         VNode::empty()
     }
 

@@ -1,0 +1,719 @@
+//! The dioxus asset system.
+//!
+//! This module provides functionality for extracting assets from a binary file and then writing back
+//! their asset hashes directly into the binary file. Previously, we performed asset hashing in the
+//! `asset!()` macro. The new system, implemented here, instead performs the hashing at build time,
+//! which provides more flexibility in the asset processing pipeline.
+//!
+//! We chose to implement this approach since assets might reference each other which means we minimally
+//! need to parse the asset to create a unique hash for each asset before they are used in the application.
+//! The hashes are used both for cache busting the asset in the browser and to cache the asset optimization
+//! process in the build system.
+//!
+//! We use the same lessons learned from the hot-patching engine which parses the binary file and its
+//! symbol table to find symbols that match the `__ASSETS__` prefix. These symbols are ideally data
+//! symbols and contain the BundledAsset data type which implements ConstSerialize and ConstDeserialize.
+//!
+//! When the binary is built, the `dioxus asset!()` macro will emit its metadata into the __ASSETS__
+//! symbols, which we process here. After reading the metadata directly from the executable, we then
+//! hash it and write the hash directly into the binary file.
+//!
+//! During development, we can skip this step for most platforms since local paths are sufficient
+//! for asset loading. However, for WASM and for production builds, we need to ensure that assets
+//! can be found relative to the current exe. Unfortunately, on android, the `current_exe` path is wrong,
+//! so the assets are resolved against the "asset root" - which is covered by the asset loader crate.
+//!
+//! Finding the __ASSETS__ symbols is not quite straightforward when hotpatching, especially on WASM
+//! since we build and link the module as relocatable, which is not a stable WASM proposal. In this
+//! implementation, we handle both the non-PIE *and* PIC cases which are rather bespoke to our whole
+//! build system.
+
+use std::{
+    fs::OpenOptions,
+    io::{Cursor, Read, Seek, Write},
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
+
+use crate::Result;
+use crate::opt::AppManifest;
+use anyhow::{Context, bail};
+use const_serialize::{ConstVec, deserialize_const, serialize_const};
+use manganis::BundledAsset;
+use manganis_core::SymbolData;
+use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
+use pdb::FallibleIterator;
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+
+/// Buffer size used for the `__ASSETS__` linker sections emitted by the manganis macro.
+///
+/// Matches `manganis::macro_helpers::serialize_asset`, which always pads to 4096 bytes so
+/// every entry is fixed-width and can be located by symbol offset alone.
+const MANGANIS_SECTION_SIZE: usize = 4096;
+
+/// Deserialize a `__ASSETS__` payload.
+///
+/// The manganis macro emits a raw `BundledAsset`; FFI helper macros emit `SymbolData` (which
+/// wraps assets, Android artifacts, Swift packages, etc.). We try `SymbolData` first because
+/// it carries the variant tag and falls back to the bare `BundledAsset` form for the
+/// asset-only path.
+fn deserialize_manganis_payload(data: &[u8]) -> Option<SymbolDataOrAsset> {
+    // A bare `BundledAsset` payload is not valid `SymbolData`, so a failed parse here is the
+    // expected path for every `asset!()` symbol and is not worth logging.
+    if let Some((_remaining, symbol_data)) = deserialize_const!(SymbolData, data) {
+        return Some(SymbolDataOrAsset::SymbolData(Box::new(symbol_data)));
+    }
+
+    if let Some((remaining, asset)) = deserialize_const!(BundledAsset, data) {
+        // Accept any trailing zero padding — the linker section is padded to MANGANIS_SECTION_SIZE.
+        let is_valid = remaining.is_empty() || remaining.iter().all(|&b| b == 0);
+
+        if is_valid {
+            return Some(SymbolDataOrAsset::Asset(asset));
+        } else {
+            tracing::warn!(
+                "BundledAsset deserialized but remaining bytes are not all zeros: {} remaining bytes, first few: {:?}",
+                remaining.len(),
+                &remaining[..remaining.len().min(16)]
+            );
+        }
+    } else {
+        tracing::warn!(
+            "Failed to deserialize as SymbolData or BundledAsset. Data length: {}, first 32 bytes: {:?}",
+            data.len(),
+            &data[..data.len().min(32)]
+        );
+    }
+
+    None
+}
+
+fn serialize_bundled_asset(asset: &BundledAsset) -> Vec<u8> {
+    let buffer = serialize_const(asset, ConstVec::new());
+    let mut data = buffer.as_ref().to_vec();
+    if data.len() < MANGANIS_SECTION_SIZE {
+        data.resize(MANGANIS_SECTION_SIZE, 0);
+    }
+    data
+}
+
+fn serialize_symbol_data(data: &SymbolData) -> Vec<u8> {
+    let buffer = serialize_const(data, ConstVec::new());
+    let mut bytes = buffer.as_ref().to_vec();
+    if bytes.len() < MANGANIS_SECTION_SIZE {
+        bytes.resize(MANGANIS_SECTION_SIZE, 0);
+    }
+    bytes
+}
+
+/// Result of deserializing a manganis symbol payload.
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
+enum SymbolDataOrAsset {
+    /// Wrapped enum format emitted by FFI/widget macros (carries assets or plugin metadata).
+    SymbolData(Box<SymbolData>),
+
+    /// Bare `BundledAsset` emitted directly by the `asset!()` macro.
+    Asset(BundledAsset),
+}
+
+#[derive(Clone, Copy)]
+struct AssetWriteEntry {
+    symbol: ManganisSymbolOffset,
+    asset_index: usize,
+    representation: AssetRepresentation,
+}
+
+impl AssetWriteEntry {
+    fn new(
+        symbol: ManganisSymbolOffset,
+        asset_index: usize,
+        representation: AssetRepresentation,
+    ) -> Self {
+        Self {
+            symbol,
+            asset_index,
+            representation,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum AssetRepresentation {
+    /// Serialized as a raw BundledAsset (legacy or new format)
+    RawBundled,
+    /// Serialized as SymbolData::Asset (new CBOR format)
+    SymbolData,
+}
+
+fn is_manganis_symbol(name: &str) -> bool {
+    name.contains("__ASSETS__")
+}
+
+/// An asset offset in the binary
+#[derive(Clone, Copy)]
+struct ManganisSymbolOffset {
+    offset: u64,
+}
+
+impl ManganisSymbolOffset {
+    fn new(offset: u64) -> Self {
+        Self { offset }
+    }
+}
+
+/// Find the offsets of any manganis symbols in the given file.
+fn find_symbol_offsets<'a, R: ReadRef<'a>>(
+    path: &Path,
+    file_contents: &[u8],
+    file: &File<'a, R>,
+) -> Result<Vec<ManganisSymbolOffset>> {
+    let pdb_file = find_pdb_file(path);
+
+    match file.format() {
+        // We need to handle dynamic offsets in wasm files differently
+        object::BinaryFormat::Wasm => find_wasm_symbol_offsets(file_contents, file),
+        // Windows puts the symbol information in a PDB file alongside the executable.
+        // If this is a windows PE file and we found a PDB file, we will use that to find the symbol offsets.
+        object::BinaryFormat::Pe if pdb_file.is_some() => {
+            find_pdb_symbol_offsets(&pdb_file.unwrap())
+        }
+        // Otherwise, look for manganis symbols in the object file.
+        _ => find_native_symbol_offsets(file),
+    }
+}
+
+/// Find the pdb file matching the executable file.
+fn find_pdb_file(path: &Path) -> Option<PathBuf> {
+    let mut pdb_file = path.with_extension("pdb");
+    // Also try to find it in the same directory as the executable with _'s instead of -'s
+    if let Some(file_name) = pdb_file.file_name() {
+        let new_file_name = file_name.to_string_lossy().replace('-', "_");
+        let altrnate_pdb_file = pdb_file.with_file_name(new_file_name);
+        // Keep the most recent pdb file
+        match (pdb_file.metadata(), altrnate_pdb_file.metadata()) {
+            (Ok(pdb_metadata), Ok(alternate_metadata)) => {
+                if let (Ok(pdb_modified), Ok(alternate_modified)) =
+                    (pdb_metadata.modified(), alternate_metadata.modified())
+                {
+                    if pdb_modified < alternate_modified {
+                        pdb_file = altrnate_pdb_file;
+                    }
+                }
+            }
+            (Err(_), Ok(_)) => {
+                pdb_file = altrnate_pdb_file;
+            }
+            _ => {}
+        }
+    }
+    if pdb_file.exists() {
+        Some(pdb_file)
+    } else {
+        None
+    }
+}
+
+/// Find the offsets of any manganis symbols in a pdb file.
+fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<ManganisSymbolOffset>> {
+    let pdb_file_handle = std::fs::File::open(pdb_file)?;
+    let mut pdb_file = pdb::PDB::open(pdb_file_handle).context("Failed to open PDB file")?;
+    let Ok(Some(sections)) = pdb_file.sections() else {
+        tracing::error!("Failed to read sections from PDB file");
+        return Ok(Vec::new());
+    };
+    let global_symbols = pdb_file
+        .global_symbols()
+        .context("Failed to read global symbols from PDB file")?;
+    let address_map = pdb_file
+        .address_map()
+        .context("Failed to read address map from PDB file")?;
+    let mut symbols = global_symbols.iter();
+    let mut addresses = Vec::new();
+    while let Ok(Some(symbol)) = symbols.next() {
+        let Ok(pdb::SymbolData::Public(data)) = symbol.parse() else {
+            continue;
+        };
+        let Some(rva) = data.offset.to_section_offset(&address_map) else {
+            continue;
+        };
+
+        let name = data.name.to_string();
+        if is_manganis_symbol(&name) {
+            let section = sections
+                .get(rva.section as usize - 1)
+                .expect("Section index out of bounds");
+
+            addresses.push(ManganisSymbolOffset::new(
+                (section.pointer_to_raw_data + rva.offset) as u64,
+            ));
+        }
+    }
+    Ok(addresses)
+}
+
+/// Find the offsets of any manganis symbols in a native object file.
+fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(
+    file: &File<'a, R>,
+) -> Result<Vec<ManganisSymbolOffset>> {
+    let mut offsets = Vec::new();
+    for (symbol, section) in manganis_symbols(file) {
+        let virtual_address = symbol.address();
+
+        let Some((section_range_start, _)) = section.file_range() else {
+            tracing::error!(
+                "Found __ASSETS__ symbol {:?} in section {}, but the section has no file range",
+                symbol.name(),
+                section.index()
+            );
+            continue;
+        };
+        // Translate the section_relative_address to the file offset
+        let section_relative_address: u64 = (virtual_address as i128 - section.address() as i128)
+            .try_into()
+            .expect("Virtual address should be greater than or equal to section address");
+        let file_offset = section_range_start + section_relative_address;
+        offsets.push(ManganisSymbolOffset::new(file_offset));
+    }
+
+    Ok(offsets)
+}
+
+/// Evaluate a walrus global expression to get its value.
+fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) -> Option<u64> {
+    match expr {
+        walrus::ConstExpr::Value(walrus::ir::Value::I32(value)) => Some(*value as u64),
+        walrus::ConstExpr::Value(walrus::ir::Value::I64(value)) => Some(*value as u64),
+        walrus::ConstExpr::Global(id) => {
+            let global = module.globals.get(*id);
+            if let walrus::GlobalKind::Local(pointer) = &global.kind {
+                eval_walrus_global_expr(module, pointer)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Find the value of a global export by name.
+fn find_global_export_value(module: &walrus::Module, name: &str) -> Option<u64> {
+    for export in module.exports.iter() {
+        if export.name == name {
+            if let walrus::ExportItem::Global(g) = export.item {
+                if let walrus::GlobalKind::Local(expr) = &module.globals.get(g).kind {
+                    return eval_walrus_global_expr(module, expr);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Find the offsets of any manganis symbols in the wasm file.
+///
+/// This handles both standard WASM builds and builds with advanced features like:
+/// - Bulk memory operations (passive data segments)
+/// - Thread Local Storage (TLS)
+/// - Atomics and shared memory
+fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
+    file_contents: &[u8],
+    file: &File<'a, R>,
+) -> Result<Vec<ManganisSymbolOffset>> {
+    let Some(section) = file
+        .sections()
+        .find(|section| section.name() == Ok("<data>"))
+    else {
+        tracing::error!("Failed to find <data> section in WASM file");
+        return Ok(Vec::new());
+    };
+
+    let Some((_, section_range_end)) = section.file_range() else {
+        tracing::error!("Failed to find file range for <data> section in WASM file");
+        return Ok(Vec::new());
+    };
+
+    let section_size = section.data()?.len() as u64;
+    let section_start = section_range_end - section_size;
+
+    // Parse data segments with wasmparser to get file offsets.
+    // Walrus doesn't expose file offset information, so we need wasmparser for this.
+    // With bulk memory operations, there may be multiple data segments.
+    let reader = wasmparser::DataSectionReader::new(wasmparser::BinaryReader::new(
+        &file_contents[section_start as usize..section_range_end as usize],
+        0,
+    ))
+    .context("Failed to create WASM data section reader")?;
+
+    // Collect all data segments with their file offsets and sizes
+    let mut segment_file_info: Vec<(u64, u64)> = Vec::new();
+    for segment in reader.into_iter() {
+        let segment = segment.context("Failed to read data segment")?;
+        segment_file_info.push((
+            (segment.data.as_ptr() as u64)
+                .checked_sub(file_contents.as_ptr() as u64)
+                .expect("Data segment should be within file contents"),
+            segment.data.len() as u64,
+        ));
+    }
+
+    if segment_file_info.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Parse the wasm file with walrus to find globals and exports
+    let module = walrus::Module::from_buffer(file_contents)
+        .context("Failed to parse WASM module with walrus")?;
+
+    // Determine the memory base address for symbol lookup
+    let main_memory_walrus = module
+        .data
+        .iter()
+        .next()
+        .context("Failed to find main memory in WASM module")?;
+
+    let main_memory_offset = match &main_memory_walrus.kind {
+        walrus::DataKind::Active { offset, .. } => {
+            // Active segments have an explicit offset expression
+            eval_walrus_global_expr(&module, offset).unwrap_or_default()
+        }
+        walrus::DataKind::Passive => {
+            // For passive segments (bulk memory operations), there's no static offset.
+            // The memory.init instruction determines placement at runtime.
+            //
+            // Try to find the actual memory base from linker exports:
+            // - __memory_base: Set by the linker for bulk-memory builds
+            // - Falls back to 0x100000 (Rust/LLVM default for static data)
+            //
+            // With TLS support, the linker calculates symbol addresses as if TLS data
+            // is at the base address followed by main data. But at runtime, TLS is stored
+            // separately per-thread via __wasm_init_tls. We detect TLS by looking for
+            // __tls_size and adjust accordingly.
+            //
+            // IMPORTANT: The linker aligns main data to a 4-byte boundary after TLS.
+            // This alignment padding exists in MEMORY but NOT in the FILE. We must
+            // use the aligned TLS size for base calculation, but the file segments
+            // are stored without this padding.
+            let memory_base = find_global_export_value(&module, "__memory_base");
+            let tls_size = find_global_export_value(&module, "__tls_size").unwrap_or(0);
+
+            // If TLS is present and segment 0 matches TLS size, remove TLS segment
+            // from our file info since it's not where data symbols point
+            if tls_size > 0 && !segment_file_info.is_empty() && segment_file_info[0].1 == tls_size {
+                segment_file_info.remove(0);
+            }
+
+            // Align TLS size up to 4 bytes to match linker's memory layout.
+            // The linker aligns main data to a 4-byte boundary after TLS, so symbol
+            // addresses are calculated from (memory_base + aligned_tls_size).
+            // However, file segments are stored without this alignment padding.
+            let tls_aligned = (tls_size + 3) & !3;
+
+            // Use __memory_base if available (set by linker in release builds),
+            // otherwise fall back to 0x100000 (debug builds default)
+            memory_base.unwrap_or(0x100000u64) + tls_aligned
+        }
+    };
+
+    // Find all manganis symbols and calculate their file offsets
+    let mut offsets = Vec::new();
+
+    for export in module.exports.iter() {
+        if !is_manganis_symbol(&export.name) {
+            continue;
+        }
+
+        let walrus::ExportItem::Global(global) = export.item else {
+            continue;
+        };
+
+        let global_data = module.globals.get(global);
+        let walrus::GlobalKind::Local(pointer) = &global_data.kind else {
+            continue;
+        };
+
+        let Some(virtual_address) = eval_walrus_global_expr(&module, pointer) else {
+            tracing::error!(
+                "Found __ASSETS__ symbol {:?} in WASM file, but the global expression could not be evaluated",
+                export.name
+            );
+            continue;
+        };
+
+        // Calculate offset relative to the data base address
+        let data_relative_offset =
+            match (virtual_address as i128).checked_sub(main_memory_offset as i128) {
+                Some(offset) if offset >= 0 => offset as u64,
+                _ => {
+                    tracing::error!(
+                        "Virtual address 0x{:x} is below main memory offset 0x{:x}",
+                        virtual_address,
+                        main_memory_offset
+                    );
+                    continue;
+                }
+            };
+
+        // Find which segment this offset falls into.
+        // Segments are laid out contiguously in memory.
+        let mut cumulative_offset = 0u64;
+        let mut file_offset = None;
+
+        for (seg_file_offset, seg_size) in segment_file_info.iter() {
+            if data_relative_offset < cumulative_offset + seg_size {
+                let offset_in_segment = data_relative_offset - cumulative_offset;
+                file_offset = Some(seg_file_offset + offset_in_segment);
+                break;
+            }
+            cumulative_offset += seg_size;
+        }
+
+        let Some(file_offset) = file_offset else {
+            tracing::error!(
+                "Virtual address 0x{:x} is beyond all data segments",
+                virtual_address
+            );
+            continue;
+        };
+
+        offsets.push(ManganisSymbolOffset::new(file_offset));
+    }
+
+    Ok(offsets)
+}
+
+/// Find all assets in the given file, hash them, and write them back to the file.
+/// Also extracts Android/Swift plugin metadata for FFI bindings.
+pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<AppManifest> {
+    let path = path.as_ref();
+    let mut file =
+        open_file_for_writing_with_timeout(path, OpenOptions::new().write(true).read(true)).await?;
+
+    let mut file_contents = Vec::new();
+    file.read_to_end(&mut file_contents)?;
+
+    let (offsets, obj_format) = {
+        let mut reader = Cursor::new(&file_contents);
+        let read_cache = ReadCache::new(&mut reader);
+        let object_file = object::File::parse(&read_cache)?;
+        (
+            find_symbol_offsets(path, &file_contents, &object_file)?,
+            object_file.format(),
+        )
+    };
+
+    let mut assets = Vec::new();
+    let mut android_artifacts = Vec::new();
+    let mut swift_packages = Vec::new();
+    let mut write_entries = Vec::new();
+
+    // Read each symbol from the data section using the offsets
+    for symbol in offsets.iter().copied() {
+        let offset = symbol.offset;
+
+        // Read data from file_contents (already loaded into memory)
+        // Use a large buffer for variable length data, but don't exceed file size
+        let buffer_size =
+            MANGANIS_SECTION_SIZE.min(file_contents.len().saturating_sub(offset as usize));
+        if buffer_size == 0 {
+            tracing::warn!("Symbol at offset {offset} is beyond file size");
+            continue;
+        }
+
+        let data_in_range = if (offset as usize) + buffer_size <= file_contents.len() {
+            &file_contents[offset as usize..(offset as usize) + buffer_size]
+        } else {
+            &file_contents[offset as usize..]
+        };
+
+        // Try to deserialize - const-serialize will handle variable-length data correctly
+        // The deserialization should work even with padding (zeros) at the end
+        if let Some(result) = deserialize_manganis_payload(data_in_range) {
+            match result {
+                SymbolDataOrAsset::SymbolData(symbol_data) => match *symbol_data {
+                    SymbolData::Asset(asset) => {
+                        tracing::debug!(
+                            "Found asset (via SymbolData) at offset {offset}: {:?}",
+                            asset.absolute_source_path()
+                        );
+                        let asset_index = assets.len();
+                        assets.push(asset);
+                        write_entries.push(AssetWriteEntry::new(
+                            symbol,
+                            asset_index,
+                            AssetRepresentation::SymbolData,
+                        ));
+                    }
+
+                    SymbolData::AndroidArtifact(meta) => {
+                        tracing::debug!(
+                            "Found Android artifact declaration for plugin {}",
+                            meta.plugin_name.as_str()
+                        );
+                        android_artifacts.push(meta);
+                    }
+                    SymbolData::SwiftPackage(meta) => {
+                        tracing::debug!(
+                            "Found Swift package declaration for plugin {}",
+                            meta.plugin_name.as_str()
+                        );
+                        swift_packages.push(meta);
+                    }
+                    _ => {}
+                },
+                SymbolDataOrAsset::Asset(asset) => {
+                    tracing::debug!(
+                        "Found asset (old format) at offset {offset}: {:?}",
+                        asset.absolute_source_path()
+                    );
+                    let asset_index = assets.len();
+                    assets.push(asset);
+                    write_entries.push(AssetWriteEntry::new(
+                        symbol,
+                        asset_index,
+                        AssetRepresentation::RawBundled,
+                    ));
+                }
+            }
+        } else {
+            tracing::warn!(
+                "Found a symbol at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions, or the symbol may be in an unsupported format."
+            );
+        }
+    }
+
+    // Add the hash to each asset in parallel
+    assets
+        .par_iter_mut()
+        .for_each(crate::opt::add_hash_to_asset);
+
+    // Write back only assets to the binary file (permissions are not modified)
+    for entry in write_entries {
+        let offset = entry.symbol.offset;
+        let asset = assets
+            .get(entry.asset_index)
+            .copied()
+            .expect("asset index collected from symbol scan");
+
+        let new_data = match entry.representation {
+            AssetRepresentation::RawBundled => {
+                tracing::debug!(
+                    "Writing asset to offset {offset}: {:?} - {:?}",
+                    asset.absolute_source_path(),
+                    asset.bundled_path()
+                );
+                serialize_bundled_asset(&asset)
+            }
+            AssetRepresentation::SymbolData => {
+                tracing::debug!("Writing asset (SymbolData) to offset {offset}: {:?}", asset);
+                serialize_symbol_data(&SymbolData::Asset(asset))
+            }
+        };
+        if new_data.len() > MANGANIS_SECTION_SIZE {
+            tracing::warn!(
+                "Asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. Truncating output.",
+                new_data.len(),
+                MANGANIS_SECTION_SIZE
+            );
+        }
+        write_serialized_bytes(&mut file, offset, &new_data, MANGANIS_SECTION_SIZE)?;
+    }
+
+    // Ensure the file is flushed to disk
+    file.sync_all()
+        .context("Failed to sync file after writing assets")?;
+
+    // If the file is a macos binary, we need to re-sign the modified binary
+    if obj_format == object::BinaryFormat::MachO && !assets.is_empty() {
+        // Spawn the codesign command to re-sign the binary
+        let output = tokio::process::Command::new("codesign")
+            .arg("--force")
+            .arg("--sign")
+            .arg("-") // Sign with an empty identity
+            .arg(path)
+            .output()
+            .await
+            .context("Failed to run codesign - is `codesign` in your path?")?;
+        if !output.status.success() {
+            bail!(
+                "Failed to re-sign the binary with codesign after finalizing the assets: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+
+    let mut manifest = AppManifest::new();
+
+    for asset in assets {
+        manifest.insert_asset(asset);
+    }
+
+    manifest.android_artifacts = android_artifacts;
+    manifest.swift_sources = swift_packages;
+
+    Ok(manifest)
+}
+
+/// Try to open a file for writing, retrying if the file is already open by another process.
+///
+/// This is useful on windows where antivirus software might grab the executable before we have a chance to read it.
+async fn open_file_for_writing_with_timeout(
+    file: &Path,
+    options: &mut OpenOptions,
+) -> Result<std::fs::File> {
+    let start_time = Instant::now();
+    let timeout = Duration::from_secs(5);
+    loop {
+        match options.open(file) {
+            Ok(file) => return Ok(file),
+            Err(e) => {
+                if cfg!(windows) && e.raw_os_error() == Some(32) && start_time.elapsed() < timeout {
+                    // File is already open, wait and retry
+                    tracing::trace!(
+                        "Failed to open file because another process is using it. Retrying..."
+                    );
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                } else {
+                    return Err(e.into());
+                }
+            }
+        }
+    }
+}
+
+fn write_serialized_bytes(
+    file: &mut std::fs::File,
+    offset: u64,
+    data: &[u8],
+    buffer_size: usize,
+) -> Result<()> {
+    use std::io::SeekFrom;
+
+    file.seek(SeekFrom::Start(offset))?;
+    if data.len() <= buffer_size {
+        file.write_all(data)?;
+        if data.len() < buffer_size {
+            let padding = vec![0; buffer_size - data.len()];
+            file.write_all(&padding)?;
+        }
+    } else {
+        file.write_all(&data[..buffer_size])?;
+    }
+
+    Ok(())
+}
+
+/// Extract all manganis symbols and their sections from the given object file.
+fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
+    file: &'b File<'a, R>,
+) -> impl Iterator<Item = (Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
+    file.symbols().filter_map(move |symbol| {
+        let name = symbol.name().ok()?;
+        if !is_manganis_symbol(name) {
+            return None;
+        }
+        let section_index = symbol.section_index()?;
+        let section = file.section_by_index(section_index).ok()?;
+        Some((symbol, section))
+    })
+}

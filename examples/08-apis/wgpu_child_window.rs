@@ -111,6 +111,7 @@ impl<'a> GraphicsResources<'a> {
                 force_fallback_adapter: false,
                 // Request an adapter which can render to our surface
                 compatible_surface: Some(&surface),
+                apply_limit_buckets: false,
             })
             .await
             .expect("Failed to find an appropriate adapter");
@@ -190,6 +191,7 @@ fn fs_main() -> @location(0) vec4<f32> {
             desired_maximum_frame_latency: 2,
             alpha_mode: wgpu::CompositeAlphaMode::PostMultiplied,
             view_formats: vec![],
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
         surface.configure(&device, &config);
@@ -255,6 +257,6 @@ fn fs_main() -> @location(0) vec4<f32> {
         }
 
         queue.submit(Some(encoder.finish()));
-        frame.present();
+        queue.present(frame);
     }
 }

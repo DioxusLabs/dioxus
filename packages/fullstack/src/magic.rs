@@ -264,7 +264,7 @@ mod decode_ok {
                     Ok(res) => {
                         let status = res.status();
 
-                        let bytes = res.bytes().await.unwrap();
+                        let bytes = res.bytes().await?;
                         let as_bytes = if bytes.is_empty() {
                             b"null".as_slice()
                         } else {
@@ -593,7 +593,7 @@ mod resp {
 
     use super::*;
     use axum::response::Response;
-    use dioxus_core::CapturedError;
+    use dioxus_vdom::CapturedError;
     use http::HeaderValue;
 
     /// A trait for converting the result of the Server Function into an Axum response.

@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 //! # Routable
 
-use dioxus_core::Element;
+use dioxus_vdom::Element;
 use std::iter::FlatMap;
 use std::slice::Iter;
 use std::{fmt::Display, str::FromStr};
@@ -168,6 +168,7 @@ where
 }
 
 /// A marker type for `Option<T>` to implement `FromQueryArgument`.
+#[doc(hidden)]
 pub struct OptionMarker;
 
 impl<T: Default + FromStr> FromQueryArgument<OptionMarker> for Option<T>

@@ -17,8 +17,8 @@ pub enum UserWindowEvent {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     TrayMenuEvent(tray_icon::menu::MenuEvent),
 
-    /// Poll the virtualdom
-    Poll(WindowId),
+    /// Poll the shared VirtualDom.
+    Poll,
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview
     Ipc {
@@ -38,8 +38,11 @@ pub enum UserWindowEvent {
     /// Create a new window
     NewWindow,
 
-    /// Close a given window (could be any window!)
-    CloseWindow(WindowId),
+    /// Request that a given window close, honoring its close behavior and component lifecycle.
+    RequestWindowClose(WindowId),
+
+    /// Destroy a native window after its Dioxus owner has released the portal.
+    DestroyWindow(WindowId),
 
     /// Gracefully shutdown the entire app
     Shutdown,

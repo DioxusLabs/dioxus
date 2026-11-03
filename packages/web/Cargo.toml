@@ -10,13 +10,12 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "web", "wasm"]
 
 [dependencies]
-dioxus-core = { workspace = true }
-dioxus-core-types = { workspace = true }
-dioxus-cli-config = { workspace = true, features = ["web"] }
+dioxus-vdom = { workspace = true }
+dx-env = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
-dioxus-devtools = { workspace = true }
+dioxus-devtools = { workspace = true, optional = true }
 dioxus-signals = { workspace = true }
 dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
@@ -39,7 +38,7 @@ serde-wasm-bindgen = { version = "0.6.5", optional = true }
 ciborium = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true, features = ["futures"] }
 send_wrapper = { workspace = true, features = ["futures"] }
-wasm-streams = "0.4.2"
+wasm-streams = "0.5.0"
 
 [dependencies.web-sys]
 workspace = true
@@ -111,8 +110,9 @@ devtools = [
   "web-sys/Location",
   "dep:serde_json",
   "dep:serde",
-  "dioxus-core/serialize",
-  "dep:gloo-timers"
+  "dioxus-vdom/serialize",
+  "dep:gloo-timers",
+  "dep:dioxus-devtools",
 ]
 document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 
@@ -122,7 +122,6 @@ wasm-bindgen-test = { workspace = true }
 dioxus-ssr = { workspace = true, default-features = false }
 gloo-dialogs = { workspace = true }
 dioxus-web = { path = ".", features = ["hydrate"] }
-tracing-wasm = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

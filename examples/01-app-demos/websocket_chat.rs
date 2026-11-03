@@ -60,7 +60,7 @@ fn app() -> Element {
             value: "{input}",
             oninput: move |e| async move { input.set(e.value()) },
             onkeydown: move |e| async move {
-                if e.key() == Key::Enter {
+                if e.key() == Key::Named(NamedKey::Enter) {
                     _ = socket.send(ClientEvent::SendMessage(input.read().clone())).await;
                     input.set("".to_string());
                 }

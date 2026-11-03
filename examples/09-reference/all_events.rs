@@ -72,6 +72,25 @@ fn app() -> Element {
                         onselectionchange: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
                         "Selection events also include textarea ranges and direction.",
                     }
+                    label {
+                        r#for: "beforeinput-input",
+                        "Type here to inspect beforeinput (input_type, data, pre-change value)"
+                    }
+                    input {
+                        id: "beforeinput-input",
+                        style: "font: inherit; padding: 8px 10px;",
+                        onbeforeinput: move |event| log_event(event.data()),
+                        oninput: move |event| log_event(event.data()),
+                    }
+                    label {
+                        r#for: "paste-input",
+                        "Paste into this field to read the clipboard text (and any files)"
+                    }
+                    input {
+                        id: "paste-input",
+                        style: "font: inherit; padding: 8px 10px;",
+                        onpaste: move |event| log_event(event.data()),
+                    }
                 }
                 div {
                     style: "text-align: center; padding: 20px; font-family: sans-serif; overflow: auto; height: 400px;",
