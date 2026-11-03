@@ -76,7 +76,7 @@ gloo-net = "0.7.0"
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-wasm-streams = "0.5.0"
+wasm-streams = "0.7.0"
 content_disposition = "0.4.0"
 
 # native websocket deps
