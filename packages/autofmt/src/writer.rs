@@ -236,16 +236,21 @@ impl<'a> Writer<'a> {
     /// An expression within a for or if block that might need to be spread out across several lines
     fn write_inline_expr(&mut self, expr: &Expr) -> std::fmt::Result {
         let unparsed = self.unparse_expr(expr);
-        let mut lines = unparsed.lines();
-        let first_line = lines.next().ok_or(std::fmt::Error)?;
+        let string_lines = crate::prettier_please::string_literal_continuation_lines(&unparsed);
+        let mut lines = unparsed.lines().enumerate();
+        let (_, first_line) = lines.next().ok_or(std::fmt::Error)?;
 
         write!(self.out, "{first_line}")?;
 
         let mut was_multiline = false;
 
-        for line in lines {
+        for (index, line) in lines {
             was_multiline = true;
-            self.out.tabbed_line()?;
+            if string_lines.contains(&index) {
+                self.out.new_line()?;
+            } else {
+                self.out.tabbed_line()?;
+            }
             write!(self.out, "{line}")?;
         }
 
@@ -1175,8 +1180,9 @@ impl<'a> Writer<'a> {
     }
 
     fn write_mulitiline_tokens(&mut self, out: String) -> Result {
-        let mut lines = out.split('\n').peekable();
-        let first = lines.next().unwrap();
+        let string_lines = crate::prettier_please::string_literal_continuation_lines(&out);
+        let mut lines = out.split('\n').enumerate().peekable();
+        let (_, first) = lines.next().unwrap();
 
         // a one-liner for whatever reason
         // Does not need a new line
@@ -1185,8 +1191,9 @@ impl<'a> Writer<'a> {
         } else {
             writeln!(self.out, "{first}")?;
 
-            while let Some(line) = lines.next() {
-                if !line.trim().is_empty() {
+            while let Some((index, line)) = lines.next() {
+                // A line inside a multi-line string literal is part of the string's value
+                if !line.trim().is_empty() && !string_lines.contains(&index) {
                     self.out.tab()?;
                 }
 
@@ -1204,14 +1211,19 @@ impl<'a> Writer<'a> {
 
     fn write_spread_attribute(&mut self, attr: &Expr) -> Result {
         let formatted = self.unparse_expr(attr);
+        let string_lines = crate::prettier_please::string_literal_continuation_lines(&formatted);
 
-        let mut lines = formatted.lines();
+        let mut lines = formatted.lines().enumerate();
 
-        let first_line = lines.next().unwrap();
+        let (_, first_line) = lines.next().unwrap();
 
         write!(self.out, "..{first_line}")?;
-        for line in lines {
-            self.out.indented_tabbed_line()?;
+        for (index, line) in lines {
+            if string_lines.contains(&index) {
+                self.out.new_line()?;
+            } else {
+                self.out.indented_tabbed_line()?;
+            }
             write!(self.out, "{line}")?;
         }
 
