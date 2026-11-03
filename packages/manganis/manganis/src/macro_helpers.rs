@@ -6,49 +6,6 @@ use manganis_core::{
     AndroidArtifactMetadata, AssetOptions, BundledAsset, SwiftPackageMetadata, SymbolData,
 };
 
-/// Select whether to embed assets for the invoking crate.
-pub const fn embed_assets(value: Option<&str>) -> bool {
-    match value {
-        Some(value) => {
-            let bytes = value.as_bytes();
-            !bytes_equal(bytes, b"0") && !bytes_equal(bytes, b"false")
-        }
-        None => true,
-    }
-}
-
-const fn bytes_equal(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut i = 0;
-    while i < a.len() {
-        if a[i] != b[i] {
-            return false;
-        }
-        i += 1;
-    }
-    true
-}
-
-#[cfg(test)]
-mod embed_tests {
-    use super::embed_assets;
-
-    #[test]
-    fn select_embedding() {
-        assert!(embed_assets(None));
-        for value in ["1", "true"] {
-            assert!(embed_assets(Some(value)));
-        }
-        for value in ["0", "false"] {
-            assert!(!embed_assets(Some(value)));
-        }
-        assert!(embed_assets(Some("other")));
-        assert!(embed_assets(Some("")));
-    }
-}
-
 /// Copy a slice into a constant sized buffer at compile time
 ///
 /// This is a generic utility that works with any byte slice and can be used

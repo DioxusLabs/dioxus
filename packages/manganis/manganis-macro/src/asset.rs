@@ -103,16 +103,10 @@ impl AssetParser {
             self.options.clone()
         };
 
-        let embedded = if asset.is_dir() {
+        let embedded = if asset.is_dir() || !embed_assets(env!("MANGANIS_EMBED_ASSETS_RESOLVED")) {
             quote! { None }
         } else {
-            quote! {
-                if manganis::macro_helpers::embed_assets(option_env!("MANGANIS_EMBED_ASSETS")) {
-                    Some(include_bytes!(#asset_str))
-                } else {
-                    None
-                }
-            }
+            quote! { Some(include_bytes!(#asset_str)) }
         };
 
         quote! {
@@ -156,5 +150,24 @@ impl AssetParser {
     fn error_tokens(&self, err: &AssetParseError) -> proc_macro2::TokenStream {
         let err = err.to_string();
         quote! { compile_error!(#err) }
+    }
+}
+
+fn embed_assets(value: &str) -> bool {
+    !matches!(value, "0" | "false")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::embed_assets;
+
+    #[test]
+    fn select_embedding() {
+        for value in ["", "1", "true", "other"] {
+            assert!(embed_assets(value));
+        }
+        for value in ["0", "false"] {
+            assert!(!embed_assets(value));
+        }
     }
 }

@@ -195,6 +195,8 @@ For each processed asset:
 
 Assets not post-processed by `dx` retain the placeholder bundled path. File assets are embedded by default in debug and release builds and served from a virtual path by native resolvers; otherwise they resolve to their absolute source path. `MANGANIS_EMBED_ASSETS=1` or `true` enables embedding, and `0` or `false` disables it. The CLI disables embedding by default; folders are not embedded.
 
+The macro crate's build script tracks the environment setting, and the macro only emits `include_bytes!` when embedding is enabled. Switching the setting rebuilds the macro and its dependents; in disabled mode, asset files are not rustc dependencies.
+
 **Development Mode** (`!is_bundled_app()`):
 ```
 Asset::resolve()
