@@ -70,10 +70,15 @@ impl WasmOpt {
             args.push("--memory-packing");
         }
 
-        if !self.cfg.debug {
-            args.push("--strip-debug");
-        } else {
+        if self.cfg.debug {
             args.push("--debuginfo");
+        } else if self.cfg.keep_names {
+            // wasm-opt drops the name section unless it is told to keep debug info,
+            // so keep it and strip only the DWARF sections
+            args.push("--debuginfo");
+            args.push("--strip-dwarf");
+        } else {
+            args.push("--strip-debug");
         }
 
         for extra in &self.cfg.extra_features {
