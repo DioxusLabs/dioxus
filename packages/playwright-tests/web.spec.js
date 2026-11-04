@@ -199,3 +199,25 @@ test("select multiple", async ({ page }) => {
   await dynamicSelect.selectOption(["1", "2"]);
   await expect(dynamicSelect).toHaveValues(["1", "2"]);
 });
+
+test("muted sets the media element's muted property", async ({ page }) => {
+  await page.goto("http://localhost:9990");
+
+  const staticVideo = page.locator("video#static-muted-video");
+  await staticVideo.waitFor({ state: "attached" });
+  await expect(staticVideo).toHaveJSProperty("muted", true);
+
+  const dynamicVideo = page.locator("video#dynamic-muted-video");
+  await expect(dynamicVideo).toHaveJSProperty("muted", true);
+  await page.locator("button#toggle-muted").click();
+  await expect(dynamicVideo).toHaveJSProperty("muted", false);
+  await page.locator("button#toggle-muted").click();
+  await expect(dynamicVideo).toHaveJSProperty("muted", true);
+
+  const removableVideo = page.locator("video#removable-muted-video");
+  await expect(removableVideo).toHaveJSProperty("muted", true);
+  await page.locator("button#toggle-muted-present").click();
+  await expect(removableVideo).toHaveJSProperty("muted", false);
+  await page.locator("button#toggle-muted-present").click();
+  await expect(removableVideo).toHaveJSProperty("muted", true);
+});

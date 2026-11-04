@@ -65,6 +65,7 @@ fn app() -> Element {
         DocumentElements {}
         MergeStyles {}
         SelectMultiple {}
+        MutedVideo {}
     }
 }
 
@@ -217,6 +218,20 @@ fn SelectMultiple() -> Element {
             option { label: "Value1", value: "1" }
             option { label: "Value2", value: "2" }
         }
+    }
+}
+
+#[component]
+fn MutedVideo() -> Element {
+    let mut muted = use_signal(|| true);
+    let mut present = use_signal(|| true);
+
+    rsx! {
+        video { id: "static-muted-video", muted: "true" }
+        video { id: "dynamic-muted-video", muted: muted() }
+        video { id: "removable-muted-video", muted: present().then_some(true) }
+        button { id: "toggle-muted", onclick: move |_| muted.toggle(), "Toggle muted" }
+        button { id: "toggle-muted-present", onclick: move |_| present.toggle(), "Toggle muted presence" }
     }
 }
 
