@@ -1,0 +1,407 @@
+//! <div align="center">
+//!     <img
+//!         src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c"
+//!         alt="Build web, desktop, and mobile apps with a single codebase."
+//!         width="100%"
+//!         class="darkmode-image"
+//!     >
+//! </div>
+//!
+//! # dx-env
+//!
+//! This crate is the environment variable contract between `dx` and the application it launches. It
+//! exposes the values that `dx` sets when running the application during development.
+//!
+//! Note that these functions will return a different value when running under the CLI, so make sure
+//! not to rely on them when running in a production environment.
+//!
+//! ## Constants
+//!
+//! The various constants here are the names of the environment variables that the CLI sets. We recommend
+//! using the functions in this crate to access the values of these environment variables indirectly.
+//!
+//! The CLI uses this crate and the associated constants to *set* the environment variables, but as
+//! a consumer of the CLI, you would want to read the values of these environment variables using
+//! the provided functions.
+//!
+//! ## Example Usage
+//!
+//! We recommend using the functions here to access the values of the environment variables set by the CLI.
+//! For example, you might use the [`fullstack_address_or_localhost`] function to get the address that
+//! the CLI is requesting the application to be served on.
+//!
+//! ```rust, ignore
+//! async fn launch_axum(app: axum::Router<()>) {
+//!     // Read the PORT and ADDR environment variables set by the CLI
+//!     let addr = dx_env::fullstack_address_or_localhost();
+//!
+//!     // Bind to the address and serve the application
+//!     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+//!     axum::serve(listener, app.into_make_service())
+//!         .await
+//!         .unwrap();
+//! }
+//! ```
+//!
+//! ## Stability
+//!
+//! The *values* that these functions return are *not* guaranteed to be stable between patch releases
+//! of Dioxus. At any time, we might change the values that the CLI sets or the way that they are read.
+//!
+//! We also don't guarantee the stability of the env var names themselves. If you want to rely on a
+//! particular env var, use the defined constants in your code.
+
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::PathBuf,
+};
+
+pub const CLI_ENABLED_ENV: &str = "DX_CLI_ENABLED";
+pub const SERVER_IP_ENV: &str = "IP";
+pub const SERVER_PORT_ENV: &str = "PORT";
+pub const DEVSERVER_IP_ENV: &str = "DX_DEVSERVER_IP";
+pub const DEVSERVER_PORT_ENV: &str = "DX_DEVSERVER_PORT";
+pub const ASSET_ROOT_ENV: &str = "DX_ASSET_ROOT";
+pub const PRODUCT_NAME_ENV: &str = "DX_PRODUCT_NAME";
+
+#[deprecated(since = "0.6.0", note = "The CLI currently does not set this.")]
+#[doc(hidden)]
+pub const OUT_DIR: &str = "DX_OUT_DIR";
+pub const SESSION_CACHE_DIR: &str = "DX_SESSION_CACHE_DIR";
+pub const BUILD_ID: &str = "DX_BUILD_ID";
+
+/// The `DIOXUS_*` names these variables had before they were renamed to `DX_*`.
+///
+/// `dx` sets both names, and the accessors in this crate fall back to the legacy name when the
+/// `DX_*` name is unset, so apps and tools built against older versions keep working.
+const LEGACY_ENV_NAMES: &[(&str, &str)] = &[
+    (CLI_ENABLED_ENV, "DIOXUS_CLI_ENABLED"),
+    (DEVSERVER_IP_ENV, "DIOXUS_DEVSERVER_IP"),
+    (DEVSERVER_PORT_ENV, "DIOXUS_DEVSERVER_PORT"),
+    (ASSET_ROOT_ENV, "DIOXUS_ASSET_ROOT"),
+    (PRODUCT_NAME_ENV, "DIOXUS_PRODUCT_NAME"),
+    (SESSION_CACHE_DIR, "DIOXUS_SESSION_CACHE_DIR"),
+    (BUILD_ID, "DIOXUS_BUILD_ID"),
+    ("DX_OUT_DIR", "DIOXUS_OUT_DIR"),
+];
+
+/// Get the legacy `DIOXUS_*` name of a `DX_*` environment variable, if it has one.
+///
+/// `dx` uses this to also set the legacy names for apps built against older versions of this crate.
+pub fn legacy_env_name(name: &str) -> Option<&'static str> {
+    LEGACY_ENV_NAMES
+        .iter()
+        .find(|(new, _)| *new == name)
+        .map(|(_, legacy)| *legacy)
+}
+
+/// Read an environment variable at runtime, falling back to its legacy `DIOXUS_*` name.
+fn env_var(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .or_else(|| std::env::var(legacy_env_name(name)?).ok())
+}
+
+/// Reads an environment variable at runtime in debug mode or at compile time in
+/// release mode. When bundling in release mode, we will not be running under the
+/// environment variables that the CLI sets, so we need to read them at compile time.
+macro_rules! read_env_config {
+    ($name:literal, $legacy:literal) => {{
+        #[cfg(debug_assertions)]
+        {
+            // In debug mode, read the environment variable set by the CLI at runtime
+            env_var($name)
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            // In release mode, read the environment variable set by the CLI at compile time
+            // This means the value will still be available when running the application
+            // standalone.
+            // We don't always read the environment variable at compile time to avoid rebuilding
+            // this crate when the environment variable changes.
+            option_env!($name)
+                .or(option_env!($legacy))
+                .map(ToString::to_string)
+        }
+    }};
+}
+
+/// Get the address of the devserver for use over a raw socket
+///
+/// This returns a [`SocketAddr`], meaning that you still need to connect to it using a socket with
+/// the appropriate protocol and path.
+///
+/// For reference, the devserver typically lives on `127.0.0.1:8080` and serves the devserver websocket
+/// on `127.0.0.1:8080/_dioxus`.
+pub fn devserver_raw_addr() -> Option<SocketAddr> {
+    let port = env_var(DEVSERVER_PORT_ENV);
+
+    if cfg!(target_os = "android") {
+        // Since `adb reverse` is used for Android, the 127.0.0.1 will always be
+        // the correct IP address.
+        let port = port.unwrap_or("8080".to_string());
+        return Some(format!("127.0.0.1:{}", port).parse().unwrap());
+    }
+
+    let port = port?;
+    let ip = env_var(DEVSERVER_IP_ENV)?;
+
+    format!("{}:{}", ip, port).parse().ok()
+}
+
+/// Get the address of the devserver for use over a websocket
+///
+/// This is meant for internal use, though if you are building devtools around Dioxus, this would be
+/// useful to connect as a "listener" to the devserver.
+///
+/// Unlike [`devserver_raw_addr`], this returns a string that can be used directly to connect to the
+/// devserver over a websocket. IE `ws://127.0.0.1:8080/_dioxus`.
+pub fn devserver_ws_endpoint() -> Option<String> {
+    let addr = devserver_raw_addr()?;
+    Some(format!("ws://{addr}/_dioxus"))
+}
+
+/// Get the IP that the server should be bound to.
+///
+/// This is set by the CLI and is used to bind the server to a specific address.
+/// You can manually set the ip by setting the `IP` environment variable.
+///
+/// ```sh
+/// IP=0.0.0.0 ./server
+/// ```
+pub fn server_ip() -> Option<IpAddr> {
+    std::env::var(SERVER_IP_ENV)
+        .ok()
+        .and_then(|s| s.parse().ok())
+}
+
+/// Get the port that the server should listen on.
+///
+/// This is set by the CLI and is used to bind the server to a specific port.
+/// You can manually set the port by setting the `PORT` environment variable.
+///
+/// ```sh
+/// PORT=8081 ./server
+/// ```
+pub fn server_port() -> Option<u16> {
+    std::env::var(SERVER_PORT_ENV)
+        .ok()
+        .and_then(|s| s.parse().ok())
+}
+
+/// Get the full address that the server should listen on.
+///
+/// This is a convenience function that combines the `server_ip` and `server_port` functions and then
+/// falls back to `localhost:8080` if the environment variables are not set.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// async fn launch_axum(app: axum::Router<()>) {
+///     // Read the PORT and ADDR environment variables set by the CLI
+///     let addr = dx_env::fullstack_address_or_localhost();
+///
+///     // Bind to the address and serve the application
+///     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+///     axum::serve(listener, app.into_make_service())
+///         .await
+///         .unwrap();
+/// }
+/// ```
+///
+/// ## Stability
+///
+/// In the future, we might change the address from 127.0.0.1 to 0.0.0.0.
+pub fn fullstack_address_or_localhost() -> SocketAddr {
+    let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    let port = server_port().unwrap_or(8080);
+    SocketAddr::new(ip, port)
+}
+
+/// Check if the CLI is enabled when running the application.
+///
+/// The CLI *always* sets this value to true when running the application.
+///
+/// ## Note
+///
+/// On Android and the Web, this *might* not be reliable since there isn't always a consistent way to
+/// pass off the CLI environment variables to the application.
+pub fn is_cli_enabled() -> bool {
+    // todo: (jon) - on android and web we should fix this...
+    env_var(CLI_ENABLED_ENV).is_some()
+}
+
+/// Get the path where the application will be served from.
+///
+/// This is used by the router to format the URLs. For example, an app with a base path of `dogapp` will
+/// be served at `http://localhost:8080/dogapp`.
+///
+/// All assets will be served from this base path as well, ie `http://localhost:8080/dogapp/assets/logo.png`.
+#[allow(unreachable_code)]
+pub fn base_path() -> Option<String> {
+    // This may trigger when compiling to the server if you depend on another crate that pulls in
+    // the web feature. It might be better for the renderers to provide the current platform
+    // as a global context
+    #[cfg(all(feature = "web", target_arch = "wasm32"))]
+    {
+        return web_base_path();
+    }
+
+    read_env_config!("DX_ASSET_ROOT", "DIOXUS_ASSET_ROOT")
+}
+
+#[cfg(feature = "web")]
+#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+        export function getMetaContents(meta_name) {
+            const selector = document.querySelector(`meta[name="${meta_name}"]`);
+            if (!selector) {
+                return null;
+            }
+            return selector.content;
+        }
+    "#)]
+unsafe extern "C" {
+    #[wasm_bindgen(js_name = getMetaContents)]
+    pub fn get_meta_contents(selector: &str) -> Option<String>;
+}
+
+/// Get the path where the application is served from in the browser.
+///
+/// This uses wasm_bindgen on the browser to extract the base path from a meta element.
+#[cfg(feature = "web")]
+pub fn web_base_path() -> Option<String> {
+    // In debug mode, we get the base path from the meta element which can be hot reloaded and changed without recompiling
+    #[cfg(debug_assertions)]
+    {
+        thread_local! {
+            static BASE_PATH: std::cell::OnceCell<Option<String>> = const { std::cell::OnceCell::new() };
+        }
+        BASE_PATH.with(|f| {
+            f.get_or_init(|| {
+                get_meta_contents(ASSET_ROOT_ENV)
+                    .or_else(|| legacy_env_name(ASSET_ROOT_ENV).and_then(get_meta_contents))
+            })
+            .clone()
+        })
+    }
+
+    // In release mode, we get the base path from the environment variable
+    #[cfg(not(debug_assertions))]
+    {
+        option_env!("DX_ASSET_ROOT")
+            .or(option_env!("DIOXUS_ASSET_ROOT"))
+            .map(ToString::to_string)
+    }
+}
+
+/// Format a meta element for the base path to be used in the output HTML
+#[doc(hidden)]
+pub fn format_base_path_meta_element(base_path: &str) -> String {
+    let mut meta = format!(r#"<meta name="{ASSET_ROOT_ENV}" content="{base_path}">"#);
+    if let Some(legacy) = legacy_env_name(ASSET_ROOT_ENV) {
+        meta.push_str(&format!(r#"<meta name="{legacy}" content="{base_path}">"#));
+    }
+    meta
+}
+
+/// Get the path to the output directory where the application is being built.
+///
+/// This might not return a valid path - we don't recommend relying on this.
+#[doc(hidden)]
+#[deprecated(
+    since = "0.6.0",
+    note = "The does not set the OUT_DIR environment variable."
+)]
+pub fn out_dir() -> Option<PathBuf> {
+    #[allow(deprecated)]
+    {
+        env_var(OUT_DIR).map(PathBuf::from)
+    }
+}
+
+/// Get the directory where this app can write to for this session that's guaranteed to be stable
+/// between reloads of the same app. This is useful for emitting state like window position and size
+/// so the app can restore it when it's next opened.
+///
+/// Note that this cache dir is really only useful for platforms that can access it. Web/Android
+/// don't have access to this directory, so it's not useful for them.
+///
+/// This is designed with desktop executables in mind.
+pub fn session_cache_dir() -> Option<PathBuf> {
+    if cfg!(target_os = "android") {
+        return Some(android_session_cache_dir());
+    }
+
+    env_var(SESSION_CACHE_DIR).map(PathBuf::from)
+}
+
+/// The session cache directory for android
+pub fn android_session_cache_dir() -> PathBuf {
+    PathBuf::from("/data/local/tmp/dx/")
+}
+
+/// The unique build id for this application, used to disambiguate between different builds of the same
+/// application.
+pub fn build_id() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        env_var(BUILD_ID).and_then(|s| s.parse().ok()).unwrap_or(0)
+    }
+}
+
+/// The product name of the bundled application.
+pub fn product_name() -> Option<String> {
+    read_env_config!("DX_PRODUCT_NAME", "DIOXUS_PRODUCT_NAME")
+}
+
+/// Check whether the app is running as a bundled app rather than through `cargo run`.
+///
+/// Returns true when the CLI launched the app (`DX_CLI_ENABLED` is set) or when
+/// `CARGO_MANIFEST_DIR` is unset or empty.
+pub fn is_bundled_app() -> bool {
+    static BUNDLED: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+        if is_cli_enabled() {
+            return true;
+        }
+
+        // Generally only set by `cargo run`
+        if let Ok(path) = std::env::var("CARGO_MANIFEST_DIR")
+            && !path.is_empty()
+        {
+            return false;
+        }
+
+        true
+    });
+
+    *BUNDLED
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_names() {
+        assert_eq!(legacy_env_name(CLI_ENABLED_ENV), Some("DIOXUS_CLI_ENABLED"));
+        assert_eq!(legacy_env_name(BUILD_ID), Some("DIOXUS_BUILD_ID"));
+        assert_eq!(legacy_env_name(SERVER_PORT_ENV), None);
+        for (new, legacy) in LEGACY_ENV_NAMES {
+            assert!(new.starts_with("DX_"));
+            assert_eq!(legacy.strip_prefix("DIOXUS_"), new.strip_prefix("DX_"));
+        }
+    }
+
+    #[test]
+    fn base_path_meta_has_both_names() {
+        let meta = format_base_path_meta_element("app");
+        assert!(meta.contains(r#"name="DX_ASSET_ROOT" content="app""#));
+        assert!(meta.contains(r#"name="DIOXUS_ASSET_ROOT" content="app""#));
+    }
+}

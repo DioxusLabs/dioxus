@@ -3072,7 +3072,7 @@ name = "dioxus-asset-resolver"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-cli-config",
+ "dx-env",
  "http",
  "infer",
  "jni 0.21.1",
@@ -3101,10 +3101,6 @@ dependencies = [
  "serde",
  "syn 2.0.117",
 ]
-
-[[package]]
-name = "dioxus-base-types"
-version = "0.8.0-alpha.3"
 
 [[package]]
 name = "dioxus-cli"
@@ -3137,12 +3133,10 @@ dependencies = [
  "ctrlc",
  "depinfo",
  "dioxus-autofmt",
- "dioxus-base-types",
  "dioxus-cli-config",
  "dioxus-cli-telemetry",
  "dioxus-component-manifest",
  "dioxus-devtools-types",
- "dioxus-dx-wire-format",
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-rsx-hotreload",
@@ -3151,6 +3145,8 @@ dependencies = [
  "dircpy",
  "dirs 6.0.0",
  "dunce",
+ "dx-env",
+ "dx-wire-format",
  "escargot",
  "flate2",
  "fs2",
@@ -3178,6 +3174,7 @@ dependencies = [
  "manganis",
  "manganis-core",
  "md5",
+ "mimalloc",
  "mozjpeg",
  "notify",
  "nucleo",
@@ -3238,7 +3235,7 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.8.0-alpha.3"
 dependencies = [
- "wasm-bindgen",
+ "dx-env",
 ]
 
 [[package]]
@@ -3365,10 +3362,10 @@ dependencies = [
 name = "dioxus-devtools"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-cli-config",
  "dioxus-devtools-types",
  "dioxus-signals",
  "dioxus-vdom",
+ "dx-env",
  "futures-channel",
  "futures-util",
  "serde",
@@ -3394,7 +3391,6 @@ name = "dioxus-document"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-base-types",
  "dioxus-html",
  "dioxus-vdom",
  "dioxus-vdom-macro",
@@ -3406,17 +3402,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
-]
-
-[[package]]
-name = "dioxus-dx-wire-format"
-version = "0.8.0-alpha.3"
-dependencies = [
- "cargo_metadata",
- "manganis-core",
- "serde",
- "serde_json",
- "subsecond-types",
 ]
 
 [[package]]
@@ -3486,7 +3471,6 @@ dependencies = [
  "derive_more",
  "dioxus",
  "dioxus-asset-resolver",
- "dioxus-cli-config",
  "dioxus-fullstack-core",
  "dioxus-fullstack-macro",
  "dioxus-hooks",
@@ -3494,6 +3478,7 @@ dependencies = [
  "dioxus-server",
  "dioxus-signals",
  "dioxus-vdom",
+ "dx-env",
  "form_urlencoded",
  "futures",
  "futures-channel",
@@ -3614,10 +3599,9 @@ dependencies = [
  "async-trait",
  "bytes",
  "dioxus",
- "dioxus-base-types",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
- "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-vdom",
  "dioxus-vdom-macro",
  "dioxus-web",
@@ -3652,7 +3636,6 @@ dependencies = [
 name = "dioxus-interpreter-js"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-base-types",
  "dioxus-html",
  "dioxus-vdom",
  "js-sys",
@@ -3699,7 +3682,7 @@ name = "dioxus-logger"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-cli-config",
+ "dx-env",
  "serde_json",
  "tracing",
  "tracing-subscriber",
@@ -3900,7 +3883,6 @@ dependencies = [
  "ciborium",
  "criterion",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
@@ -3910,6 +3892,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-vdom",
  "dioxus-vdom-macro",
+ "dx-env",
  "percent-encoding",
  "rustversion",
  "serde",
@@ -3951,7 +3934,6 @@ dependencies = [
 name = "dioxus-rsx-hotreload"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-base-types",
  "dioxus-rsx",
  "dioxus-vdom",
  "dioxus-vdom-template",
@@ -3992,7 +3974,6 @@ dependencies = [
  "ciborium",
  "dashmap 6.2.1",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-core",
@@ -4006,6 +3987,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-vdom",
  "dioxus-vdom-macro",
+ "dx-env",
  "enumset",
  "futures",
  "futures-channel",
@@ -4066,7 +4048,6 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "askama_escape",
  "dioxus",
- "dioxus-base-types",
  "dioxus-vdom",
  "rustc-hash 2.1.2",
 ]
@@ -4120,7 +4101,6 @@ dependencies = [
  "const_format",
  "criterion",
  "dioxus",
- "dioxus-base-types",
  "dioxus-const-vec",
  "dioxus-html",
  "dioxus-renderer-oracle",
@@ -4131,6 +4111,7 @@ dependencies = [
  "futures-util",
  "generational-box",
  "longest-increasing-subsequence",
+ "manganis-core",
  "pretty_assertions",
  "rand 0.9.4",
  "reqwest",
@@ -4195,8 +4176,6 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "ciborium",
  "dioxus",
- "dioxus-base-types",
- "dioxus-cli-config",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-core",
@@ -4207,6 +4186,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-vdom",
  "dioxus-web",
+ "dx-env",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -4443,6 +4423,24 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "dx-env"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "dx-wire-format"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "cargo_metadata",
+ "manganis-core",
+ "serde",
+ "serde_json",
+ "subsecond-types",
+]
 
 [[package]]
 name = "dyn-clone"
@@ -8547,6 +8545,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8853,8 +8860,7 @@ name = "manganis-core"
 version = "0.8.0-alpha.3"
 dependencies = [
  "const-serialize",
- "dioxus-base-types",
- "dioxus-cli-config",
+ "dx-env",
  "manganis",
  "serde",
  "winnow 0.7.15",
@@ -8984,6 +8990,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.48"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]

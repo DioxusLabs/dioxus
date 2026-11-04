@@ -39,7 +39,7 @@ use crate::{
     opt::{AppManifest, js_is_module},
 };
 use anyhow::Context;
-use dioxus_cli_config::format_base_path_meta_element;
+use dx_env::format_base_path_meta_element;
 use manganis::AssetOptions;
 use manganis_core::AssetVariant;
 use std::{
