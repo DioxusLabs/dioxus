@@ -14,7 +14,7 @@ resolver = "2"
 
 # Dioxus + SSR
 subsecond = { workspace =  true }
-dioxus-cli-config = { workspace = true }
+dx-env = { workspace = true }
 dioxus-devtools = { workspace = true, features = ["serve"] }
 dioxus-history = { workspace = true }
 dioxus-signals = { workspace = true }

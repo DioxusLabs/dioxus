@@ -7,9 +7,9 @@
 
 use std::collections::HashMap;
 
-use dioxus_base_types::HotReloadingContext;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::HotReloadResult;
+use dioxus_rsx_hotreload::HotReloadingContext;
 use dioxus_vdom::{
     Template, VNode,
     internal::{

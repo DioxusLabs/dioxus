@@ -4,7 +4,7 @@ use crate::{
     serve::{AppServer, ServeUpdate, WebServer},
 };
 use anyhow::bail;
-use dioxus_dx_wire_format::BuildStage;
+use dx_wire_format::BuildStage;
 
 /// Run the project with the given arguments
 ///

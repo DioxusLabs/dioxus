@@ -1,11 +1,5 @@
 /// Check if the event bubbles
 ///
-/// todo: this should not be in this crate, but this crate is a "root" crate and
-/// has zero-deps, meaning it gets compiled before anything else.
-///
-/// This function being here means we can use it in the interpreter without pulling in dioxus-html,
-/// drastically shortening the crate graph and thus compile times
-///
 /// The real solution to this problem is that events need to mark themselves as "bubbling" or "not bubbling"
 /// in their definition, which gets passed as part of the mutations.
 pub fn event_bubbles(evt: &str) -> bool {

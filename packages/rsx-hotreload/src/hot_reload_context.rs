@@ -1,3 +1,4 @@
+/// Maps the Rust names of elements and attributes to their rendered names and namespaces for hot reloading.
 pub trait HotReloadingContext {
     fn map_attribute(
         element_name_rust: &str,
@@ -6,6 +7,7 @@ pub trait HotReloadingContext {
     fn map_element(element_name_rust: &str) -> Option<(&'static str, Option<&'static str>)>;
 }
 
+/// A [`HotReloadingContext`] that knows no elements or attributes.
 pub struct Empty;
 
 impl HotReloadingContext for Empty {

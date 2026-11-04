@@ -7,9 +7,9 @@ members = [
     "packages/vdom-template",
     "packages/oracle",
     "packages/fuzz",
-    "packages/base-types",
-    "packages/cli",
+    "packages/dx",
     "packages/cli-config",
+    "packages/dx-env",
     "packages/cli-telemetry",
     "packages/vdom-macro",
     "packages/config-macro",
@@ -129,7 +129,6 @@ dioxus-core = { path = "packages/core", version = "=0.8.0-alpha.3", default-feat
 dioxus-vdom = { path = "packages/vdom", version = "=0.8.0-alpha.3" }
 dioxus-vdom-template = { path = "packages/vdom-template", version = "=0.8.0-alpha.3" }
 dioxus-renderer-oracle = { path = "packages/oracle", version = "=0.8.0-alpha.3" }
-dioxus-base-types = { path = "packages/base-types", version = "=0.8.0-alpha.3" }
 dioxus-vdom-macro = { path = "packages/vdom-macro", version = "=0.8.0-alpha.3" }
 dioxus-config-macro = { path = "packages/config-macro", version = "=0.8.0-alpha.3" }
 dioxus-router = { path = "packages/router", version = "=0.8.0-alpha.3" }
@@ -157,7 +156,7 @@ dioxus-fullstack = { path = "packages/fullstack", version = "=0.8.0-alpha.3", de
 dioxus-fullstack-core = { path = "packages/fullstack-core", version = "=0.8.0-alpha.3", default-features = false }
 dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "=0.8.0-alpha.3", default-features = false }
 dioxus-server = { path = "packages/fullstack-server", version = "=0.8.0-alpha.3" }
-dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "=0.8.0-alpha.3" }
+dx-wire-format = { path = "packages/dx-wire-format", version = "=0.8.0-alpha.3" }
 dioxus-logger = { path = "packages/logger", version = "=0.8.0-alpha.3" }
 dioxus-native = { path = "packages/native", version = "=0.8.0-alpha.3" }
 dioxus-native-dom = { path = "packages/native-dom", version = "=0.8.0-alpha.3" }
@@ -170,6 +169,7 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "=0.8.0-alpha.3" 
 
 # cli
 dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "=0.8.0-alpha.3" }
+dx-env = { path = "packages/dx-env", version = "=0.8.0-alpha.3" }
 dioxus-cli-config = { path = "packages/cli-config", version = "=0.8.0-alpha.3" }
 
 # subsecond
