@@ -13,7 +13,7 @@
 pub use crate::html;
 
 dioxus_html_internal_macro::define_elements! {
-    core = dioxus_core,
+    core = dioxus_vdom,
     html = crate,
     hot_reload_context = true;
 

@@ -8,8 +8,8 @@
 
 use std::{any::Any, rc::Rc};
 
-use dioxus_core::{ElementId, Runtime};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
+use dioxus_vdom::{ElementId, Runtime};
 use wasm_bindgen::{JsCast, closure::Closure};
 use web_sys::{Event, Node};
 
@@ -86,7 +86,7 @@ impl WebsysDom {
 
                 let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 
-                let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
+                let event = dioxus_vdom::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
                 runtime.handle_event(name.as_str(), event.clone(), element);
 
                 // Prevent the default action if the user set prevent default on the event

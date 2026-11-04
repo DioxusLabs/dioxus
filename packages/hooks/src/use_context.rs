@@ -1,4 +1,4 @@
-use dioxus_core::{consume_context, provide_context, try_consume_context, use_hook};
+use dioxus_vdom::{consume_context, provide_context, try_consume_context, use_hook};
 
 /// Try to consume some context in the tree, returning `None` if it is not found.
 ///

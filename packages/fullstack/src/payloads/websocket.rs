@@ -28,11 +28,11 @@ use axum::{
 };
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
-use dioxus_core::{CapturedError, Result, use_hook};
 use dioxus_fullstack_core::{HttpError, RequestError};
 use dioxus_hooks::{Resource, UseWaker, use_resource};
 use dioxus_hooks::{use_signal, use_waker};
 use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
+use dioxus_vdom::{CapturedError, Result, use_hook};
 use futures::{
     Sink, SinkExt, Stream, StreamExt, TryFutureExt,
     stream::{SplitSink, SplitStream},

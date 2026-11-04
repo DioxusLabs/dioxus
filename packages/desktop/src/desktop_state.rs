@@ -3,7 +3,7 @@ use crate::{
     event_handlers::WindowEventHandlers, file_upload::NativeFileHover, ipc::UserWindowEvent,
     query::QueryEngine, shortcut::ShortcutRegistry, webview::PendingWebview,
 };
-use dioxus_core::{RenderTargetId, Runtime};
+use dioxus_vdom::{RenderTargetId, Runtime};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,

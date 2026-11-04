@@ -426,7 +426,7 @@ impl NativeFileData for DesktopFileData {
         &self,
     ) -> std::pin::Pin<
         Box<
-            dyn std::future::Future<Output = Result<bytes::Bytes, dioxus_core::CapturedError>>
+            dyn std::future::Future<Output = Result<bytes::Bytes, dioxus_vdom::CapturedError>>
                 + 'static,
         >,
     > {
@@ -437,7 +437,7 @@ impl NativeFileData for DesktopFileData {
     fn read_string(
         &self,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>,
+        Box<dyn std::future::Future<Output = Result<String, dioxus_vdom::CapturedError>> + 'static>,
     > {
         let path = self.0.clone();
         Box::pin(async move { Ok(std::fs::read_to_string(&path)?) })
@@ -455,7 +455,7 @@ impl NativeFileData for DesktopFileData {
         &self,
     ) -> std::pin::Pin<
         Box<
-            dyn futures_util::Stream<Item = Result<bytes::Bytes, dioxus_core::CapturedError>>
+            dyn futures_util::Stream<Item = Result<bytes::Bytes, dioxus_vdom::CapturedError>>
                 + 'static
                 + Send,
         >,

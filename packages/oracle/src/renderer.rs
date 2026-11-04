@@ -1,6 +1,6 @@
 use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, format_snapshot_mismatch};
 use crate::vdom_snapshot::{fresh_snapshot, vdom_snapshot};
-use dioxus_core::{BorrowedAttributeValue, Element, ElementId, VirtualDom, WriteMutations};
+use dioxus_vdom::{BorrowedAttributeValue, Element, ElementId, VirtualDom, WriteMutations};
 use std::{fmt, mem};
 
 type NodeId = usize;

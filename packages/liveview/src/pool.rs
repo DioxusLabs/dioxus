@@ -6,9 +6,9 @@ use crate::{
     query::{QueryEngine, QueryResult},
 };
 
-use dioxus_core::{Element, Event, ScopeId, VirtualDom, provide_context};
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
+use dioxus_vdom::{Element, Event, ScopeId, VirtualDom, provide_context};
 use futures_util::{SinkExt, StreamExt, pin_mut};
 use serde::Serialize;
 use std::{any::Any, rc::Rc};

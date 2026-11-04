@@ -7,13 +7,13 @@ use crate::{
     model::*,
 };
 use dioxus::prelude::*;
-use dioxus_core::{
+use dioxus_vdom::{
     Attribute, AttributeValue, DynamicNode, DynamicValues, Portal, Runtime, Task, Template,
     VComponent, VNode, VText,
 };
 #[cfg(test)]
-use dioxus_core_template::DecodedTemplateOp;
-use dioxus_core_template::RuntimeTemplateBuilder;
+use dioxus_vdom_template::DecodedTemplateOp;
+use dioxus_vdom_template::RuntimeTemplateBuilder;
 use std::future::pending;
 
 pub(crate) fn App(context: HarnessContext) -> Element {
@@ -310,33 +310,33 @@ fn track_lifecycle(
 }
 
 fn exercise_scope_render_apis(schedule_task_update: bool) {
-    let scope = dioxus_core::current_scope_id();
+    let scope = dioxus_vdom::current_scope_id();
     let _ = format!("{scope:?}");
-    let _ = dioxus_core::generation();
+    let _ = dioxus_vdom::generation();
 
-    dioxus_core::provide_context(RenderScopeContext);
-    dioxus_core::provide_context(RenderScopeContext);
-    let _ = dioxus_core::has_context::<RenderScopeContext>();
-    let _ = dioxus_core::try_consume_context::<RenderScopeContext>();
-    let _ = dioxus_core::consume_context::<RenderScopeContext>();
-    let _ = dioxus_core::consume_context_from_scope::<RenderScopeContext>(scope);
+    dioxus_vdom::provide_context(RenderScopeContext);
+    dioxus_vdom::provide_context(RenderScopeContext);
+    let _ = dioxus_vdom::has_context::<RenderScopeContext>();
+    let _ = dioxus_vdom::try_consume_context::<RenderScopeContext>();
+    let _ = dioxus_vdom::consume_context::<RenderScopeContext>();
+    let _ = dioxus_vdom::consume_context_from_scope::<RenderScopeContext>(scope);
 
-    dioxus_core::provide_root_context(RenderRootContext);
-    dioxus_core::provide_root_context(RenderRootContext);
-    let _ = dioxus_core::try_consume_context::<RenderRootContext>();
+    dioxus_vdom::provide_root_context(RenderRootContext);
+    dioxus_vdom::provide_root_context(RenderRootContext);
+    let _ = dioxus_vdom::try_consume_context::<RenderRootContext>();
     let _ =
-        dioxus_core::consume_context_from_scope::<RenderRootContext>(dioxus_core::ScopeId::ROOT);
+        dioxus_vdom::consume_context_from_scope::<RenderRootContext>(dioxus_vdom::ScopeId::ROOT);
 
-    let _ = dioxus_core::schedule_update();
-    let _ = dioxus_core::schedule_update_any();
+    let _ = dioxus_vdom::schedule_update();
+    let _ = dioxus_vdom::schedule_update_any();
     let _: Task = use_hook(move || {
-        dioxus_core::queue_effect(|| {});
+        dioxus_vdom::queue_effect(|| {});
         if schedule_task_update {
-            dioxus_core::spawn_isomorphic(async {
-                dioxus_core::needs_update();
+            dioxus_vdom::spawn_isomorphic(async {
+                dioxus_vdom::needs_update();
             })
         } else {
-            dioxus_core::spawn_isomorphic(async {})
+            dioxus_vdom::spawn_isomorphic(async {})
         }
     });
 }
@@ -721,7 +721,7 @@ mod tests {
         }
     }
 
-    fn first_root_element(template: &Template) -> dioxus_core_template::StaticTemplateElement<'_> {
+    fn first_root_element(template: &Template) -> dioxus_vdom_template::StaticTemplateElement<'_> {
         let root = template
             .anchors()
             .iter()
@@ -732,8 +732,8 @@ mod tests {
             .expect("root node");
 
         match root {
-            dioxus_core_template::StaticTemplateNode::Element(element) => element,
-            dioxus_core_template::StaticTemplateNode::Text(_) => panic!("expected root element"),
+            dioxus_vdom_template::StaticTemplateNode::Element(element) => element,
+            dioxus_vdom_template::StaticTemplateNode::Text(_) => panic!("expected root element"),
         }
     }
 

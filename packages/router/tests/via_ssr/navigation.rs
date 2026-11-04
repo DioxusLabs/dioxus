@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::NoOpMutations;
+use dioxus_vdom::NoOpMutations;
 use std::sync::atomic::AtomicUsize;
 
 // Regression test for <https://github.com/DioxusLabs/dioxus/issues/3235>

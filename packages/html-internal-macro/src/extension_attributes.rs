@@ -78,7 +78,7 @@ impl ToTokens for ImplExtensionAttributes {
                 /// Static metadata for this generated attribute.
                 pub struct #descriptor;
 
-                impl ::dioxus_core::view::AttributeDescriptor for #descriptor {
+                impl ::dioxus_vdom::view::AttributeDescriptor for #descriptor {
                     const NAME: &'static str = #attr_name;
                     const NAMESPACE: ::std::option::Option<&'static str> = #namespace;
                     const VOLATILE: bool = #volatile;
@@ -102,19 +102,19 @@ impl ToTokens for ImplExtensionAttributes {
                     fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
                         self,
                         value: __DioxusAttributeValue,
-                    ) -> <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                    ) -> <__DioxusAttributeValue as ::dioxus_vdom::view::IntoAttributeBuilderValue<
                         Self,
                         #descriptor,
                         __DioxusAttributeMarker,
                     >>::Output
                     where
-                        __DioxusAttributeValue: ::dioxus_core::view::IntoAttributeBuilderValue<
+                        __DioxusAttributeValue: ::dioxus_vdom::view::IntoAttributeBuilderValue<
                             Self,
                             #descriptor,
                             __DioxusAttributeMarker,
                         >,
                     {
-                        <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                        <__DioxusAttributeValue as ::dioxus_vdom::view::IntoAttributeBuilderValue<
                             Self,
                             #descriptor,
                             __DioxusAttributeMarker,
@@ -139,24 +139,24 @@ impl ToTokens for ImplExtensionAttributes {
             );
 
             quote! {
-                pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {
+                pub trait #extension_name: ::dioxus_vdom::view::AttributeBuilderTarget + Sized {
                     #[allow(non_snake_case)]
                     fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
                         self,
                         value: __DioxusAttributeValue,
-                    ) -> <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                    ) -> <__DioxusAttributeValue as ::dioxus_vdom::view::IntoAttributeBuilderValue<
                         Self,
                         #descriptor,
                         __DioxusAttributeMarker,
                     >>::Output
                     where
-                        __DioxusAttributeValue: ::dioxus_core::view::IntoAttributeBuilderValue<
+                        __DioxusAttributeValue: ::dioxus_vdom::view::IntoAttributeBuilderValue<
                             Self,
                             #descriptor,
                             __DioxusAttributeMarker,
                         >,
                     {
-                        <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                        <__DioxusAttributeValue as ::dioxus_vdom::view::IntoAttributeBuilderValue<
                             Self,
                             #descriptor,
                             __DioxusAttributeMarker,
@@ -165,7 +165,7 @@ impl ToTokens for ImplExtensionAttributes {
                 }
 
                 impl<__DioxusTag, __DioxusAttributes, __DioxusChildren> #extension_name
-                    for ::dioxus_core::view::ElementBuilder<
+                    for ::dioxus_vdom::view::ElementBuilder<
                         __DioxusTag,
                         __DioxusAttributes,
                         __DioxusChildren,
@@ -180,7 +180,7 @@ impl ToTokens for ImplExtensionAttributes {
                 impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
                 where
                     __DioxusSpreadTarget:
-                        crate::#spread_marker + ::dioxus_core::view::AttributeBuilderTarget,
+                        crate::#spread_marker + ::dioxus_vdom::view::AttributeBuilderTarget,
                 {
                 }
             }
@@ -193,7 +193,7 @@ impl ToTokens for ImplExtensionAttributes {
             /// implements this marker to receive the group's full attribute extension methods.
             pub trait #spread_marker {}
 
-            pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {
+            pub trait #extension_name: ::dioxus_vdom::view::AttributeBuilderTarget + Sized {
                 #(#impls)*
             }
 
@@ -202,7 +202,7 @@ impl ToTokens for ImplExtensionAttributes {
             impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
             where
                 __DioxusSpreadTarget:
-                    #spread_marker + ::dioxus_core::view::AttributeBuilderTarget,
+                    #spread_marker + ::dioxus_vdom::view::AttributeBuilderTarget,
             {
             }
 
