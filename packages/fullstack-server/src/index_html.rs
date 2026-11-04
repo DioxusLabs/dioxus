@@ -67,18 +67,20 @@ impl IndexHtml {
                 format!("Failed to find closing </body> tag after id=\"{root_id}\" in index.html.")
             })?;
 
-        // Strip out the head if it exists
-        let mut head_before_title = String::new();
-        let mut head_after_title = head;
-        let mut title = String::new();
-        if let Some((new_head_before_title, new_title)) = head_after_title.split_once("<title>") {
-            let (new_title, new_head_after_title) = new_title
-                .split_once("</title>")
-                .context("Failed to find closing </title> tag after <title> in index.html.")?;
-            title = format!("<title>{new_title}</title>");
-            head_before_title = new_head_before_title.to_string();
-            head_after_title = new_head_after_title.to_string();
-        }
+        // Strip out the title if it exists. Without one, the title is injected at the end of the head
+        let (head_before_title, title, head_after_title) = match head.split_once("<title>") {
+            Some((head_before_title, rest)) => {
+                let (title, head_after_title) = rest
+                    .split_once("</title>")
+                    .context("Failed to find closing </title> tag after <title> in index.html.")?;
+                (
+                    head_before_title.to_string(),
+                    format!("<title>{title}</title>"),
+                    head_after_title.to_string(),
+                )
+            }
+            None => (head, String::new(), String::new()),
+        };
 
         Ok(IndexHtml {
             head_before_title,
@@ -112,5 +114,37 @@ impl IndexHtml {
         </html>"#;
 
         Self::new(DEFAULT, "main").expect("Failed to load default index.html")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn title_is_injected_inside_head_without_title_tag() {
+        let index = IndexHtml::ssr_only();
+        let rendered = format!(
+            "{}<title>App</title>{}",
+            index.head_before_title, index.head_after_title
+        );
+        assert!(rendered.trim_start().starts_with("<!DOCTYPE html>"));
+        assert!(rendered.trim_end().ends_with("<title>App</title>"));
+        assert!(index.title.is_empty());
+    }
+
+    #[test]
+    fn existing_title_tag_is_split_out() {
+        let index = IndexHtml::new(
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Default</title><link rel=\"icon\"></head><body><div id=\"main\"></div></body></html>",
+            "main",
+        )
+        .unwrap();
+        assert_eq!(
+            index.head_before_title,
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+        );
+        assert_eq!(index.title, "<title>Default</title>");
+        assert_eq!(index.head_after_title, "<link rel=\"icon\">");
     }
 }
