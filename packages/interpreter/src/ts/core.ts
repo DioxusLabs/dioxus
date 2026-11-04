@@ -316,6 +316,10 @@ export class BaseInterpreter {
         case "selected":
           node.selected = false;
           break;
+        case "muted":
+          node.muted = false;
+          node.removeAttribute("muted");
+          break;
         case "dangerous_inner_html":
           node.innerHTML = "";
           break;
