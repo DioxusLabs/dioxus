@@ -116,6 +116,20 @@ pub fn try_fmt_file(
         let start = collect_macros::byte_offset(contents, span.start()) + 1;
         let end = collect_macros::byte_offset(contents, span.end()) - 1;
 
+        // A comment after the opening delimiter ends its line, so the body starts on the next one
+        if let Some(comment) = writer.inline_comment(span.start(), 1) {
+            if formatted.contains('\n') {
+                formatted = format!(" {comment}{formatted}");
+            } else {
+                let indent = writer.out.indent.indent_str();
+                let outer = indent.repeat(writer.out.indent_level);
+                formatted = match formatted.trim() {
+                    "" => format!(" {comment}\n{outer}"),
+                    body => format!(" {comment}\n{outer}{indent}{body}\n{outer}"),
+                };
+            }
+        }
+
         // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
         let body_is_solo_expr = body.body().roots.len() == 1
             && matches!(
