@@ -9,23 +9,45 @@ use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 
 const DIOXUS_CODE: &str = r#"
+const _message_queue = [];
+const _message_waiters = [];
+let _closed = false;
+const _closed_error = new Error("Dioxus eval was dropped");
+_closed_error.name = "DioxusEvalClosed";
 let dioxus = {
     recv: function () {
-        return new Promise((resolve, _reject) => {
-            // Ever 50 ms check for new data
-            let timeout = setTimeout(() => {
-                let __msg = null;
-                while (true) {
-                    let __data = _message_queue.shift();
-                    if (__data) {
-                        __msg = __data;
-                        break;
-                    }
-                }
-                clearTimeout(timeout);
-                resolve(__msg);
-            }, 50);
+        return new Promise((resolve, reject) => {
+            if (_closed) {
+                reject(_closed_error);
+                return;
+            }
+            if (_message_queue.length > 0) {
+                resolve(_message_queue.shift());
+            } else {
+                _message_waiters.push({ resolve, reject });
+            }
         });
+    },
+
+    rustSend: function (value) {
+        if (_closed) return;
+        // Wake one receiver, or retain the value until JavaScript asks for it.
+        // Test the queue length in recv: null, false, 0, and "" are valid messages.
+        const waiter = _message_waiters.shift();
+        if (waiter) {
+            waiter.resolve(value);
+        } else {
+            _message_queue.push(value);
+        }
+    },
+
+    close: function () {
+        if (_closed) return;
+        _closed = true;
+        _message_queue.length = 0;
+        for (const waiter of _message_waiters.splice(0)) {
+            waiter.reject(_closed_error);
+        }
     },
 
     send: function (value) {
@@ -108,10 +130,14 @@ impl QueryEngine {
 
                     let _request_id = {request_id};
 
-                    if (!window.{QUEUE_NAME}[{request_id}]) {{
-                        window.{QUEUE_NAME}[{request_id}] = [];
-                    }}
-                    let _message_queue = window.{QUEUE_NAME}[{request_id}];
+                    window.{QUEUE_NAME}[{request_id}] = dioxus;
+                    const close = dioxus.close;
+                    dioxus.close = () => {{
+                        close();
+                        if (window.{QUEUE_NAME}[{request_id}] === dioxus) {{
+                            delete window.{QUEUE_NAME}[{request_id}];
+                        }}
+                    }};
 
                     {script}
                 }})().then((result)=>{{
@@ -126,6 +152,10 @@ impl QueryEngine {
                     window.ipc.postMessage(
                         JSON.stringify(returned_value)
                     );
+                }}).catch((error) => {{
+                    if (error?.name !== "DioxusEvalClosed") {{
+                        console.error("Dioxus eval failed", error);
+                    }}
                 }})
             }})();"#
         )) {
@@ -182,14 +212,7 @@ impl<V: DeserializeOwned> Query<V> {
         let data = message.to_string();
         let script = format!(
             r#"
-            if (!window.{QUEUE_NAME}) {{
-                window.{QUEUE_NAME} = [];
-            }}
-
-            if (!window.{QUEUE_NAME}[{queue_id}]) {{
-                window.{QUEUE_NAME}[{queue_id}] = [];
-            }}
-            window.{QUEUE_NAME}[{queue_id}].push({data});
+            window.{QUEUE_NAME}?.[{queue_id}]?.rustSend({data});
             "#
         );
 
@@ -246,13 +269,7 @@ impl<V: DeserializeOwned> Drop for Query<V> {
 
         _ = self.query_engine.query_tx.send(format!(
             r#"
-            if (!window.{QUEUE_NAME}) {{
-                window.{QUEUE_NAME} = [];
-            }}
-
-            if (window.{QUEUE_NAME}[{queue_id}]) {{
-                window.{QUEUE_NAME}[{queue_id}] = [];
-            }}
+            window.{QUEUE_NAME}?.[{queue_id}]?.close();
             "#
         ));
     }
