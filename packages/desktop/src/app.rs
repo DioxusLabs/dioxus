@@ -6,7 +6,7 @@ use crate::{
     waker::create_dom_waker,
     webview::WebviewInstance,
 };
-use dioxus_core::{RenderTargetId, ScopeId, VirtualDom, provide_context};
+use dioxus_vdom::{RenderTargetId, ScopeId, VirtualDom, provide_context};
 use futures_util::{FutureExt, pin_mut};
 use std::{
     collections::{BTreeMap, HashMap},

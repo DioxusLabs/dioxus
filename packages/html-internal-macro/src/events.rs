@@ -73,8 +73,8 @@ impl ToTokens for EventExtensions {
                 fn #name<__Marker>(
                     self,
                     event_handler: impl super::EventHandlerValue<#data, __Marker>,
-                ) -> <Self as ::dioxus_core::view::AttributeBuilderTarget>::Output {
-                    ::dioxus_core::view::AttributeBuilderTarget::append_attribute(
+                ) -> <Self as ::dioxus_vdom::view::AttributeBuilderTarget>::Output {
+                    ::dioxus_vdom::view::AttributeBuilderTarget::append_attribute(
                         self,
                         super::event_attribute::<#data, __Marker>(#on_name, event_handler),
                     )
@@ -85,10 +85,10 @@ impl ToTokens for EventExtensions {
                 #[inline]
                 fn #explicit_closure<__Marker, __Return>(
                     self,
-                    event_handler: impl FnMut(::dioxus_core::Event<#data>) -> __Return + 'static,
-                ) -> <Self as ::dioxus_core::view::AttributeBuilderTarget>::Output
+                    event_handler: impl FnMut(::dioxus_vdom::Event<#data>) -> __Return + 'static,
+                ) -> <Self as ::dioxus_vdom::view::AttributeBuilderTarget>::Output
                 where
-                    __Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
+                    __Return: ::dioxus_vdom::SpawnIfAsync<__Marker> + 'static,
                 {
                     #[allow(deprecated)]
                     self.#name(event_handler)
@@ -98,13 +98,13 @@ impl ToTokens for EventExtensions {
 
         tokens.append_all(quote! {
             /// Event handler extension methods for typed HTML builders.
-            pub trait EventsExtension: ::dioxus_core::view::AttributeBuilderTarget + Sized {
+            pub trait EventsExtension: ::dioxus_vdom::view::AttributeBuilderTarget + Sized {
                 #(#methods)*
             }
 
             impl<Target> EventsExtension for Target
             where
-                Target: ::dioxus_core::view::AttributeBuilderTarget,
+                Target: ::dioxus_vdom::view::AttributeBuilderTarget,
             {
             }
         });

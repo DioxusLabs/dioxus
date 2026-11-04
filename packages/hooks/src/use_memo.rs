@@ -1,6 +1,6 @@
 use crate::use_callback;
-use dioxus_core::use_hook;
 use dioxus_signals::Memo;
+use dioxus_vdom::use_hook;
 
 #[doc = include_str!("../docs/derived_state.md")]
 #[doc = include_str!("../docs/rules_of_hooks.md")]

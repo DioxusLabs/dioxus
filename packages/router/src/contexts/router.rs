@@ -5,9 +5,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use dioxus_core::{Element, ReactiveContext, ScopeId, provide_context};
 use dioxus_history::history;
 use dioxus_signals::{CopyValue, ReadableExt, Signal, WritableExt};
+use dioxus_vdom::{Element, ReactiveContext, ScopeId, provide_context};
 
 use crate::{
     SiteMapSegment, components::child_router::consume_child_route_mapping,
@@ -35,7 +35,7 @@ struct RootRouterContext(Signal<Option<RouterContext>>);
 ///
 /// This will return `None` if there is no router present or the router has not been created yet.
 pub fn root_router() -> Option<RouterContext> {
-    let rt = dioxus_core::Runtime::current();
+    let rt = dioxus_vdom::Runtime::current();
 
     if let Some(ctx) = rt.consume_context::<RootRouterContext>(ScopeId::ROOT) {
         ctx.0.cloned()
@@ -50,7 +50,7 @@ pub fn root_router() -> Option<RouterContext> {
 
 pub(crate) fn provide_router_context(ctx: RouterContext) {
     if root_router().is_none() {
-        dioxus_core::Runtime::current().provide_context(
+        dioxus_vdom::Runtime::current().provide_context(
             ScopeId::ROOT,
             RootRouterContext(Signal::new_in_scope(Some(ctx), ScopeId::ROOT)),
         );
@@ -274,7 +274,7 @@ impl RouterContext {
         match route {
             Ok(route) => route,
             Err(err) => {
-                dioxus_core::throw_error(ParseRouteError { message: err });
+                dioxus_vdom::throw_error(ParseRouteError { message: err });
                 "/".parse().unwrap_or_else(|err| panic!("{err}"))
             }
         }

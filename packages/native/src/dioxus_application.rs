@@ -1,6 +1,6 @@
 use blitz_shell::{BlitzApplication, BlitzShellProxy, View};
-use dioxus_core::{ScopeId, provide_context};
 use dioxus_history::{History, MemoryHistory};
+use dioxus_vdom::{ScopeId, provide_context};
 use std::rc::Rc;
 use std::sync::Arc;
 use winit::application::ApplicationHandler;

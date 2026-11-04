@@ -1,7 +1,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(unused)]
+use crate::core::{Element, LaunchConfig};
 use dioxus_config_macro::*;
-use dioxus_core::{Element, LaunchConfig};
 use std::any::Any;
 
 use crate::prelude::*;
@@ -314,10 +314,12 @@ impl LaunchBuilder {
             #[cfg(any(feature = "desktop", feature = "mobile", feature = "native"))]
             if get_server_url().is_empty() {
                 let serverurl = format!(
-                    "http://{}:{}",
-                    std::env::var("DIOXUS_DEVSERVER_IP")
-                        .unwrap_or_else(|_| "127.0.0.1".to_string()),
-                    std::env::var("DIOXUS_DEVSERVER_PORT").unwrap_or_else(|_| "8080".to_string())
+                    "http://{}",
+                    dioxus_cli_config::devserver_raw_addr().unwrap_or_else(|| (
+                        [127, 0, 0, 1],
+                        8080
+                    )
+                        .into())
                 )
                 .leak();
 

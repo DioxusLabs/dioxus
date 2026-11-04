@@ -3,12 +3,12 @@ use crate::{
     document::DesktopDocument,
     window_lifecycle::{ComponentWindowLifecycle, ComponentWindowRenderState, WindowProviders},
 };
-use dioxus_core::{
+use dioxus_history::MemoryHistory;
+use dioxus_vdom::{
     Element, EventHandler, Portal, VNode, provide_context, schedule_update, spawn, use_hook,
     use_hook_with_cleanup,
 };
-use dioxus_core_macro::rsx;
-use dioxus_history::MemoryHistory;
+use dioxus_vdom_macro::rsx;
 use std::{cell::RefCell, rc::Rc};
 
 /// Properties for the [`Window()`] component.
@@ -16,7 +16,7 @@ use std::{cell::RefCell, rc::Rc};
 /// Use the `config` prop to set the initial native window configuration, the
 /// `onclose` prop to handle a user-initiated close, and children to choose what
 /// the window renders. Configuration is applied when the window is opened.
-#[derive(dioxus_core_macro::Props, Clone)]
+#[derive(dioxus_vdom_macro::Props, Clone)]
 pub struct WindowProps {
     #[props(into, default)]
     config: InitialWindowConfig,

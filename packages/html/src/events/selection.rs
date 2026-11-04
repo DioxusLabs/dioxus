@@ -1,4 +1,4 @@
-use dioxus_core::Event;
+use dioxus_vdom::Event;
 use std::ops::Range;
 
 pub type SelectionEvent = Event<SelectionData>;

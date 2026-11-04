@@ -4,14 +4,14 @@
 
 use std::cell::RefCell;
 
-use dioxus_core::Element;
-use dioxus_core_macro::rsx;
 use dioxus_document::{
     Document, Eval, LinkProps, MetaProps, NoOpDocument, ScriptProps, StyleProps,
 };
 use dioxus_html::elements::prelude::*;
 use dioxus_html::*;
 use dioxus_ssr::Renderer;
+use dioxus_vdom::Element;
+use dioxus_vdom_macro::rsx;
 use parking_lot::RwLock;
 use std::sync::LazyLock;
 

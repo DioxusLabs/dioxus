@@ -1,4 +1,4 @@
-use dioxus_core::{LaunchConfig, VirtualDom};
+use dioxus_vdom::{LaunchConfig, VirtualDom};
 use std::path::PathBuf;
 use std::{borrow::Cow, sync::Arc};
 use tao::window::{Icon, WindowBuilder};

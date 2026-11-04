@@ -339,7 +339,7 @@ where
         })
     }
 
-    fn subscribers(&self) -> dioxus_core::Subscribers
+    fn subscribers(&self) -> dioxus_vdom::Subscribers
     where
         Self::Target: 'static,
     {

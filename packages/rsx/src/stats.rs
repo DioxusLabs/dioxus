@@ -1,4 +1,4 @@
-use dioxus_core_template::{TemplateLoweringCursor, TemplateSlotPath};
+use dioxus_vdom_template::{TemplateLoweringCursor, TemplateSlotPath};
 
 /// Storage requirements for lowering a template.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]

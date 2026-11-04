@@ -2,7 +2,7 @@ use crate::FileData;
 use crate::file_data::HasFileData;
 use std::fmt::Debug;
 
-use dioxus_core::Event;
+use dioxus_vdom::Event;
 
 pub type FormEvent = Event<FormData>;
 

@@ -104,7 +104,7 @@ pub fn init(level: Level) -> Result<(), SetGlobalDefaultError> {
                     .add_directive("hyper_util=warn".parse().unwrap()), // hyper has `debug!` sitting around in some places that are spammy
             );
 
-        if !dioxus_cli_config::is_cli_enabled() {
+        if !dx_env::is_cli_enabled() {
             return set_global_default(sub.finish());
         }
 

@@ -24,11 +24,13 @@ pub enum html {}
 
 #[macro_use]
 pub mod elements;
-#[cfg(feature = "hot-reload-context")]
+#[cfg(feature = "hot-reload")]
 pub use elements::HtmlCtx;
 #[cfg(feature = "html-to-rsx")]
 pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
+mod bubbles;
 pub mod events;
+pub use bubbles::event_bubbles;
 pub(crate) mod file_data;
 pub use file_data::*;
 mod attribute_groups;
@@ -41,9 +43,9 @@ pub use data_transfer::*;
 pub use bytes;
 
 #[doc(hidden)]
-pub use dioxus_core;
-#[doc(hidden)]
 pub use dioxus_html_internal_macro::define_elements as __define_elements;
+#[doc(hidden)]
+pub use dioxus_vdom;
 
 /// Define typed custom elements (and their typed attributes) for use in `rsx!`.
 ///
@@ -88,7 +90,7 @@ macro_rules! define_elements {
     ($($tokens:tt)*) => {
         $crate::__dioxus_html_define_elements_with_detected_gated_attributes! {
             $crate::__define_elements,
-            core = $crate::dioxus_core,
+            core = $crate::dioxus_vdom,
             html = $crate;
             $($tokens)*
         }

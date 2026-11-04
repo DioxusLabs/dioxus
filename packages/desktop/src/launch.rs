@@ -3,12 +3,12 @@ use crate::{
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
 };
-use dioxus_core::*;
-use dioxus_core_macro::rsx;
+use dioxus_vdom::*;
+use dioxus_vdom_macro::rsx;
 use std::{any::Any, cell::RefCell, rc::Rc};
 use tao::event::{Event, StartCause, WindowEvent};
 
-#[derive(Clone, dioxus_core_macro::Props)]
+#[derive(Clone, dioxus_vdom_macro::Props)]
 struct DesktopRootProps {
     root: fn() -> Element,
     config: Rc<RefCell<Option<WindowConfig>>>,
@@ -20,7 +20,7 @@ impl PartialEq for DesktopRootProps {
     }
 }
 
-#[derive(Clone, dioxus_core_macro::Props)]
+#[derive(Clone, dioxus_vdom_macro::Props)]
 struct LaunchedRootProps {
     root: fn() -> Element,
 }

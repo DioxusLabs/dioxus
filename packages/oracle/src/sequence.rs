@@ -1,6 +1,6 @@
 use crate::renderer::{EditSummary, OracleNodeId, RendererOracle};
 use crate::vdom_snapshot::vdom_snapshot;
-use dioxus_core::{Element, ScopeId, VNode, VirtualDom, consume_context, generation};
+use dioxus_vdom::{Element, ScopeId, VNode, VirtualDom, consume_context, generation};
 use std::rc::Rc;
 
 /// The steps for a [`Sequence`], handed to the source app via a root context so
@@ -37,7 +37,7 @@ struct ExpectedStep(Rc<StepSource>);
 ///     .run();
 /// ```
 ///
-/// The source app dispatches on `dioxus_core::generation()` to pick the current
+/// The source app dispatches on `dioxus_vdom::generation()` to pick the current
 /// step, cloned from a root context. Between steps
 /// `Sequence` marks `ScopeId::APP` dirty and renders. The expected DOM is built
 /// by walking the VNode tree of the same step in a throwaway `VirtualDom` -

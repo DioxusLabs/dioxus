@@ -1,4 +1,4 @@
-use dioxus_core::{Callback, use_hook};
+use dioxus_vdom::{Callback, use_hook};
 
 /// Create a callback that's always up to date. Whenever this hook is called the inner callback will be replaced with the new callback but the handle will remain.
 ///

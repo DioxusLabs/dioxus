@@ -18,8 +18,8 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
-use dioxus_core::{BorrowedAttributeValue, ElementId, WriteMutations};
 use dioxus_interpreter_js::MutationState;
+use dioxus_vdom::{BorrowedAttributeValue, ElementId, WriteMutations};
 use futures_channel::oneshot;
 use futures_util::FutureExt;
 use rand::{RngCore, SeedableRng};
