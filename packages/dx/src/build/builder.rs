@@ -1035,28 +1035,44 @@ impl AppBuilder {
     /// The simulator might have been shut down since `dx serve` started (e.g. the user quit
     /// Simulator.app), so we boot one again before installing if none is running.
     async fn open_ios_sim(&mut self, envs: Vec<(String, String)>) -> Result<()> {
-        if !self.build.is_ios_sim_booted().await {
-            self.build.start_ios_sim().await?;
+        let udid = match self.build.booted_ios_sim().await {
+            Some(udid) => udid,
+            None => {
+                let udid = self.build.boot_ios_sim().await?;
+                if let Err(err) = self.build.open_simulator_app().await {
+                    tracing::warn!("Failed to open Simulator.app: {err}");
+                }
 
-            // `simctl boot` returns before the simulator is ready to install apps, so wait for it
-            let status = Command::new("xcrun")
-                .args(["simctl", "bootstatus", "booted"])
-                .output()
-                .await?;
-            if !status.status.success() {
-                tracing::warn!(
-                    "Failed to wait for the iOS simulator to boot: {}",
-                    String::from_utf8_lossy(&status.stderr).trim()
-                );
+                // `simctl boot` returns before the simulator is ready to install apps, so wait for it.
+                // This runs inside the `dx serve` loop, so don't let a stuck boot hang it forever.
+                tracing::info!("Waiting for the iOS simulator to boot...");
+                let wait = Command::new("xcrun")
+                    .args(["simctl", "bootstatus", &udid, "-b"])
+                    .kill_on_drop(true)
+                    .output();
+                let status = tokio::time::timeout(Duration::from_secs(120), wait)
+                    .await
+                    .map_err(|_| {
+                        anyhow::anyhow!(
+                            "Timed out after 120 s waiting for the iOS simulator to boot"
+                        )
+                    })??;
+                if !status.status.success() {
+                    bail!(
+                        "Failed to wait for the iOS simulator to boot: {}",
+                        String::from_utf8_lossy(&status.stderr).trim()
+                    );
+                }
+                udid
             }
-        }
+        };
 
         tracing::debug!("Installing app to simulator {:?}", self.build.root_dir());
 
         let res = Command::new("xcrun")
             .arg("simctl")
             .arg("install")
-            .arg("booted")
+            .arg(&udid)
             .arg(self.build.root_dir())
             .output()
             .await?;
@@ -1073,7 +1089,7 @@ impl AppBuilder {
             .arg("simctl")
             .arg("launch")
             .arg("--console")
-            .arg("booted")
+            .arg(&udid)
             .arg(self.build.bundle_identifier())
             .envs(ios_envs)
             .stderr(Stdio::piped())

@@ -82,77 +82,51 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Check whether any iOS simulator is currently booted. Other platforms (watchOS, tvOS...) are ignored.
-    pub async fn is_ios_sim_booted(&self) -> bool {
-        #[derive(Deserialize, Debug)]
-        struct XcrunListJson {
-            devices: BTreeMap<String, Vec<serde_json::Value>>,
+    /// The UDID of the most recently booted iOS simulator that is running, if any.
+    /// Other platforms (watchOS, tvOS...) are ignored.
+    pub async fn booted_ios_sim(&self) -> Option<String> {
+        let devices = list_ios_sims().await.ok()?;
+        most_recently_booted(devices.iter().filter(|device| device.state == "Booted"))
+            .map(|device| device.udid.clone())
+    }
+
+    /// Boot the most recently used iOS simulator unless one is already running, and return its UDID.
+    /// `simctl boot` returns before the simulator can install apps, so callers still need to wait
+    /// for `simctl bootstatus`.
+    pub async fn boot_ios_sim(&self) -> Result<String> {
+        let devices = list_ios_sims().await?;
+        if let Some(device) =
+            most_recently_booted(devices.iter().filter(|device| device.state == "Booted"))
+        {
+            return Ok(device.udid.clone());
         }
-        let Ok(output) = Command::new("xcrun")
-            .args(["simctl", "list", "devices", "booted", "-j"])
-            .output()
-            .await
-        else {
-            return false;
+        let Some(device) = most_recently_booted(devices.iter()) else {
+            bail!("No available iOS simulator found. Install an iOS simulator runtime in Xcode.");
         };
-        serde_json::from_slice::<XcrunListJson>(&output.stdout)
-            .map(|list| {
-                list.devices.iter().any(|(runtime, devices)| {
-                    runtime.contains(".SimRuntime.iOS-") && !devices.is_empty()
-                })
-            })
-            .unwrap_or(false)
+
+        tracing::info!("Booting iOS simulator: \"{}\"", device.name);
+        let boot = Command::new("xcrun")
+            .args(["simctl", "boot", &device.udid])
+            .output()
+            .await?;
+        if !boot.status.success() {
+            bail!(
+                "Failed to boot the iOS simulator \"{}\": {}",
+                device.name,
+                String::from_utf8_lossy(&boot.stderr).trim()
+            );
+        }
+        Ok(device.udid.clone())
     }
 
     pub async fn start_ios_sim(&self) -> Result<()> {
-        #[derive(Deserialize, Debug)]
-        struct XcrunListJson {
-            // "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [{}, {}, {}]
-            devices: BTreeMap<String, Vec<XcrunDevice>>,
+        if let Err(err) = self.boot_ios_sim().await {
+            tracing::warn!("{err}");
         }
-        #[derive(Deserialize, Debug)]
-        struct XcrunDevice {
-            #[serde(rename = "lastBootedAt")]
-            last_booted_at: Option<String>,
-            udid: String,
-            name: String,
-            state: String,
-        }
-        let xcrun_list = Command::new("xcrun")
-            .arg("simctl")
-            .arg("list")
-            .arg("-j")
-            .output()
-            .await?;
-        let as_str = String::from_utf8_lossy(&xcrun_list.stdout);
-        let xcrun_list_json = serde_json::from_str::<XcrunListJson>(as_str.trim());
-        if let Ok(xcrun_list_json) = xcrun_list_json {
-            if xcrun_list_json.devices.is_empty() {
-                tracing::warn!("No iOS sdks installed found. Please install the iOS SDK in Xcode.");
-            }
+        self.open_simulator_app().await
+    }
 
-            if let Some((_rt, devices)) = xcrun_list_json.devices.iter().next() {
-                if devices.iter().all(|device| device.state != "Booted") {
-                    let last_booted =
-                        devices
-                            .iter()
-                            .max_by_key(|device| match device.last_booted_at {
-                                Some(ref last_booted) => last_booted,
-                                None => "2000-01-01T01:01:01Z",
-                            });
-
-                    if let Some(device) = last_booted {
-                        tracing::info!("Booting iOS simulator: \"{}\"", device.name);
-                        Command::new("xcrun")
-                            .arg("simctl")
-                            .arg("boot")
-                            .arg(&device.udid)
-                            .output()
-                            .await?;
-                    }
-                }
-            }
-        }
+    pub async fn open_simulator_app(&self) -> Result<()> {
         let path_to_xcode = Command::new("xcode-select")
             .arg("--print-path")
             .output()
@@ -2027,5 +2001,83 @@ fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
             output
         }
         serde_json::Value::Null => String::new(),
+    }
+}
+
+#[derive(Deserialize, Debug)]
+struct XcrunListJson {
+    // "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [{}, {}, {}]
+    devices: BTreeMap<String, Vec<XcrunDevice>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct XcrunDevice {
+    #[serde(rename = "lastBootedAt")]
+    last_booted_at: Option<String>,
+    #[serde(rename = "isAvailable")]
+    is_available: Option<bool>,
+    udid: String,
+    name: String,
+    state: String,
+}
+
+/// Every available simulator across all installed iOS runtimes.
+async fn list_ios_sims() -> Result<Vec<XcrunDevice>> {
+    let output = Command::new("xcrun")
+        .args(["simctl", "list", "devices", "-j"])
+        .output()
+        .await?;
+    if !output.status.success() {
+        bail!(
+            "Failed to list iOS simulators: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let list: XcrunListJson =
+        serde_json::from_slice(&output.stdout).context("Failed to parse the iOS simulator list")?;
+    Ok(available_ios_sims(list))
+}
+
+fn available_ios_sims(list: XcrunListJson) -> Vec<XcrunDevice> {
+    list.devices
+        .into_iter()
+        .filter(|(runtime, _)| runtime.contains(".SimRuntime.iOS-"))
+        .flat_map(|(_, devices)| devices)
+        .filter(|device| device.is_available.unwrap_or(true))
+        .collect()
+}
+
+fn most_recently_booted<'a>(
+    devices: impl Iterator<Item = &'a XcrunDevice>,
+) -> Option<&'a XcrunDevice> {
+    // `lastBootedAt` is an ISO 8601 timestamp, so it sorts as a string
+    devices.max_by_key(|device| device.last_booted_at.as_deref().unwrap_or(""))
+}
+
+#[cfg(test)]
+mod simulator_tests {
+    use super::*;
+
+    #[test]
+    fn picks_the_newest_available_ios_simulator_across_runtimes() {
+        let json = r#"{"devices": {
+            "com.apple.CoreSimulator.SimRuntime.iOS-17-5": [
+                {"lastBootedAt": "2026-01-02T00:00:00Z", "isAvailable": true, "udid": "OLD", "name": "iPhone 15", "state": "Shutdown"}
+            ],
+            "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [
+                {"lastBootedAt": "2026-03-04T00:00:00Z", "isAvailable": true, "udid": "NEW", "name": "iPhone 16", "state": "Shutdown"},
+                {"lastBootedAt": "2026-05-06T00:00:00Z", "isAvailable": false, "udid": "GONE", "name": "iPhone 16 Pro", "state": "Shutdown"},
+                {"udid": "NEVER", "name": "iPhone SE", "state": "Shutdown"}
+            ],
+            "com.apple.CoreSimulator.SimRuntime.watchOS-11-4": [
+                {"lastBootedAt": "2026-07-08T00:00:00Z", "isAvailable": true, "udid": "WATCH", "name": "Watch", "state": "Booted"}
+            ]
+        }}"#;
+        let devices = available_ios_sims(serde_json::from_str(json).unwrap());
+        assert_eq!(most_recently_booted(devices.iter()).unwrap().udid, "NEW");
+        assert!(
+            most_recently_booted(devices.iter().filter(|device| device.state == "Booted"))
+                .is_none()
+        );
     }
 }
