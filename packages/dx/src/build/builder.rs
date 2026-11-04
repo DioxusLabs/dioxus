@@ -26,6 +26,7 @@ use tokio::{
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use super::{BuildContext, BuildId, BuildMode, HotpatchModuleCache};
+use dioxus_cli_config::{ALWAYS_ON_TOP_ENV, APP_TITLE_ENV};
 
 /// The component of the serve engine that watches ongoing builds and manages their state, open handle,
 /// and progress.
@@ -579,32 +580,23 @@ impl AppBuilder {
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs: Vec<(String, String)> = vec![
+            (dx_env::CLI_ENABLED_ENV.into(), "true".to_string()),
+            (APP_TITLE_ENV.into(), krate.config.web.app.title.clone()),
             (
-                dioxus_cli_config::CLI_ENABLED_ENV.into(),
-                "true".to_string(),
-            ),
-            (
-                dioxus_cli_config::APP_TITLE_ENV.into(),
-                krate.config.web.app.title.clone(),
-            ),
-            (
-                dioxus_cli_config::SESSION_CACHE_DIR.into(),
+                dx_env::SESSION_CACHE_DIR.into(),
                 self.build.session_cache_dir().display().to_string(),
             ),
-            (dioxus_cli_config::BUILD_ID.into(), build_id.0.to_string()),
-            (
-                dioxus_cli_config::ALWAYS_ON_TOP_ENV.into(),
-                always_on_top.to_string(),
-            ),
+            (dx_env::BUILD_ID.into(), build_id.0.to_string()),
+            (ALWAYS_ON_TOP_ENV.into(), always_on_top.to_string()),
         ];
 
         if let Some(devserver_ip) = devserver_ip {
             envs.push((
-                dioxus_cli_config::DEVSERVER_IP_ENV.into(),
+                dx_env::DEVSERVER_IP_ENV.into(),
                 devserver_ip.ip().to_string(),
             ));
             envs.push((
-                dioxus_cli_config::DEVSERVER_PORT_ENV.into(),
+                dx_env::DEVSERVER_PORT_ENV.into(),
                 devserver_ip.port().to_string(),
             ));
         }
@@ -614,11 +606,17 @@ impl AppBuilder {
         }
 
         if let Some(base_path) = krate.trimmed_base_path() {
-            envs.push((
-                dioxus_cli_config::ASSET_ROOT_ENV.into(),
-                base_path.to_string(),
-            ));
+            envs.push((dx_env::ASSET_ROOT_ENV.into(), base_path.to_string()));
         }
+
+        // Also set the legacy `DIOXUS_*` names for apps built against older versions of dx-env
+        let legacy_envs: Vec<_> = envs
+            .iter()
+            .filter_map(|(name, value)| {
+                dx_env::legacy_env_name(name).map(|legacy| (legacy.to_string(), value.clone()))
+            })
+            .collect();
+        envs.extend(legacy_envs);
 
         if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
             envs.push(("RUST_LOG".into(), env_filter));
@@ -627,14 +625,8 @@ impl AppBuilder {
         // Launch the server if we were given an address to start it on, and the build includes a server. After we
         // start the server, consume its stdout/stderr.
         if let Some(addr) = start_fullstack_on_address {
-            envs.push((
-                dioxus_cli_config::SERVER_IP_ENV.into(),
-                addr.ip().to_string(),
-            ));
-            envs.push((
-                dioxus_cli_config::SERVER_PORT_ENV.into(),
-                addr.port().to_string(),
-            ));
+            envs.push((dx_env::SERVER_IP_ENV.into(), addr.ip().to_string()));
+            envs.push((dx_env::SERVER_PORT_ENV.into(), addr.port().to_string()));
         }
 
         // If there's any CARGO vars in the captured rustc args, push those too.
@@ -975,7 +967,7 @@ impl AppBuilder {
         changed_file: &Path,
         bundled_name: &Path,
     ) -> Result<PathBuf> {
-        let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
+        let target = dx_env::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
 
         let res = Command::new(&self.build.workspace.android_tools()?.adb)
@@ -1483,7 +1475,7 @@ impl AppBuilder {
                 .arg("shell")
                 .arg("rm")
                 .arg("-rf")
-                .arg(dioxus_cli_config::android_session_cache_dir())
+                .arg(dx_env::android_session_cache_dir())
                 .output()
                 .await?;
 
@@ -1501,7 +1493,7 @@ impl AppBuilder {
             Command::new(&adb)
                 .arg("push")
                 .arg(env_file)
-                .arg(dioxus_cli_config::android_session_cache_dir().join(".env"))
+                .arg(dx_env::android_session_cache_dir().join(".env"))
                 .output()
                 .await?;
 
@@ -2074,7 +2066,7 @@ impl AppBuilder {
     ) -> anyhow::Result<()> {
         use super::{BuildId, BuilderUpdate};
         use anyhow::Context;
-        use dioxus_cli_config::{server_ip, server_port};
+        use dx_env::{server_ip, server_port};
         use dx_wire_format::BuildStage;
         use futures_util::{StreamExt, stream::FuturesUnordered};
         use std::{

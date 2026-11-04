@@ -5,7 +5,6 @@ use crate::isrg::{
 };
 use crate::streaming::{Mount, StreamingRenderer};
 use crate::{ServeConfig, document::ServerDocument};
-use dioxus_cli_config::base_path;
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
@@ -15,6 +14,7 @@ use dioxus_vdom::{
     DynamicNode, DynamicNodeSlot, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext,
     VirtualDom, consume_context, has_context, try_consume_context,
 };
+use dx_env::base_path;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
 use http::{HeaderMap, StatusCode, request::Parts};

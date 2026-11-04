@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "web", "wasm"]
 
 [dependencies]
 dioxus-vdom = { workspace = true }
-dioxus-cli-config = { workspace = true, features = ["web"] }
+dx-env = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }

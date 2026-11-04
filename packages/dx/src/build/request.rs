@@ -206,8 +206,8 @@ use anyhow::{Context, bail};
 use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{DebugSetting, Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
-use dioxus_cli_config::PRODUCT_NAME_ENV;
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_config::APP_TITLE_ENV;
+use dx_env::{ASSET_ROOT_ENV, PRODUCT_NAME_ENV, legacy_env_name};
 use krates::{NodeId, cm::TargetKind};
 use manganis::BundledAsset;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -1928,13 +1928,20 @@ impl BuildRequest {
 
         // Always bake the product name into the binary so bundled apps can find their assets
         // at runtime regardless of build profile (the asset directory structure uses the product name).
-        env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
+        let product_name: OsString = self.bundled_app_name().into();
+        env_vars.push((PRODUCT_NAME_ENV.into(), product_name.clone()));
+        if let Some(legacy) = legacy_env_name(PRODUCT_NAME_ENV) {
+            env_vars.push((legacy.into(), product_name));
+        }
 
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
             if let Some(base_path) = self.trimmed_base_path() {
                 env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
+                if let Some(legacy) = legacy_env_name(ASSET_ROOT_ENV) {
+                    env_vars.push((legacy.into(), base_path.to_string().into()));
+                }
             }
             env_vars.push((
                 APP_TITLE_ENV.into(),
