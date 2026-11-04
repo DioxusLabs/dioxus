@@ -176,7 +176,16 @@ pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! 
                 tokio::runtime::RuntimeFlavor::CurrentThread,
                 "The tokio current-thread runtime does not work with dioxus event handling"
             );
-            launch_virtual_dom_blocking(virtual_dom, desktop_config);
+            // The event loop never returns to the scheduler, so tokio's cooperative budget would
+            // never reset and budgeted futures would stay pending forever. Run it unconstrained,
+            // like the runtime we create below. It is polled in place rather than with `block_on`,
+            // so this also works inside a `LocalSet` and doesn't put the event loop in a nested
+            // runtime context. The async block must not await anything before launching.
+            let _ = futures_util::FutureExt::now_or_never(tokio::task::unconstrained(async move {
+                launch_virtual_dom_blocking(virtual_dom, desktop_config)
+            }));
+
+            unreachable!("The desktop launch function will never exit")
         } else {
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
