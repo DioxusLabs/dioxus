@@ -472,7 +472,7 @@ impl BuildRequest {
 
                 // Create module directory
                 let module_dir = plugins_dir.join(plugin_name);
-                self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
+                Self::copy_build_dir_recursive(&artifact_path, &module_dir)?;
 
                 // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
                 self.strip_gradle_plugin_versions(&module_dir)?;
