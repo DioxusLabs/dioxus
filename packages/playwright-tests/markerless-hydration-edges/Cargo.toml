@@ -9,6 +9,17 @@ dioxus = { workspace = true, features = ["fullstack"] }
 serde = { workspace = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+tower = { workspace = true, features = ["util"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+futures-util = { workspace = true, features = ["std"] }
+js-sys = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+wasm-bindgen-test = { workspace = true }
+web-sys = { workspace = true, features = ["Document", "DomParser", "Element", "Event", "EventTarget", "HtmlElement", "HtmlTextAreaElement", "MouseEvent", "MouseEventInit", "NodeList", "Performance", "SupportedType", "Window"] }
+
 [features]
 default = []
 server = ["dioxus/server", "dep:tokio"]
