@@ -178,4 +178,12 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .unwrap()
             .into()
     }
+
+    fn convert_custom_data(&self, event: &PlatformEventData) -> CustomData {
+        event
+            .downcast::<SerializedCustomData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
 }
