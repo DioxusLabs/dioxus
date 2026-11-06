@@ -37,6 +37,7 @@ lazy-js-bundle = { workspace = true }
 [dev-dependencies]
 serde_json = { workspace = true }
 dioxus = { workspace = true }
+dioxus-renderer-oracle = { workspace = true }
 dioxus-web = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 
