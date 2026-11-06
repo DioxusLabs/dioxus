@@ -4110,6 +4110,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
+ "hashbrown 0.16.1",
  "longest-increasing-subsequence",
  "manganis-core",
  "pretty_assertions",

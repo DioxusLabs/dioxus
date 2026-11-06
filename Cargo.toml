@@ -234,6 +234,7 @@ futures = "0.3.32"
 futures-channel = "0.3.32"
 futures-util = { version = "0.3.32", default-features = false }
 rustc-hash = "2.1.1"
+hashbrown = { version = "0.16.1", default-features = false }
 wasm-bindgen = "0.2.127"
 wasm-bindgen-futures = "0.4.77"
 wasm-bindgen-test = "0.3.77"

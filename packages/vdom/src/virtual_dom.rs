@@ -213,6 +213,8 @@ pub struct VirtualDom {
     // The scopes that have been resolved since the last render
     pub(crate) resolved_scopes: Vec<ScopeId>,
 
+    pub(crate) scratch: crate::diff::scratch::DocumentScratch,
+
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
 
@@ -316,6 +318,7 @@ impl VirtualDom {
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             resolved_scopes: Default::default(),
+            scratch: Default::default(),
         };
 
         let root_props = Box::new(VProps::new(
