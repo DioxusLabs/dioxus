@@ -27,6 +27,7 @@ dioxus-vdom-template = { workspace = true }
 const_format = { workspace = true }
 futures-channel = { workspace = true }
 generational-box = { workspace = true }
+hashbrown = { workspace = true }
 longest-increasing-subsequence = { workspace = true }
 rustc-hash = { workspace = true }
 rustversion = { workspace = true }

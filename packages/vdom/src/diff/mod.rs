@@ -23,6 +23,7 @@ pub(crate) mod context;
 mod iterator;
 pub(crate) mod node;
 pub(crate) mod placement;
+pub(crate) mod scratch;
 pub(crate) mod template;
 
 pub(crate) struct CreatedVNode {
