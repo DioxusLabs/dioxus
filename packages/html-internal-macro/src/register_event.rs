@@ -243,7 +243,7 @@ mod tests {
             refused(quote! { dioxus_html; event: onnotice; js-event: "notice"; bubbling: true; })
                 .contains("expected `bubbles`")
         );
-        assert!(refused(quote! { dioxus_html; event: onnotice; js-event: "notice"; }).len() > 0);
+        assert!(!refused(quote! { dioxus_html; event: onnotice; js-event: "notice"; }).is_empty());
     }
 
     #[test]
