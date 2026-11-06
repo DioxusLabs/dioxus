@@ -14,6 +14,7 @@ mod before_input;
 mod cancel;
 mod clipboard;
 mod composition;
+mod custom;
 mod drag;
 mod file;
 mod focus;
@@ -113,6 +114,9 @@ macro_rules! with_web_event_converters {
                 ))
             };
             convert_composition_data(CompositionData) => web_sys::CompositionEvent;
+            convert_custom_data(CustomData) => web_sys::CustomEvent => |event| {
+                Synthetic::new(downcast_event(event).raw.clone()).into()
+            };
             convert_drag_data(DragData) => web_sys::DragEvent => |event| {
                 let event = downcast_event(event);
                 DragData::new(Synthetic::new(

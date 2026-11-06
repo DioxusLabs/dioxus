@@ -93,6 +93,7 @@ pub enum EventData {
     Transition(SerializedTransitionData),
     Toggle(SerializedToggleData),
     Image(SerializedImageData),
+    Custom(SerializedCustomData),
     Mounted,
 }
 
@@ -156,6 +157,9 @@ impl EventData {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
             EventData::Image(data) => {
+                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
+            }
+            EventData::Custom(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
             EventData::Mounted => {
@@ -306,6 +310,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     fn convert_image_data(&self, event: &PlatformEventData) -> ImageData {
         event
             .downcast::<SerializedImageData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
+    fn convert_custom_data(&self, event: &PlatformEventData) -> CustomData {
+        event
+            .downcast::<SerializedCustomData>()
             .cloned()
             .unwrap()
             .into()

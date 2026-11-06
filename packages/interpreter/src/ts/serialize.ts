@@ -85,6 +85,8 @@ export function serializeEvent(
       extend(serializeResizeEventDetail(detail));
     } else if (detail instanceof IntersectionObserverEntry) {
       extend(serializeIntersectionEventDetail(detail));
+    } else if (typeof detail === "string") {
+      extend({ detail });
     }
   }
 
