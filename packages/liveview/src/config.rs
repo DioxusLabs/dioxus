@@ -1,4 +1,4 @@
-use dioxus_core::{LaunchConfig, VirtualDom};
+use dioxus_vdom::{LaunchConfig, VirtualDom};
 
 use crate::LiveviewRouter;
 
@@ -33,7 +33,7 @@ impl<R: LiveviewRouter> Config<R> {
     }
 
     /// Create a new configuration for the LiveView server.
-    pub fn with_app(mut self, app: fn() -> dioxus_core::Element) -> Self {
+    pub fn with_app(mut self, app: fn() -> dioxus_vdom::Element) -> Self {
         self.router = self.router.with_app(&self.route, app);
         self
     }

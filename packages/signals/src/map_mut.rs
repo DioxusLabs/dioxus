@@ -4,7 +4,7 @@ use crate::{
     Readable, ReadableExt, ReadableRef, Writable, WritableExt, WritableRef, WriteLock, read_impls,
     write_impls,
 };
-use dioxus_core::{IntoAttributeValue, Subscribers};
+use dioxus_vdom::{IntoAttributeValue, Subscribers};
 use generational_box::{AnyStorage, BorrowResult};
 
 /// A read only signal that has been mapped to a new type.
@@ -120,7 +120,7 @@ where
     V::Target: 'static,
     F: Fn(&V::Target) -> &O,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
+    fn into_value(self) -> dioxus_vdom::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }

@@ -30,4 +30,3 @@ objc2 = { workspace = true }
 
 [features]
 default = []
-dioxus = ["manganis-core/dioxus"]

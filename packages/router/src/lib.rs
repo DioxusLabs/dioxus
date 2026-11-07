@@ -67,7 +67,7 @@ pub use hooks::router;
 
 #[cfg(feature = "html")]
 pub use crate::components::{GoBackButton, GoForwardButton, HistoryButtonProps, Link, LinkProps};
-pub use crate::components::{Outlet, Router, RouterProps};
+pub use crate::components::{OnInitialRouteResolved, Outlet, Router, RouterProps};
 pub use crate::contexts::*;
 pub use crate::hooks::*;
 pub use crate::navigation::*;
@@ -82,7 +82,7 @@ pub trait HasProps {
     type Props;
 }
 
-impl<P> HasProps for dioxus_core::Component<P> {
+impl<P> HasProps for dioxus_vdom::Component<P> {
     type Props = P;
 }
 

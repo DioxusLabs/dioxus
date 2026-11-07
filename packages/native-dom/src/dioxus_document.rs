@@ -11,8 +11,8 @@ use blitz_dom::{
     EventHandler, Node,
 };
 use blitz_traits::events::{DomEvent, DomEventData, EventState, UiEvent};
-use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{PlatformEventData, set_event_converter};
+use dioxus_vdom::{ElementId, Event, VirtualDom};
 use futures_util::task::noop_waker;
 use std::cell::RefCell;
 use std::future::Future;
@@ -36,7 +36,7 @@ fn get_dioxus_id(node: &Node) -> Option<ElementId> {
         .map(ElementId::from_raw)
 }
 
-/// Integrates [`BaseDocument`] from  [`blitz-dom`](blitz_dom)  with [`VirtualDom`] from [`dioxus-core`](dioxus_core)
+/// Integrates [`BaseDocument`] from  [`blitz-dom`](blitz_dom)  with [`VirtualDom`] from [`dioxus-vdom`](dioxus_vdom)
 ///
 /// ### Example
 ///
@@ -366,7 +366,7 @@ mod tests {
     use super::*;
     use blitz_dom::DocumentConfig;
     use dioxus::prelude::*;
-    use dioxus_core::ScopeId;
+    use dioxus_vdom::ScopeId;
     use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
 

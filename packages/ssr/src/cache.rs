@@ -30,7 +30,7 @@
 //!```
 
 use crate::renderer::{BOOL_ATTRS, ssr_attr_name, str_truthy};
-use dioxus_core::{StaticElement, StaticText, VNode, VNodeChild};
+use dioxus_vdom::{StaticElement, StaticText, VNode, VNodeChild};
 use std::{fmt::Write, ops::AddAssign};
 
 #[derive(Debug)]

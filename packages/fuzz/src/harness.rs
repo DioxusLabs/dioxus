@@ -6,8 +6,8 @@ use crate::{
     ops::{EventBehaviorSpec, Op},
     vdom::App,
 };
-use dioxus_core::{BorrowedAttributeValue, ElementId, Event, ScopeId, VirtualDom, WriteMutations};
 use dioxus_renderer_oracle::{EventListenerTarget, RendererOracle, SnapshotNode};
+use dioxus_vdom::{BorrowedAttributeValue, ElementId, Event, ScopeId, VirtualDom, WriteMutations};
 use std::{
     any::Any,
     cell::RefCell,
@@ -583,38 +583,38 @@ fn fire_selected_event_listener(
             });
         }
         EventBehaviorSpec::ScheduleUpdate => {
-            let update = dioxus_core::schedule_update();
+            let update = dioxus_vdom::schedule_update();
             update();
         }
         EventBehaviorSpec::ScheduleUpdateAny => {
-            let id = dioxus_core::current_scope_id();
-            let update_any = dioxus_core::schedule_update_any();
+            let id = dioxus_vdom::current_scope_id();
+            let update_any = dioxus_vdom::schedule_update_any();
             update_any(id);
         }
-        EventBehaviorSpec::NeedsUpdate => dioxus_core::needs_update(),
+        EventBehaviorSpec::NeedsUpdate => dioxus_vdom::needs_update(),
         EventBehaviorSpec::NeedsUpdateAny => {
-            let id = dioxus_core::current_scope_id();
-            dioxus_core::needs_update_any(id);
+            let id = dioxus_vdom::current_scope_id();
+            dioxus_vdom::needs_update_any(id);
         }
         EventBehaviorSpec::ContextRoundTrip => {
-            let id = dioxus_core::current_scope_id();
-            dioxus_core::provide_context(EventScopeContext);
-            dioxus_core::provide_context(EventScopeContext);
-            let _ = dioxus_core::has_context::<EventScopeContext>();
-            let _ = dioxus_core::try_consume_context::<EventScopeContext>();
-            let _ = dioxus_core::consume_context::<EventScopeContext>();
-            let _ = dioxus_core::consume_context_from_scope::<EventScopeContext>(id);
+            let id = dioxus_vdom::current_scope_id();
+            dioxus_vdom::provide_context(EventScopeContext);
+            dioxus_vdom::provide_context(EventScopeContext);
+            let _ = dioxus_vdom::has_context::<EventScopeContext>();
+            let _ = dioxus_vdom::try_consume_context::<EventScopeContext>();
+            let _ = dioxus_vdom::consume_context::<EventScopeContext>();
+            let _ = dioxus_vdom::consume_context_from_scope::<EventScopeContext>(id);
         }
         EventBehaviorSpec::RootContextRoundTrip => {
-            dioxus_core::provide_root_context(EventRootContext);
-            dioxus_core::provide_root_context(EventRootContext);
-            let _ = dioxus_core::try_consume_context::<EventRootContext>();
-            let _ = dioxus_core::consume_context::<EventRootContext>();
-            let _ = dioxus_core::consume_context_from_scope::<EventRootContext>(ScopeId::ROOT);
+            dioxus_vdom::provide_root_context(EventRootContext);
+            dioxus_vdom::provide_root_context(EventRootContext);
+            let _ = dioxus_vdom::try_consume_context::<EventRootContext>();
+            let _ = dioxus_vdom::consume_context::<EventRootContext>();
+            let _ = dioxus_vdom::consume_context_from_scope::<EventRootContext>(ScopeId::ROOT);
         }
-        EventBehaviorSpec::QueueEffect => dioxus_core::queue_effect(|| {}),
+        EventBehaviorSpec::QueueEffect => dioxus_vdom::queue_effect(|| {}),
         EventBehaviorSpec::SpawnIsomorphic => {
-            let _ = dioxus_core::spawn_isomorphic(async {});
+            let _ = dioxus_vdom::spawn_isomorphic(async {});
         }
     });
 

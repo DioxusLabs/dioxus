@@ -3,8 +3,8 @@
 //! per fuzz process so the coverage-instrumented binary records them.
 
 /// Drive the VirtualDom's pending work to completion synchronously.
-fn drive_render(dom: &mut dioxus_core::VirtualDom) {
-    dom.render_immediate(&mut dioxus_core::Mutations::default());
+fn drive_render(dom: &mut dioxus_vdom::VirtualDom) {
+    dom.render_immediate(&mut dioxus_vdom::Mutations::default());
 }
 
 thread_local! {
@@ -26,14 +26,14 @@ fn warmup_gen() -> u32 {
 /// and render. Returns the dom and oracle so callers can drive extra custom
 /// rounds.
 fn run_generations(
-    app: fn() -> dioxus_core::Element,
+    app: fn() -> dioxus_vdom::Element,
     generations: u32,
 ) -> (
-    dioxus_core::VirtualDom,
+    dioxus_vdom::VirtualDom,
     dioxus_renderer_oracle::RendererOracle,
 ) {
-    use dioxus_core::{ScopeId, VirtualDom};
     use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_vdom::{ScopeId, VirtualDom};
 
     WARMUP_GEN.with(|c| c.set(0));
     let mut dom = VirtualDom::new(app);
@@ -135,7 +135,7 @@ fn warmup_keyed_reorder() {
 /// renderer arena.
 fn warmup_suspense_hidden_paths() {
     use dioxus::prelude::*;
-    use dioxus_core::{SuspenseContext, generation};
+    use dioxus_vdom::{SuspenseContext, generation};
     use std::cell::Cell;
 
     thread_local! {
@@ -220,7 +220,7 @@ fn warmup_suspense_hidden_paths() {
 
 fn warmup_empty_fallback_slot_promotion() {
     use dioxus::prelude::*;
-    use dioxus_core::generation;
+    use dioxus_vdom::generation;
 
     #[component]
     #[allow(non_snake_case)]
@@ -248,7 +248,7 @@ fn warmup_empty_fallback_slot_promotion() {
 
 fn warmup_non_root_dynamic_slot_without_adjacent_anchor() {
     use dioxus::prelude::*;
-    use dioxus_core::generation;
+    use dioxus_vdom::generation;
 
     fn app() -> Element {
         let g = generation();
@@ -270,7 +270,7 @@ fn warmup_non_root_dynamic_slot_without_adjacent_anchor() {
 
 fn warmup_root_dynamic_slot_anchors() {
     use dioxus::prelude::*;
-    use dioxus_core::generation;
+    use dioxus_vdom::generation;
 
     fn before_static_root() -> Element {
         let g = generation();
@@ -302,7 +302,7 @@ fn warmup_root_dynamic_slot_anchors() {
 
 fn warmup_keyed_fragment_skip_anchors() {
     use dioxus::prelude::*;
-    use dioxus_core::generation;
+    use dioxus_vdom::generation;
 
     fn app() -> Element {
         let g = generation();
@@ -378,7 +378,7 @@ fn warmup_keyed_splice_into_static_slot() {
 /// pass instead of being re-run afterwards.
 fn warmup_deferred_subtree_check() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom, current_scope_id};
+    use dioxus_vdom::{ScopeId, VirtualDom, current_scope_id};
     use std::cell::RefCell;
 
     thread_local! {
@@ -430,7 +430,7 @@ fn warmup_deferred_subtree_check() {
 /// take their `None` branches.
 fn warmup_dropped_scope_anchor_lookup() {
     use dioxus::prelude::*;
-    use dioxus_core::generation;
+    use dioxus_vdom::generation;
 
     #[derive(Clone, PartialEq, Props)]
     struct InnerProps {
@@ -518,7 +518,7 @@ fn warmup_suspense_then_remove() {
 }
 
 /// One-shot warmup that exercises the multi-priority deferred-priority paths in
-/// `dioxus_core::diff::component::diff_vcomponent`. The sync `render_immediate`
+/// `dioxus_vdom::diff::component::diff_vcomponent`. The sync `render_immediate`
 /// path used by [`crate::case::run_case`] only ever processes a single priority level at a
 /// time, so the `render_deferred_priority`/`deferred_priority_for_subtree`
 /// branches are unreachable from corpus inputs alone. Calling this once per
@@ -530,8 +530,8 @@ fn warmup_suspense_then_remove() {
 /// `use_hook`, so this branch is otherwise unreachable.
 fn warmup_portal_target_switch() {
     use dioxus::prelude::*;
-    use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
     use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_vdom::{Portal, RenderTargetId, ScopeId, VirtualDom};
     use std::{cell::Cell, collections::BTreeMap};
 
     thread_local! {
@@ -609,7 +609,7 @@ fn warmup_portal_target_switch() {
 /// model never uses `use_effect`.
 fn warmup_scope_with_pending_effect() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, current_scope_id, queue_effect};
+    use dioxus_vdom::{ScopeId, current_scope_id, queue_effect};
     use std::cell::Cell;
 
     thread_local! {
@@ -676,7 +676,7 @@ fn warmup_scope_with_pending_effect() {
 /// to force a re-run that actually iterates the hook lists.
 fn warmup_before_after_render_hooks() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, current_scope_id, use_after_render, use_before_render};
+    use dioxus_vdom::{ScopeId, current_scope_id, use_after_render, use_before_render};
     use std::cell::Cell;
 
     thread_local! {
@@ -711,7 +711,7 @@ fn warmup_before_after_render_hooks() {
 /// `handle_element_return` (which calls `throw_error`) both fire.
 fn warmup_throw_error() {
     use dioxus::prelude::*;
-    use dioxus_core::{CapturedError, RenderError};
+    use dioxus_vdom::{CapturedError, RenderError};
 
     #[component]
     #[allow(non_snake_case)]
@@ -767,7 +767,7 @@ fn warmup_keyed_left_prefix_splice() {
 /// attribute's static value is restored instead of cleared.
 fn warmup_static_attribute_restore() {
     use dioxus::prelude::*;
-    use dioxus_core::Attribute;
+    use dioxus_vdom::Attribute;
 
     fn app() -> Element {
         // The template carries a static `class="static"`. The spread shadows
@@ -798,7 +798,7 @@ fn warmup_static_attribute_restore() {
 /// listener is installed (installing a listener doesn't overwrite it).
 fn warmup_attribute_value_to_listener() {
     use dioxus::prelude::*;
-    use dioxus_core::{Attribute, AttributeValue};
+    use dioxus_vdom::{Attribute, AttributeValue};
 
     fn app() -> Element {
         let attrs: Vec<Attribute> = if warmup_gen() == 0 {
@@ -825,8 +825,8 @@ fn warmup_attribute_value_to_listener() {
 /// from the list's target, driving the cross-target dynamic-text-root branch.
 fn warmup_portal_dynamic_text_root() {
     use dioxus::prelude::*;
-    use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
     use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_vdom::{Portal, RenderTargetId, ScopeId, VirtualDom};
     use std::{cell::Cell, collections::BTreeMap};
 
     thread_local! {
@@ -926,7 +926,7 @@ pub fn warmup_deferred_priority_paths() {
     warmup_portal_dynamic_text_root();
     warmup_keyed_component_anchor();
     use dioxus::prelude::*;
-    use dioxus_core::ScopeId;
+    use dioxus_vdom::ScopeId;
 
     #[derive(Clone, PartialEq, Props)]
     struct ItemProps {
@@ -939,7 +939,7 @@ pub fn warmup_deferred_priority_paths() {
     }
 
     fn app() -> Element {
-        let generation = dioxus_core::generation();
+        let generation = dioxus_vdom::generation();
         rsx! {
             for i in 0..3u32 {
                 Item { value: i + (generation as u32) }

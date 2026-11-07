@@ -171,19 +171,19 @@ impl HotReloadFormattedSegment {
         let mut next_dynamic = 0usize;
         let segments = self.segments.iter().map(|segment| match segment {
             Segment::Literal(lit) => quote! {
-                dioxus_core::internal::FmtSegment::Literal { value: #lit }
+                dioxus_vdom::internal::FmtSegment::Literal { value: #lit }
             },
             Segment::Formatted(_) => {
                 let id = dynamic_ids.get(next_dynamic).copied().unwrap_or(usize::MAX);
                 next_dynamic += 1;
                 quote! {
-                    dioxus_core::internal::FmtSegment::Dynamic { id: #id }
+                    dioxus_vdom::internal::FmtSegment::Dynamic { id: #id }
                 }
             }
         });
 
         quote! {
-            dioxus_core::internal::FmtedSegments::new(vec![ #(#segments),* ])
+            dioxus_vdom::internal::FmtedSegments::new(vec![ #(#segments),* ])
         }
     }
 }

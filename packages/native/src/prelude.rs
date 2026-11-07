@@ -1,13 +1,13 @@
 // RSX and component definition
-pub use dioxus_core;
-pub use dioxus_core::{
+pub use dioxus_vdom;
+pub use dioxus_vdom::{
     AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
     EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary,
     SuspenseContext, VNode, VirtualDom, consume_context, provide_context, spawn, suspend,
     try_consume_context, use_drop, use_hook,
 };
 #[allow(deprecated)]
-pub use dioxus_core_macro::{Props, component, rsx};
+pub use dioxus_vdom_macro::{Props, component, rsx};
 // The element-vocabulary root: `html::div`, `html::main`, etc. resolve as associated
 // consts on this type.
 pub use dioxus_html::{self, html};

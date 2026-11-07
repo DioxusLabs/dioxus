@@ -1,6 +1,6 @@
 use crate::renderer::RendererOracle;
 use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
-use dioxus_core::{
+use dioxus_vdom::{
     Attribute, AttributeValue, DynamicNode, DynamicNodeSlot, Element, MountedVNode, VNodeChild,
     VirtualDom,
 };

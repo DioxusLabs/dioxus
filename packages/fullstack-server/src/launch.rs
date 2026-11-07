@@ -8,8 +8,8 @@ use axum::{
     extract::{Request, State},
     routing::IntoMakeService,
 };
-use dioxus_cli_config::base_path;
-use dioxus_core::{ComponentFunction, Element};
+use dioxus_vdom::{ComponentFunction, Element};
+use dx_env::base_path;
 
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use futures_util::{StreamExt, stream::FusedStream};
@@ -27,7 +27,7 @@ use tower::{Service, ServiceExt as _};
 
 #[cfg(not(target_arch = "wasm32"))]
 use {
-    dioxus_core::{RenderError, VNode},
+    dioxus_vdom::{RenderError, VNode},
     tokio::net::TcpListener,
 };
 
@@ -79,7 +79,7 @@ async fn serve_server(
         }) as _
     };
 
-    serve_router(cb, dioxus_cli_config::fullstack_address_or_localhost()).await;
+    serve_router(cb, dx_env::fullstack_address_or_localhost()).await;
 }
 
 /// Create a router that serves the dioxus application at the appropriate base path.
@@ -118,9 +118,7 @@ where
 {
     let cb = move || Box::pin(serve_it()) as _;
 
-    block_on(
-        async move { serve_router(cb, dioxus_cli_config::fullstack_address_or_localhost()).await },
-    );
+    block_on(async move { serve_router(cb, dx_env::fullstack_address_or_localhost()).await });
 
     unreachable!("Serving a fullstack app should never return")
 }
@@ -162,7 +160,7 @@ pub async fn serve_router(
         .unwrap();
 
     let (shutdown_tx, _) = tokio::sync::broadcast::channel(1);
-    let our_build_id = Some(dioxus_cli_config::build_id());
+    let our_build_id = Some(dx_env::build_id());
 
     // Manually loop on accepting connections so we can also respond to devtools messages
     loop {

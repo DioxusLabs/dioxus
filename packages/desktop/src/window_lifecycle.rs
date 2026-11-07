@@ -3,9 +3,9 @@ use crate::{
     desktop_context::{ComponentWindowRegistration, PendingWindowCancellation},
     desktop_state::DesktopAppContext,
 };
-use dioxus_core::{EventHandler, RenderTargetId};
 use dioxus_document::Document;
 use dioxus_history::History;
+use dioxus_vdom::{EventHandler, RenderTargetId};
 use std::rc::Rc;
 
 #[derive(Clone)]

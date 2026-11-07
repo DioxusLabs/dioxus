@@ -2227,18 +2227,18 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
 ]
 
 [[package]]
 name = "convert_case"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+checksum = "1af709f1f33454bf52eadfc8c78b3b9ef9cb26fb54d16dc9cd9a7299f899fd1b"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -3043,25 +3043,17 @@ dependencies = [
  "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-config-macro",
- "dioxus-config-macros",
  "dioxus-core",
- "dioxus-core-macro",
  "dioxus-desktop",
  "dioxus-devtools",
- "dioxus-document",
  "dioxus-fullstack",
  "dioxus-fullstack-macro",
  "dioxus-history",
- "dioxus-hooks",
- "dioxus-html",
  "dioxus-liveview",
  "dioxus-logger",
  "dioxus-native",
  "dioxus-router",
  "dioxus-server",
- "dioxus-signals",
- "dioxus-ssr",
- "dioxus-stores",
  "dioxus-web",
  "env_logger",
  "futures-util",
@@ -3073,7 +3065,6 @@ dependencies = [
  "tokio",
  "tracing",
  "warnings",
- "wasm-splitter",
 ]
 
 [[package]]
@@ -3081,7 +3072,7 @@ name = "dioxus-asset-resolver"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-cli-config",
+ "dx-env",
  "http",
  "infer",
  "jni 0.21.1",
@@ -3137,7 +3128,7 @@ dependencies = [
  "console",
  "console-subscriber",
  "const-serialize",
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "crossterm",
  "ctrlc",
  "depinfo",
@@ -3145,17 +3136,17 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-cli-telemetry",
  "dioxus-component-manifest",
- "dioxus-core",
- "dioxus-core-types",
  "dioxus-devtools-types",
- "dioxus-dx-wire-format",
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-rsx-hotreload",
  "dioxus-rsx-rosetta",
+ "dioxus-vdom",
  "dircpy",
  "dirs 6.0.0",
  "dunce",
+ "dx-env",
+ "dx-wire-format",
  "escargot",
  "flate2",
  "fs2",
@@ -3183,6 +3174,7 @@ dependencies = [
  "manganis",
  "manganis-core",
  "md5",
+ "mimalloc",
  "mozjpeg",
  "notify",
  "nucleo",
@@ -3243,7 +3235,7 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.8.0-alpha.3"
 dependencies = [
- "wasm-bindgen",
+ "dx-env",
 ]
 
 [[package]]
@@ -3292,67 +3284,17 @@ version = "0.8.0-alpha.3"
 name = "dioxus-core"
 version = "0.8.0-alpha.3"
 dependencies = [
- "anyhow",
- "const_format",
- "criterion",
- "dioxus",
- "dioxus-const-vec",
- "dioxus-core-macro",
- "dioxus-core-template",
- "dioxus-core-types",
+ "dioxus-config-macros",
+ "dioxus-document",
+ "dioxus-hooks",
  "dioxus-html",
- "dioxus-renderer-oracle",
+ "dioxus-signals",
  "dioxus-ssr",
- "futures-channel",
- "futures-util",
- "generational-box",
- "longest-increasing-subsequence",
- "pretty_assertions",
- "rand 0.9.4",
- "reqwest",
- "rustc-hash 2.1.2",
- "rustversion",
- "serde",
- "slab",
- "slotmap",
- "subsecond",
- "sysinfo",
- "tokio",
- "tracing",
- "tracing-fluent-assertions",
- "tracing-subscriber",
- "web-sys",
- "xxhash-rust",
+ "dioxus-stores",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
+ "wasm-splitter",
 ]
-
-[[package]]
-name = "dioxus-core-macro"
-version = "0.8.0-alpha.3"
-dependencies = [
- "convert_case 0.8.0",
- "dioxus",
- "dioxus-html",
- "dioxus-rsx",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.117",
- "tokio",
- "trybuild",
-]
-
-[[package]]
-name = "dioxus-core-template"
-version = "0.8.0-alpha.3"
-dependencies = [
- "dioxus-const-vec",
- "serde",
- "xxhash-rust",
-]
-
-[[package]]
-name = "dioxus-core-types"
-version = "0.8.0-alpha.3"
 
 [[package]]
 name = "dioxus-desktop"
@@ -3365,8 +3307,6 @@ dependencies = [
  "dioxus",
  "dioxus-asset-resolver",
  "dioxus-cli-config",
- "dioxus-core",
- "dioxus-core-macro",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-history",
@@ -3375,6 +3315,8 @@ dependencies = [
  "dioxus-interpreter-js",
  "dioxus-signals",
  "dioxus-ssr",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
  "dunce",
  "exitcode",
  "futures-channel",
@@ -3420,10 +3362,10 @@ dependencies = [
 name = "dioxus-devtools"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-cli-config",
- "dioxus-core",
  "dioxus-devtools-types",
  "dioxus-signals",
+ "dioxus-vdom",
+ "dx-env",
  "futures-channel",
  "futures-util",
  "serde",
@@ -3439,7 +3381,7 @@ dependencies = [
 name = "dioxus-devtools-types"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-core",
+ "dioxus-vdom",
  "serde",
  "subsecond-types",
 ]
@@ -3449,11 +3391,10 @@ name = "dioxus-document"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-core",
- "dioxus-core-macro",
- "dioxus-core-template",
- "dioxus-core-types",
  "dioxus-html",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
+ "dioxus-vdom-template",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -3461,17 +3402,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
-]
-
-[[package]]
-name = "dioxus-dx-wire-format"
-version = "0.8.0-alpha.3"
-dependencies = [
- "cargo_metadata",
- "manganis-core",
- "serde",
- "serde_json",
- "subsecond-types",
 ]
 
 [[package]]
@@ -3541,14 +3471,14 @@ dependencies = [
  "derive_more",
  "dioxus",
  "dioxus-asset-resolver",
- "dioxus-cli-config",
- "dioxus-core",
  "dioxus-fullstack-core",
  "dioxus-fullstack-macro",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-server",
  "dioxus-signals",
+ "dioxus-vdom",
+ "dx-env",
  "form_urlencoded",
  "futures",
  "futures-channel",
@@ -3600,12 +3530,12 @@ dependencies = [
  "base64 0.22.1",
  "ciborium",
  "dioxus",
- "dioxus-core",
  "dioxus-document",
  "dioxus-fullstack",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-signals",
+ "dioxus-vdom",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -3625,7 +3555,7 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "axum",
  "const_format",
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "dioxus",
  "proc-macro2",
  "quote",
@@ -3640,7 +3570,7 @@ name = "dioxus-history"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-core",
+ "dioxus-vdom",
  "tracing",
 ]
 
@@ -3649,8 +3579,8 @@ name = "dioxus-hooks"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-core",
  "dioxus-signals",
+ "dioxus-vdom",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -3669,12 +3599,11 @@ dependencies = [
  "async-trait",
  "bytes",
  "dioxus",
- "dioxus-core",
- "dioxus-core-macro",
- "dioxus-core-types",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
- "dioxus-rsx",
+ "dioxus-rsx-hotreload",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
  "dioxus-web",
  "enumset",
  "euclid",
@@ -3684,7 +3613,6 @@ dependencies = [
  "js-sys",
  "keyboard-types",
  "lazy-js-bundle",
- "manganis",
  "rustversion",
  "serde",
  "serde_json",
@@ -3697,7 +3625,7 @@ dependencies = [
 name = "dioxus-html-internal-macro"
 version = "0.8.0-alpha.3"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -3708,9 +3636,8 @@ dependencies = [
 name = "dioxus-interpreter-js"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-core",
- "dioxus-core-types",
  "dioxus-html",
+ "dioxus-vdom",
  "js-sys",
  "lazy-js-bundle",
  "rustc-hash 2.1.2",
@@ -3729,12 +3656,12 @@ dependencies = [
  "axum",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-core",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-history",
  "dioxus-html",
  "dioxus-interpreter-js",
+ "dioxus-vdom",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -3755,7 +3682,7 @@ name = "dioxus-logger"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-cli-config",
+ "dx-env",
  "serde_json",
  "tracing",
  "tracing-subscriber",
@@ -3782,8 +3709,6 @@ dependencies = [
  "cfg-if",
  "dioxus-asset-resolver",
  "dioxus-cli-config",
- "dioxus-core",
- "dioxus-core-macro",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-history",
@@ -3792,6 +3717,8 @@ dependencies = [
  "dioxus-native-dom",
  "dioxus-signals",
  "dioxus-stores",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
  "futures-util",
  "keyboard-types",
  "manganis",
@@ -3812,8 +3739,8 @@ dependencies = [
  "blitz-dom",
  "blitz-traits",
  "dioxus",
- "dioxus-core",
  "dioxus-html",
+ "dioxus-vdom",
  "futures-util",
  "keyboard-types",
  "rustc-hash 2.1.2",
@@ -3943,7 +3870,7 @@ name = "dioxus-renderer-oracle"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-core",
+ "dioxus-vdom",
  "pretty_assertions",
 ]
 
@@ -3956,10 +3883,6 @@ dependencies = [
  "ciborium",
  "criterion",
  "dioxus",
- "dioxus-cli-config",
- "dioxus-core",
- "dioxus-core-macro",
- "dioxus-fullstack-core",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
@@ -3967,6 +3890,9 @@ dependencies = [
  "dioxus-router-macro",
  "dioxus-signals",
  "dioxus-ssr",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
+ "dx-env",
  "percent-encoding",
  "rustversion",
  "serde",
@@ -3982,6 +3908,7 @@ dependencies = [
  "base16",
  "digest 0.10.7",
  "dioxus",
+ "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
  "sha2 0.10.9",
@@ -3993,7 +3920,7 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-core-template",
+ "dioxus-vdom-template",
  "prettier-please",
  "prettyplease",
  "proc-macro2",
@@ -4007,10 +3934,9 @@ dependencies = [
 name = "dioxus-rsx-hotreload"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-core",
- "dioxus-core-template",
- "dioxus-core-types",
  "dioxus-rsx",
+ "dioxus-vdom",
+ "dioxus-vdom-template",
  "internment",
  "proc-macro2",
  "proc-macro2-diagnostics",
@@ -4023,7 +3949,7 @@ dependencies = [
 name = "dioxus-rsx-rosetta"
 version = "0.8.0-alpha.3"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "dioxus-autofmt",
  "dioxus-html",
  "dioxus-rsx",
@@ -4048,9 +3974,6 @@ dependencies = [
  "ciborium",
  "dashmap 6.2.1",
  "dioxus",
- "dioxus-cli-config",
- "dioxus-core",
- "dioxus-core-macro",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-core",
@@ -4062,6 +3985,9 @@ dependencies = [
  "dioxus-router",
  "dioxus-signals",
  "dioxus-ssr",
+ "dioxus-vdom",
+ "dioxus-vdom-macro",
+ "dx-env",
  "enumset",
  "futures",
  "futures-channel",
@@ -4101,7 +4027,7 @@ name = "dioxus-signals"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-core",
+ "dioxus-vdom",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -4122,8 +4048,7 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "askama_escape",
  "dioxus",
- "dioxus-core",
- "dioxus-core-types",
+ "dioxus-vdom",
  "rustc-hash 2.1.2",
 ]
 
@@ -4132,10 +4057,10 @@ name = "dioxus-stores"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-core",
  "dioxus-signals",
  "dioxus-stores-macro",
  "dioxus-stores-visibility-helper",
+ "dioxus-vdom",
  "generational-box",
  "trybuild",
 ]
@@ -4144,7 +4069,7 @@ dependencies = [
 name = "dioxus-stores-macro"
 version = "0.8.0-alpha.3"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.12.0",
  "dioxus",
  "dioxus-stores",
  "proc-macro2",
@@ -4169,17 +4094,80 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-vdom"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "anyhow",
+ "const_format",
+ "criterion",
+ "dioxus",
+ "dioxus-const-vec",
+ "dioxus-html",
+ "dioxus-renderer-oracle",
+ "dioxus-ssr",
+ "dioxus-vdom-macro",
+ "dioxus-vdom-template",
+ "futures-channel",
+ "futures-util",
+ "generational-box",
+ "longest-increasing-subsequence",
+ "manganis-core",
+ "pretty_assertions",
+ "rand 0.9.4",
+ "reqwest",
+ "rustc-hash 2.1.2",
+ "rustversion",
+ "serde",
+ "slab",
+ "slotmap",
+ "subsecond",
+ "sysinfo",
+ "tokio",
+ "tracing",
+ "tracing-fluent-assertions",
+ "tracing-subscriber",
+ "web-sys",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "dioxus-vdom-fuzz"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
- "dioxus-core",
- "dioxus-core-template",
  "dioxus-renderer-oracle",
  "dioxus-ssr",
+ "dioxus-vdom",
+ "dioxus-vdom-template",
  "mutatis",
  "postcard",
  "serde",
+]
+
+[[package]]
+name = "dioxus-vdom-macro"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "convert_case 0.12.0",
+ "dioxus",
+ "dioxus-html",
+ "dioxus-rsx",
+ "proc-macro-crate 3.5.0",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.117",
+ "tokio",
+ "trybuild",
+]
+
+[[package]]
+name = "dioxus-vdom-template"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "dioxus-const-vec",
+ "serde",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -4188,9 +4176,6 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "ciborium",
  "dioxus",
- "dioxus-cli-config",
- "dioxus-core",
- "dioxus-core-types",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-core",
@@ -4199,7 +4184,9 @@ dependencies = [
  "dioxus-interpreter-js",
  "dioxus-signals",
  "dioxus-ssr",
+ "dioxus-vdom",
  "dioxus-web",
+ "dx-env",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -4436,6 +4423,24 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "dx-env"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "dx-wire-format"
+version = "0.8.0-alpha.3"
+dependencies = [
+ "cargo_metadata",
+ "manganis-core",
+ "serde",
+ "serde_json",
+ "subsecond-types",
+]
 
 [[package]]
 name = "dyn-clone"
@@ -8540,6 +8545,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8846,8 +8860,7 @@ name = "manganis-core"
 version = "0.8.0-alpha.3"
 dependencies = [
  "const-serialize",
- "dioxus-cli-config",
- "dioxus-core-types",
+ "dx-env",
  "manganis",
  "serde",
  "winnow 0.7.15",
@@ -8977,6 +8990,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.48"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]

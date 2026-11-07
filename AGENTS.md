@@ -21,7 +21,7 @@ packages/
 ├── hooks/            # Built-in hooks (use_signal, use_effect, etc.)
 ├── router/           # Type-safe routing with #[derive(Routable)]
 ├── fullstack/        # SSR, hydration, #[server] functions
-├── cli/              # `dx` build tool, dev server, bundling
+├── dx/               # `dx` build tool, dev server, bundling
 ├── web/              # WASM renderer
 ├── desktop/          # Wry/Tao webview renderer
 ├── native/           # Blitz/Vello GPU renderer
@@ -75,7 +75,7 @@ fn MyComponent(name: String) -> Element {
 
 ## Notes for Agents
 
-1. The `dioxus` crate re-exports from other crates - most implementation is in `packages/core`, `packages/signals`, etc.
+1. The `dioxus` crate re-exports from other crates - most implementation is in `packages/vdom`, `packages/signals`, etc.
 2. RSX macro expansion happens in `packages/rsx` - look there for syntax questions
 3. Each renderer implements `WriteMutations` differently - see `06-RENDERERS.md`
 4. Hot-reload has two systems: RSX template diffing (fast) and Subsecond code patching (full Rust)

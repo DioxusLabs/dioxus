@@ -1,10 +1,10 @@
-use dioxus_core::{CapturedError, RenderError, Result, SuspendedFuture};
-use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers, use_hook};
 use dioxus_hooks::{Resource, use_resource, use_signal};
 use dioxus_signals::{
     ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal, Writable, WritableExt,
     WriteLock, read_impls,
 };
+use dioxus_vdom::{CapturedError, RenderError, Result, SuspendedFuture};
+use dioxus_vdom::{IntoAttributeValue, IntoDynNode, Subscribers, use_hook};
 use generational_box::{BorrowResult, UnsyncStorage};
 use serde::{Serialize, de::DeserializeOwned};
 use std::ops::Deref;
@@ -253,7 +253,7 @@ impl<T> IntoAttributeValue for Loader<T>
 where
     T: Clone + IntoAttributeValue + PartialEq + 'static,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
+    fn into_value(self) -> dioxus_vdom::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
@@ -262,7 +262,7 @@ impl<T> IntoDynNode for Loader<T>
 where
     T: Clone + IntoDynNode + PartialEq + 'static,
 {
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+    fn into_dyn_node(self) -> dioxus_vdom::DynamicNode {
         let t: T = self();
         t.into_dyn_node()
     }
