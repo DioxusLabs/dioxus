@@ -21,6 +21,12 @@ cfg_if::cfg_if! {
         use anyrender_vello_hybrid::{
             VelloHybridRendererOptions as InnerRendererOptions, VelloHybridWindowRenderer as InnerRenderer,
         };
+    } else if #[cfg(all(feature = "default-renderer", not(target_arch = "wasm32")))] {
+        use anyrender_skia::SkiaWindowRenderer as InnerRenderer;
+    } else if #[cfg(feature = "default-renderer")] {
+        use anyrender_vello_hybrid::{
+            VelloHybridRendererOptions as InnerRendererOptions, VelloHybridWindowRenderer as InnerRenderer,
+        };
     } else {
         compile_error!("At least one renderer feature must be enabled");
     }
@@ -102,6 +108,13 @@ impl DioxusNativeWindowRenderer {
                 if let Some(limits) = options.limits {
                     inner_options = inner_options.limits(limits);
                 }
+                let inner_renderer = InnerRenderer::with_options(inner_options);
+            } else if #[cfg(all(
+                feature = "default-renderer",
+                target_arch = "wasm32",
+                not(any(feature = "vello-cpu-base", feature = "skia", feature = "skia-raster-base", feature = "vello-hybrid"))
+            ))] {
+                let inner_options: InnerRendererOptions = config.into();
                 let inner_renderer = InnerRenderer::with_options(inner_options);
             } else {
                 let inner_renderer = InnerRenderer::with_options(config);
