@@ -123,6 +123,16 @@ where
     unreachable!("Serving a fullstack app should never return")
 }
 
+/// Installs _ring_ as the process-wide rustls crypto provider, unless one is already installed.
+///
+/// `dioxus::launch` does this for fullstack apps; `serve` and `serve_router` must do it too,
+/// since reqwest is built with `rustls-no-provider`: without a provider, the first
+/// `reqwest::Client` the app builds (for example to call an API from a server function or
+/// a custom route) panics with "No provider set".
+fn install_default_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 /// Serve a fullstack dioxus application with a custom axum router.
 ///
 /// This function enables the dioxus logger and then serves the axum server with hot-reloading support.
@@ -134,6 +144,7 @@ pub async fn serve_router(
     addr: SocketAddr,
 ) {
     dioxus_logger::initialize_default();
+    install_default_crypto_provider();
 
     let listener = TcpListener::bind(addr)
         .await
@@ -285,4 +296,18 @@ fn apply_base_path<M: 'static>(
     }
 
     router
+}
+
+#[cfg(test)]
+mod tests {
+    use super::install_default_crypto_provider;
+
+    #[test]
+    fn serving_installs_a_crypto_provider_once() {
+        install_default_crypto_provider();
+        assert!(rustls::crypto::CryptoProvider::get_default().is_some());
+        // A second call (hot reload, or the app installed one itself) is harmless
+        install_default_crypto_provider();
+        assert!(rustls::crypto::CryptoProvider::get_default().is_some());
+    }
 }

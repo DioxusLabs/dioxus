@@ -51,7 +51,8 @@ futures-util = { workspace = true }
 futures-channel = { workspace = true }
 ciborium = { workspace = true }
 base64 = { workspace = true }
-rustls = { workspace = true, optional = true }
+# Always needed: `serve_router` installs ring as the process-wide crypto provider
+rustls = { workspace = true }
 hyper-rustls = { workspace = true, optional = true }
 
 url = { workspace = true, default-features = true }
@@ -94,7 +95,7 @@ default = ["router", "document"]
 document = []
 router = ["dep:dioxus-router"]
 default-tls = []
-rustls = ["dep:rustls", "dep:hyper-rustls"]
+rustls = ["dep:hyper-rustls"]
 axum-no-default = []
 rkyv = ["dep:rkyv"]
 server = []
