@@ -171,7 +171,7 @@ impl dioxus_history::History for WebHistory {
         let h = self.history.clone();
         let d = self.do_scroll_restoration;
 
-        let function = Closure::wrap(Box::new(move |_| {
+        let function = Closure::wrap_aborting(Box::new(move |_| {
             (*callback)();
             if d && let Some([x, y]) = get_current(&h) {
                 ScrollPosition { x, y }.scroll_to(w.clone())
@@ -325,7 +325,7 @@ impl dioxus_history::History for HashHistory {
         let h = self.history.clone();
         let d = self.do_scroll_restoration;
 
-        let function = Closure::wrap(Box::new(move |_| {
+        let function = Closure::wrap_aborting(Box::new(move |_| {
             (*callback)();
             if d && let Some([x, y]) = get_current(&h) {
                 ScrollPosition { x, y }.scroll_to(w.clone())
@@ -356,7 +356,7 @@ impl ScrollPosition {
 
     pub(crate) fn scroll_to(&self, window: Window) {
         let Self { x, y } = *self;
-        let f = Closure::wrap(
+        let f = Closure::wrap_aborting(
             Box::new(move || window.scroll_to_with_x_and_y(x, y)) as Box<dyn FnMut()>
         );
         web_sys::window()

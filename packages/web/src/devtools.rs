@@ -60,7 +60,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
     // Set the onmessage handler to bounce messages off to the main dioxus loop
     let tx_ = tx.clone();
     ws.set_onmessage(Some(
-        Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+        Closure::<dyn FnMut(MessageEvent)>::own_aborting(move |e: MessageEvent| {
             let Ok(text) = e.data().dyn_into::<JsString>() else {
                 return;
             };
@@ -137,7 +137,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
 
     // Set the onclose handler to reload the page if the connection is closed
     ws.set_onclose(Some(
-        Closure::<dyn FnMut(CloseEvent)>::new(move |e: CloseEvent| {
+        Closure::<dyn FnMut(CloseEvent)>::own_aborting(move |e: CloseEvent| {
             // Firefox will send a 1001 code when the connection is closed because the page is reloaded
             // Only firefox will trigger the onclose event when the page is reloaded manually: https://stackoverflow.com/questions/10965720/should-websocket-onclose-be-triggered-by-user-navigation-or-refresh
             // We should not reload the page in this case
@@ -150,7 +150,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
             web_sys::window()
                 .unwrap()
                 .set_timeout_with_callback_and_timeout_and_arguments_0(
-                    Closure::<dyn FnMut()>::new(move || {
+                    Closure::<dyn FnMut()>::own_aborting(move || {
                         make_ws(
                             tx.clone(),
                             POLL_INTERVAL_MAX.min(poll_interval * POLL_INTERVAL_SCALE_FACTOR),
@@ -288,7 +288,7 @@ pub(crate) fn invalidate_browser_asset_cache() {
 fn playground(tx: UnboundedSender<HotReloadMsg>) {
     let window = web_sys::window().expect("this code should be running in a web context");
 
-    let binding = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+    let binding = Closure::<dyn FnMut(MessageEvent)>::own_aborting(move |e: MessageEvent| {
         let Ok(text) = e.data().dyn_into::<JsString>() else {
             return;
         };
