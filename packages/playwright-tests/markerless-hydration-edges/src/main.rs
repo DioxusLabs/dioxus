@@ -411,8 +411,8 @@ fn RemovePlaceholder() -> Element {
 
 // An empty slot followed by a static element anchors on that sibling, but its
 // anchor also lists the enclosing element as parent. Hydration must still bind
-// the enclosing element to its own id: replacing it (here, swapping the
-// component out) and filling the slot must both work.
+// the enclosing element to its own id: updating its attributes, filling the
+// slot, and replacing it (here, swapping the component out) must all work.
 #[component]
 fn SlotBeforeElementSibling() -> Element {
     let mut replaced = use_signal(|| false);
@@ -439,10 +439,11 @@ fn SlotBeforeElementInner() -> Element {
     rsx! {
         section {
             id: "slot-before-element-section",
+            class: if show() { "filled" } else { "empty" },
             if show() {
                 span { id: "slot-before-element-content", "NEW" }
             }
-            p { "static" }
+            p { class: if show() { "after-filled" } else { "after-empty" }, "static" }
             button {
                 id: "fill-slot-before-element",
                 onclick: move |_| show.toggle(),

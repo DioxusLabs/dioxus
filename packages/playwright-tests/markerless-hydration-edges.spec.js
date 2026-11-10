@@ -339,8 +339,11 @@ test("an empty slot before an element sibling keeps its parent's id", async ({
 
   const section = page.locator("#slot-before-element-section");
   await expect(section).toHaveText("staticfill");
+  await expect(section).toHaveClass("empty");
   await page.locator("#fill-slot-before-element").click();
   await expect(section).toHaveText("NEWstaticfill");
+  await expect(section).toHaveClass("filled");
+  await expect(section.locator("p")).toHaveClass("after-filled");
   const order = await section.evaluate((el) =>
     Array.from(el.children).map((child) => child.id || child.tagName)
   );
