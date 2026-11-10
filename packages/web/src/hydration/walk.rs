@@ -207,6 +207,13 @@ impl WebsysDom {
             mounted_events: Vec::new(),
         };
         for anchor in element.dynamic_anchors() {
+            // A dynamic child inserted before a later static sibling has this
+            // element as its parent too, but its anchor is that sibling (bound when
+            // the walk reaches it). Taking its id here would leave this element's
+            // own id unbound, so only anchors with attributes on this element count.
+            if anchor.attrs().len() == 0 {
+                continue;
+            }
             let anchor_id = vnode
                 .mounted_anchor_node(anchor, dom)
                 .ok_or(VNodeNotInitialized)?;

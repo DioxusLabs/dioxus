@@ -22,6 +22,7 @@ fn app() -> Element {
         PlaceholderAsTrailingSibling {}
         NestedTrailingPlaceholder {}
         RemovePlaceholder {}
+        SlotBeforeElementSibling {}
         RootTrailingPlaceholder {}
         SvgHydratedListener {}
         EmptyRootHydration {}
@@ -404,6 +405,49 @@ fn RemovePlaceholder() -> Element {
             id: "hide-removable",
             onclick: move |_| show.set(false),
             "hide"
+        }
+    }
+}
+
+// An empty slot followed by a static element anchors on that sibling, but its
+// anchor also lists the enclosing element as parent. Hydration must still bind
+// the enclosing element to its own id: replacing it (here, swapping the
+// component out) and filling the slot must both work.
+#[component]
+fn SlotBeforeElementSibling() -> Element {
+    let mut replaced = use_signal(|| false);
+    rsx! {
+        div {
+            id: "slot-before-element",
+            if replaced() {
+                p { id: "slot-before-element-replacement", "replaced" }
+            } else {
+                SlotBeforeElementInner {}
+            }
+        }
+        button {
+            id: "replace-slot-before-element",
+            onclick: move |_| replaced.set(true),
+            "replace"
+        }
+    }
+}
+
+#[component]
+fn SlotBeforeElementInner() -> Element {
+    let mut show = use_signal(|| false);
+    rsx! {
+        section {
+            id: "slot-before-element-section",
+            if show() {
+                span { id: "slot-before-element-content", "NEW" }
+            }
+            p { "static" }
+            button {
+                id: "fill-slot-before-element",
+                onclick: move |_| show.toggle(),
+                "fill"
+            }
         }
     }
 }
