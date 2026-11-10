@@ -240,6 +240,14 @@ impl BuildRequest {
                     let path = PathBuf::from(arg);
                     dylibs.push(self.frameworks_folder().join(path.file_name().unwrap()));
                 }
+
+                // On Windows a Rust `dylib` dependency (and std, when it is linked dynamically) is
+                // linked through its import library. What the patch uses from it lives in the
+                // already loaded DLL, not in the executable the stub resolves against, so link
+                // the patch against the same import library.
+                if arg.ends_with(".dll.lib") {
+                    dylibs.push(PathBuf::from(arg));
+                }
             }
         }
 
