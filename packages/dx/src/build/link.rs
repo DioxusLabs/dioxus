@@ -748,11 +748,9 @@ impl BuildRequest {
                     )
                 })?;
 
-            let rlib = self
-                .find_rlib_for_crate(crate_name, rustc_args)
-                .with_context(|| {
-                    format!("Could not find rlib for workspace crate '{crate_name}'")
-                })?;
+            let rlib = Self::find_rlib_for_crate(crate_name, rustc_args).with_context(|| {
+                format!("Could not find rlib for workspace crate '{crate_name}'")
+            })?;
 
             wanted.insert(rlib);
         }
@@ -1341,7 +1339,7 @@ impl BuildRequest {
     /// rlib filename. This is important because multiple rlibs for the same crate can coexist
     /// in the deps directory (e.g., from different dx builds that produce different `-C metadata`),
     /// and globbing would return an arbitrary one.
-    fn find_rlib_for_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Result<PathBuf> {
+    fn find_rlib_for_crate(crate_name: &str, rustc_args: &RustcArgs) -> Result<PathBuf> {
         // Extract --out-dir from the captured args
         let out_dir = rustc_args
             .args
@@ -1368,12 +1366,15 @@ impl BuildRequest {
                 })
         });
 
-        // If we have an exact extra-filename, construct the precise rlib path.
-        if let Some(extra) = &extra_filename {
-            let exact = out_dir.join(format!("lib{crate_name}{extra}.rlib"));
-            if exact.exists() {
-                return Ok(exact);
-            }
+        // Construct the precise rlib path. Cargo passes no extra-filename for a local crate that
+        // is also a `dylib` or `cdylib` (to keep the library's file name stable), so that crate's
+        // rlib is plain `lib<crate_name>.rlib`.
+        let exact = out_dir.join(format!(
+            "lib{crate_name}{}.rlib",
+            extra_filename.as_deref().unwrap_or_default()
+        ));
+        if exact.exists() {
+            return Ok(exact);
         }
 
         // Fallback: glob for lib<crate_name>-<hash>.rlib in the output directory.
@@ -1514,4 +1515,45 @@ fn dep_info_path_for_rustc_args(args: &[String]) -> Option<PathBuf> {
     let out_dir = out_dir?;
     let crate_name = crate_name?;
     Some(PathBuf::from(out_dir).join(format!("{crate_name}{extra}.d")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rustc_args(out_dir: &Path, extra_filename: Option<&str>) -> RustcArgs {
+        let mut args = vec!["--out-dir".to_string(), out_dir.display().to_string()];
+        if let Some(extra) = extra_filename {
+            args.push(format!("-Cextra-filename={extra}"));
+        }
+        RustcArgs {
+            args,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn find_rlib_with_extra_filename() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("libfoo-0123456789abcdef.rlib"), b"").unwrap();
+        std::fs::write(dir.path().join("libfoo-fedcba9876543210.rlib"), b"").unwrap();
+
+        let rlib = BuildRequest::find_rlib_for_crate(
+            "foo",
+            &rustc_args(dir.path(), Some("-0123456789abcdef")),
+        )
+        .unwrap();
+        assert_eq!(rlib, dir.path().join("libfoo-0123456789abcdef.rlib"));
+    }
+
+    #[test]
+    fn find_rlib_without_extra_filename() {
+        // A crate with `crate-type = ["rlib", "cdylib"]`: cargo passes no `-C extra-filename`.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("libfoo.rlib"), b"").unwrap();
+        std::fs::write(dir.path().join("foo.dll"), b"").unwrap();
+
+        let rlib = BuildRequest::find_rlib_for_crate("foo", &rustc_args(dir.path(), None)).unwrap();
+        assert_eq!(rlib, dir.path().join("libfoo.rlib"));
+    }
 }
