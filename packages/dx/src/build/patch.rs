@@ -962,6 +962,10 @@ pub fn create_undefined_symbol_stub(
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
     for name in undefined_symbols {
+        if is_crt_tls_symbol(triple, &name) {
+            continue;
+        }
+
         let Some(sym) = cache
             .symbol_table
             .get(name.as_str().trim_start_matches("__imp_"))
@@ -1560,6 +1564,34 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || (name.contains("wasm_bindgen7closure16Closure") && name.contains("describe"))
         || (name.contains("7closure7Closure") && name.contains("describe"))
         || (name.contains("wasm_bindgen7convert8closures") && name.contains("describe_invoke"))
+}
+
+/// Windows TLS symbols that every image must define for itself, so they are never stubbed.
+///
+/// Code reaches a thread-local defined in its own image through `_tls_index`, the slot the loader
+/// assigns to that image, and the loader finds the image's TLS through its TLS directory, which
+/// `_tls_used` (from the CRT's `tlssup.obj`) provides. A patch with thread-locals of its own (any
+/// replayed crate that defines one) needs both. Stubbing them to the original executable's
+/// copies does not work: the stub makes `_tls_index` an absolute symbol, which COFF limits to 32
+/// bits, so the patch reads the index through a truncated address and faults on its first
+/// thread-local access, and with both resolved the linker no longer pulls in `tlssup.obj`, so
+/// the patch DLL gets a `.tls` section but no TLS directory. Left undefined, the linker takes
+/// both from the CRT as it does for any DLL, and the loader allocates the patch's thread-locals
+/// on every thread.
+fn is_crt_tls_symbol(triple: &Triple, name: &str) -> bool {
+    matches!(triple.operating_system, OperatingSystem::Windows)
+        && matches!(name, "_tls_index" | "_tls_used")
+}
+
+#[test]
+fn crt_tls_symbols_are_windows_only() {
+    let windows: Triple = "x86_64-pc-windows-msvc".parse().unwrap();
+    let linux: Triple = "x86_64-unknown-linux-gnu".parse().unwrap();
+    assert!(is_crt_tls_symbol(&windows, "_tls_index"));
+    assert!(is_crt_tls_symbol(&windows, "_tls_used"));
+    assert!(!is_crt_tls_symbol(&windows, "__imp__tls_index"));
+    assert!(!is_crt_tls_symbol(&windows, "_tls_start"));
+    assert!(!is_crt_tls_symbol(&linux, "_tls_index"));
 }
 
 // Test for bindgen symbols. As we find more bad symbols, add them here
