@@ -60,6 +60,11 @@ export function setAttributeInner(
       node.defaultSelected = truthy(value);
       break;
 
+    case "muted":
+      (node as HTMLMediaElement).muted = truthy(value);
+      setAttributeDefault(node, field, value);
+      break;
+
     case "dangerous_inner_html":
       node.innerHTML = value;
       break;
