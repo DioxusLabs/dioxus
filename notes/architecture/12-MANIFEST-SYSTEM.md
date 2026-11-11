@@ -123,16 +123,18 @@ name = "My Document"
 extensions = ["mydoc", "mydocx"]
 role = "Editor"
 
-# Add Info.plist entries as key-value pairs
+# Add Info.plist entries as key-value pairs. A key replaces the generated
+# value; a `+` prefix appends an array to the generated array instead.
 [ios.plist]
 ITSAppUsesNonExemptEncryption = false
+"+UIBackgroundModes" = ["audio"]
 
 # Add entitlements
 [ios.entitlements]
 "com.apple.security.application-groups" = ["group.com.example.app"]
 "aps-environment" = "development"
 
-# Raw XML for advanced cases
+# Raw XML for advanced cases, merged with the same rules after [ios.plist]
 [ios.raw]
 info_plist = """
 <key>CustomKey</key>
@@ -198,7 +200,7 @@ LSUIElement = true
 "com.apple.security.app-sandbox" = true
 "com.apple.security.network.client" = true
 
-# Raw XML for advanced cases
+# Raw XML for advanced cases, merged with the same rules after [macos.plist]
 [macos.raw]
 info_plist = """
 <key>CustomKey</key>
