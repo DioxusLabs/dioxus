@@ -45,6 +45,8 @@ pub use bytes;
 #[doc(hidden)]
 pub use dioxus_html_internal_macro::define_elements as __define_elements;
 #[doc(hidden)]
+pub use dioxus_html_internal_macro::register_event as __register_event;
+#[doc(hidden)]
 pub use dioxus_vdom;
 
 /// Define typed custom elements (and their typed attributes) for use in `rsx!`.
