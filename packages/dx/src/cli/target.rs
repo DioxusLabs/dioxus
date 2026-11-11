@@ -147,6 +147,12 @@ pub(crate) struct TargetArgs {
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) apple_team_id: Option<String>,
 
+    /// Bundle the iOS app for App Store distribution.
+    ///
+    /// Signs with an "Apple Distribution" identity and an App Store provisioning profile.
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING, num_args = 0..=1)]
+    pub(crate) appstore: bool,
+
     /// The folder where DX stores its temporary artifacts for things like hotpatching, build caches,
     /// window position, etc. This is meant to be stable within an invocation of the CLI, but you can
     /// persist it by setting this flag.
