@@ -149,7 +149,7 @@ pub mod req_to {
     }
 
     /// Using the deserialize path
-    impl<T, O> EncodeRequest<T, O, ClientResponse> for &&&&&&&&&&ServerFnEncoder<T, O>
+    impl<T, O> EncodeRequest<T, O, ClientResponse> for &&&&&&&&&ServerFnEncoder<T, O>
     where
         T: DeserializeOwned + Serialize + 'static,
     {
@@ -168,8 +168,11 @@ pub mod req_to {
         }
     }
 
-    /// When we use the FromRequest path, we don't need to deserialize the input type on the client,
-    impl<T, O, R> EncodeRequest<T, O, R> for &&&&&&&&&ServerFnEncoder<T, O>
+    /// When we use the FromRequest path, we don't need to deserialize the input type on the client.
+    ///
+    /// This takes priority over the JSON path so that a custom `IntoRequest` impl is used even when
+    /// the type also implements `Serialize` + `DeserializeOwned`.
+    impl<T, O, R> EncodeRequest<T, O, R> for &&&&&&&&&&ServerFnEncoder<T, O>
     where
         T: 'static,
         O: IntoRequest<R>,
@@ -519,8 +522,38 @@ pub mod req_from {
         }
     }
 
+    /// Types that implement both `FromRequest` and `IntoRequest` handle their own encoding. This sits
+    /// above the JSON path so it mirrors the client, where `IntoRequest` is preferred over `Serialize`.
+    impl<In, Out, M, H, R> ExtractRequest<In, Out, H, (M, R)> for &&&&&&&&&&ServerFnEncoder<In, Out>
+    where
+        Out: IntoRequest<R> + FromRequest<FullstackContext, M> + 'static,
+        H: FromRequestParts<FullstackContext>,
+    {
+        fn extract_axum(
+            &self,
+            state: FullstackContext,
+            request: Request,
+            _map: fn(In) -> Out,
+        ) -> impl Future<Output = Result<(Out, H), Response>> + 'static {
+            async move {
+                let (mut parts, body) = request.into_parts();
+                let headers = H::from_request_parts(&mut parts, &state)
+                    .await
+                    .map_err(|e| e.into_response())?;
+
+                let request = Request::from_parts(parts, body);
+
+                let res = Out::from_request(request, &state)
+                    .await
+                    .map_err(|e| e.into_response());
+
+                res.map(|out| (out, headers))
+            }
+        }
+    }
+
     // One-arg case
-    impl<In, Out, H> ExtractRequest<In, Out, H> for &&&&&&&&&&ServerFnEncoder<In, Out>
+    impl<In, Out, H> ExtractRequest<In, Out, H> for &&&&&&&&&ServerFnEncoder<In, Out>
     where
         In: DeserializeOwned + 'static,
         Out: 'static,
@@ -560,7 +593,7 @@ pub mod req_from {
     }
 
     /// We skip the BodySerialize wrapper and just go for the output type directly.
-    impl<In, Out, M, H> ExtractRequest<In, Out, H, M> for &&&&&&&&&ServerFnEncoder<In, Out>
+    impl<In, Out, M, H> ExtractRequest<In, Out, H, M> for &&&&&&&&ServerFnEncoder<In, Out>
     where
         Out: FromRequest<FullstackContext, M> + 'static,
         H: FromRequestParts<FullstackContext>,
