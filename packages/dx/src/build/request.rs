@@ -1226,7 +1226,8 @@ impl BuildRequest {
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     ///
     /// `dx` compiles everything with `--target` which ends up with a structure like:
-    /// `target/<triple>/<profile>/.fingerprint/<package_name>-<hash>`
+    /// `target/<triple>/<profile>/.fingerprint/<package_name>-<hash>`, or with Cargo's newer
+    /// build-dir layout, `target/<triple>/<profile>/build/<package_name>/<hash>/fingerprint`
     ///
     /// Normally you can't rely on this structure (ie with `cargo build`) but the explicit
     /// target arg guarantees this will work.
@@ -1276,24 +1277,18 @@ impl BuildRequest {
 
         for dep_name in self.workspace_crate_dep_names() {
             if !scope_dir.join(format!("{dep_name}.lib.json")).exists() {
+                bust.insert(dep_name.replace('_', "-"));
                 bust.insert(dep_name);
             }
         }
 
-        let fingerprint_dir = self.cargo_fingerprint_dir();
-        for entry in std::fs::read_dir(&fingerprint_dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
-            if let Some(fname) = entry.file_name().to_str() {
-                if let Some((name, _)) = fname.rsplit_once('-') {
-                    if bust.contains(name) {
-                        _ = std::fs::remove_dir_all(entry.path());
-                    }
-                }
-            }
-        }
+        Self::remove_cargo_fingerprints(
+            &self
+                .target_dir
+                .join(self.triple.to_string())
+                .join(&self.profile),
+            &bust,
+        );
 
         Ok(())
     }
@@ -2340,24 +2335,51 @@ impl BuildRequest {
     }
 
     /// Recursively copy a directory and its contents.
-    #[allow(clippy::only_used_in_recursion)]
-    pub(crate) fn copy_build_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
+    pub(crate) fn copy_build_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
         std::fs::create_dir_all(dst)?;
 
         for entry in std::fs::read_dir(src)? {
             let entry = entry?;
             let src_path = entry.path();
             let dst_path = dst.join(entry.file_name());
+            let is_dir = src_path.is_dir();
 
-            if src_path.is_dir() {
-                // Skip build directories and hidden folders
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str == "build" || name_str == ".gradle" || name_str.starts_with('.') {
+            // Skip build directories and hidden folders
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if is_dir && (name_str == "build" || name_str == ".gradle" || name_str.starts_with('.'))
+            {
+                continue;
+            }
+
+            // Frameworks keep their versioned layout through relative links
+            // (`Versions/Current`). Dereferencing them duplicates the binary and leaves
+            // `codesign` unable to tell the bundle apart from an app, so recreate links that
+            // point inside the copied tree. Links that leave it are still copied by value,
+            // since a relative link to them would dangle at the destination.
+            #[cfg(unix)]
+            if entry.file_type()?.is_symlink() {
+                let target = std::fs::read_link(&src_path)?;
+                if target.components().all(|c| {
+                    matches!(
+                        c,
+                        std::path::Component::Normal(_) | std::path::Component::CurDir
+                    )
+                }) {
+                    // Callers such as Android plugin installation copy over the previous
+                    // build's output, so replace whatever a previous copy left here.
+                    match std::fs::symlink_metadata(&dst_path) {
+                        Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(&dst_path)?,
+                        Ok(_) => std::fs::remove_file(&dst_path)?,
+                        Err(_) => {}
+                    }
+                    std::os::unix::fs::symlink(target, &dst_path)?;
                     continue;
                 }
+            }
 
-                self.copy_build_dir_recursive(&src_path, &dst_path)?;
+            if is_dir {
+                Self::copy_build_dir_recursive(&src_path, &dst_path)?;
             } else {
                 std::fs::copy(&src_path, &dst_path)?;
             }
@@ -3165,13 +3187,6 @@ impl BuildRequest {
             .collect()
     }
 
-    fn cargo_fingerprint_dir(&self) -> PathBuf {
-        self.target_dir
-            .join(self.triple.to_string())
-            .join(&self.profile)
-            .join(".fingerprint")
-    }
-
     fn is_apple_target(&self) -> bool {
         matches!(
             self.triple.operating_system,
@@ -3218,5 +3233,118 @@ impl BuildRequest {
         }
 
         deps
+    }
+
+    /// Remove Cargo fingerprints for `bust` packages across both the legacy
+    /// `<profile>/.fingerprint/<pkg>-<hash>` layout and Cargo's v2 build-dir
+    /// `<profile>/build/<pkg>/<hash>/fingerprint` layout. Build-script execution units
+    /// (identified by a sibling `run` directory in v2) are preserved.
+    fn remove_cargo_fingerprints(profile_dir: &Path, bust: &HashSet<String>) {
+        let fingerprint_dir = profile_dir.join(".fingerprint");
+        for entry in std::fs::read_dir(&fingerprint_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if let Some(fname) = entry.file_name().to_str() {
+                if let Some((name, _)) = fname.rsplit_once('-') {
+                    if bust.contains(name) {
+                        _ = std::fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }
+
+        let build_dir = profile_dir.join("build");
+        for pkg in bust {
+            for unit in std::fs::read_dir(build_dir.join(pkg))
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                let unit_path = unit.path();
+                if !unit_path.join("run").exists() {
+                    _ = std::fs::remove_dir_all(unit_path.join("fingerprint"));
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BuildRequest;
+    use std::collections::HashSet;
+
+    #[test]
+    fn removes_v1_and_v2_cargo_fingerprints_except_build_script_runs() {
+        let temp = tempfile::tempdir().unwrap();
+        let profile_dir = temp.path().join("aarch64-apple-darwin/desktop-dev");
+
+        // Legacy .fingerprint layout
+        let v1_tip = profile_dir.join(".fingerprint/app-1234abcd");
+        let v1_other = profile_dir.join(".fingerprint/other-5678ef90");
+        std::fs::create_dir_all(&v1_tip).unwrap();
+        std::fs::create_dir_all(&v1_other).unwrap();
+
+        // Cargo v2 build-dir layout: bin unit (no `run` dir) vs build-script unit (has `run` dir)
+        let v2_bin_fp = profile_dir.join("build/app/a082cdc11624f007/fingerprint");
+        let v2_build_script_unit = profile_dir.join("build/app/26e52b3aafdefb69");
+        let v2_build_script_fp = v2_build_script_unit.join("fingerprint");
+        let v2_dep_fp = profile_dir.join("build/my-dep/03f4cc9e60f625c7/fingerprint");
+        std::fs::create_dir_all(&v2_bin_fp).unwrap();
+        std::fs::create_dir_all(&v2_build_script_fp).unwrap();
+        std::fs::create_dir_all(v2_build_script_unit.join("run")).unwrap();
+        std::fs::create_dir_all(&v2_dep_fp).unwrap();
+
+        let bust = HashSet::from([
+            "app".to_string(),
+            "my_dep".to_string(),
+            "my-dep".to_string(),
+        ]);
+        BuildRequest::remove_cargo_fingerprints(&profile_dir, &bust);
+
+        assert!(!v1_tip.exists());
+        assert!(v1_other.exists());
+        assert!(!v2_bin_fp.exists());
+        assert!(v2_build_script_fp.exists());
+        assert!(!v2_dep_fp.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_preserves_internal_symlinks_and_recopies_over_previous_output() {
+        let temp = tempfile::tempdir().unwrap();
+        let src = temp.path().join("src/Plugin.framework");
+        let dst = temp.path().join("dst/Plugin.framework");
+
+        std::fs::create_dir_all(src.join("Versions/A")).unwrap();
+        std::fs::write(src.join("Versions/A/Plugin"), "binary").unwrap();
+        std::os::unix::fs::symlink("A", src.join("Versions/Current")).unwrap();
+        std::os::unix::fs::symlink("Versions/Current/Plugin", src.join("Plugin")).unwrap();
+        std::fs::write(temp.path().join("src/shared.txt"), "shared").unwrap();
+        std::os::unix::fs::symlink("../shared.txt", src.join("shared.txt")).unwrap();
+
+        // Android plugin installation copies over the previous build without clearing it.
+        BuildRequest::copy_build_dir_recursive(&src, &dst).unwrap();
+        BuildRequest::copy_build_dir_recursive(&src, &dst).unwrap();
+
+        assert_eq!(
+            std::fs::read_link(dst.join("Versions/Current")).unwrap(),
+            std::path::Path::new("A")
+        );
+        assert_eq!(
+            std::fs::read_link(dst.join("Plugin")).unwrap(),
+            std::path::Path::new("Versions/Current/Plugin")
+        );
+        assert_eq!(
+            std::fs::read_to_string(dst.join("Plugin")).unwrap(),
+            "binary"
+        );
+
+        // A link leaving the copied tree would dangle, so its target is copied instead.
+        let shared = dst.join("shared.txt");
+        assert!(!shared.symlink_metadata().unwrap().is_symlink());
+        assert_eq!(std::fs::read_to_string(shared).unwrap(), "shared");
     }
 }
