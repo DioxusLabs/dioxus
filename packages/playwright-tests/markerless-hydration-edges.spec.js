@@ -328,3 +328,35 @@ test("raw-text elements with a leading newline hydrate and update correctly", as
   await expect(pre).toContainText("CHANGED");
   await expect(pre).not.toContainText("CODE");
 });
+
+test("an empty slot before an element sibling keeps its parent's id", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(URL);
+  await page.waitForTimeout(2000);
+
+  const section = page.locator("#slot-before-element-section");
+  await expect(section).toHaveText("staticfill");
+  await expect(section).toHaveClass("empty");
+  await page.locator("#fill-slot-before-element").click();
+  await expect(section).toHaveText("NEWstaticfill");
+  await expect(section).toHaveClass("filled");
+  await expect(section.locator("p")).toHaveClass("after-filled");
+  const order = await section.evaluate((el) =>
+    Array.from(el.children).map((child) => child.id || child.tagName)
+  );
+  expect(order).toEqual([
+    "slot-before-element-content",
+    "P",
+    "fill-slot-before-element",
+  ]);
+
+  await page.locator("#replace-slot-before-element").click();
+  await expect(page.locator("#slot-before-element-replacement")).toHaveText(
+    "replaced"
+  );
+  await expect(section).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
