@@ -8,9 +8,8 @@ use peniko::Color;
 // Renderer imports
 cfg_if::cfg_if! {
     if #[cfg(feature = "vello")] {
-        pub use anyrender_vello::{
+        use anyrender_vello::{
             VelloRendererOptions as InnerRendererOptions, VelloWindowRenderer as InnerRenderer,
-            wgpu::{Features, Limits},
         };
     } else if #[cfg(feature = "vello-cpu-base")] {
         use anyrender_vello_cpu::VelloCpuWindowRenderer as InnerRenderer;
@@ -19,14 +18,26 @@ cfg_if::cfg_if! {
     } else if #[cfg(feature = "skia-raster-base")] {
         use anyrender_skia::raster::SkiaRasterWindowRenderer as InnerRenderer;
     } else if #[cfg(feature = "vello-hybrid")] {
-        pub use anyrender_vello_hybrid::{
+        use anyrender_vello_hybrid::{
             VelloHybridRendererOptions as InnerRendererOptions, VelloHybridWindowRenderer as InnerRenderer,
-            wgpu::{Features, Limits},
+        };
+    } else if #[cfg(all(feature = "default-renderer", not(target_arch = "wasm32")))] {
+        use anyrender_skia::SkiaWindowRenderer as InnerRenderer;
+    } else if #[cfg(feature = "default-renderer")] {
+        use anyrender_vello_hybrid::{
+            VelloHybridRendererOptions as InnerRendererOptions, VelloHybridWindowRenderer as InnerRenderer,
         };
     } else {
         compile_error!("At least one renderer feature must be enabled");
     }
 }
+
+// The wgpu types are exported whenever a wgpu renderer feature is enabled, even if
+// a higher-precedence renderer is the active one.
+#[cfg(feature = "vello")]
+pub use anyrender_vello::wgpu::{Features, Limits};
+#[cfg(all(feature = "vello-hybrid", not(feature = "vello")))]
+pub use anyrender_vello_hybrid::wgpu::{Features, Limits};
 
 /// Renderer configuration for [`DioxusNativeWindowRenderer`].
 ///
@@ -83,7 +94,13 @@ impl DioxusNativeWindowRenderer {
         config.composite_alpha_mode = options.alpha_mode;
 
         cfg_if::cfg_if! {
-            if #[cfg(any(feature = "vello", feature = "vello-hybrid"))] {
+            if #[cfg(any(
+                feature = "vello",
+                all(
+                    feature = "vello-hybrid",
+                    not(any(feature = "vello-cpu-base", feature = "skia", feature = "skia-raster-base"))
+                )
+            ))] {
                 let mut inner_options: InnerRendererOptions = config.into();
                 if let Some(features) = options.features {
                     inner_options = inner_options.features(features);
@@ -91,6 +108,13 @@ impl DioxusNativeWindowRenderer {
                 if let Some(limits) = options.limits {
                     inner_options = inner_options.limits(limits);
                 }
+                let inner_renderer = InnerRenderer::with_options(inner_options);
+            } else if #[cfg(all(
+                feature = "default-renderer",
+                target_arch = "wasm32",
+                not(any(feature = "vello-cpu-base", feature = "skia", feature = "skia-raster-base", feature = "vello-hybrid"))
+            ))] {
+                let inner_options: InnerRendererOptions = config.into();
                 let inner_renderer = InnerRenderer::with_options(inner_options);
             } else {
                 let inner_renderer = InnerRenderer::with_options(config);

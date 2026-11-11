@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "woff", "text-transform-icu", "apple-font-embolden"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "default-renderer", "woff", "text-transform-icu", "apple-font-embolden"]
 prelude = ["dep:dioxus-vdom-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis", "dioxus-vdom/manganis_08"]
 
 # DOM features
@@ -33,6 +33,9 @@ accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 data-uri = ["blitz-shell/data-uri"]
 
 # Renderer features
+# Skia on native targets and Vello Hybrid on wasm32 (Skia has no wasm32-unknown-unknown
+# prebuilts). Any explicitly enabled renderer feature takes precedence over it.
+default-renderer = ["dep:anyrender_skia"]
 vello = ["dep:anyrender_vello", "dep:wgpu_context"]
 vello-hybrid = ["dep:anyrender_vello_hybrid", "dep:wgpu_context"]
 skia = ["dep:anyrender_skia"]
@@ -83,7 +86,6 @@ peniko = { workspace = true }
 anyrender_vello = { workspace = true, optional = true}
 anyrender_vello_hybrid = { workspace = true, optional = true}
 anyrender_vello_cpu = { workspace = true, optional = true}
-anyrender_skia = { workspace = true, optional = true}
 wgpu_context = { workspace = true, optional = true}
 
 # DioxusLabs dependencies
@@ -122,6 +124,11 @@ slotmap = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+anyrender_skia = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Vello Hybrid is the default renderer on wasm32, so it is always a dependency there.
+anyrender_vello_hybrid = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6", default-features = false }
