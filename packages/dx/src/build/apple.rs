@@ -162,10 +162,6 @@ impl BuildRequest {
             pub version: String,
             /// Permission usage descriptions
             pub permissions: Vec<PlistPermission>,
-            /// Additional plist entries as raw XML
-            pub plist_entries: String,
-            /// Raw plist XML to inject
-            pub raw_plist: String,
             /// Minimum system version (macOS only)
             pub minimum_system_version: String,
             /// URL schemes for deep linking
@@ -212,9 +208,6 @@ impl BuildRequest {
                     })
                     .collect();
 
-                // Generate plist entries from config
-                let plist_entries = generate_plist_entries(&self.config.macos.plist);
-                let raw_plist = self.config.macos.raw.info_plist.clone().unwrap_or_default();
                 let minimum_system_version = self
                     .config
                     .macos
@@ -222,24 +215,26 @@ impl BuildRequest {
                     .clone()
                     .unwrap_or_else(|| "10.15".to_string());
 
-                handlebars::Handlebars::new()
-                    .render_template(
-                        include_str!("../../assets/macos/mac.plist.hbs"),
-                        &InfoPlistData {
-                            display_name: self.bundled_app_name(),
-                            bundle_name: self.bundled_app_name(),
-                            executable_name: self.platform_exe_name(),
-                            bundle_identifier: self.bundle_identifier(),
-                            version: self.crate_version(),
-                            permissions,
-                            plist_entries,
-                            raw_plist,
-                            minimum_system_version,
-                            url_schemes: mapper.macos_url_schemes.clone(),
-                            background_modes: Vec::new(), // macOS doesn't use UIBackgroundModes
-                        },
-                    )
-                    .map_err(|e| e.into())
+                let base = handlebars::Handlebars::new().render_template(
+                    include_str!("../../assets/macos/mac.plist.hbs"),
+                    &InfoPlistData {
+                        display_name: self.bundled_app_name(),
+                        bundle_name: self.bundled_app_name(),
+                        executable_name: self.platform_exe_name(),
+                        bundle_identifier: self.bundle_identifier(),
+                        version: self.crate_version(),
+                        permissions,
+                        minimum_system_version,
+                        url_schemes: mapper.macos_url_schemes.clone(),
+                        background_modes: Vec::new(), // macOS doesn't use UIBackgroundModes
+                    },
+                )?;
+
+                merge_info_plist(
+                    &base,
+                    &self.config.macos.plist,
+                    self.config.macos.raw.info_plist.as_deref(),
+                )
             }
             BundleFormat::Ios => {
                 // Convert iOS plist entries to permission structs
@@ -252,28 +247,26 @@ impl BuildRequest {
                     })
                     .collect();
 
-                // Generate plist entries from config
-                let plist_entries = generate_plist_entries(&self.config.ios.plist);
-                let raw_plist = self.config.ios.raw.info_plist.clone().unwrap_or_default();
+                let base = handlebars::Handlebars::new().render_template(
+                    include_str!("../../assets/ios/ios.plist.hbs"),
+                    &InfoPlistData {
+                        display_name: self.bundled_app_name(),
+                        bundle_name: self.bundled_app_name(),
+                        executable_name: self.platform_exe_name(),
+                        bundle_identifier: self.bundle_identifier(),
+                        version: self.crate_version(),
+                        permissions,
+                        minimum_system_version: String::new(), // Not used for iOS
+                        url_schemes: mapper.ios_url_schemes.clone(),
+                        background_modes: mapper.ios_background_modes.clone(),
+                    },
+                )?;
 
-                handlebars::Handlebars::new()
-                    .render_template(
-                        include_str!("../../assets/ios/ios.plist.hbs"),
-                        &InfoPlistData {
-                            display_name: self.bundled_app_name(),
-                            bundle_name: self.bundled_app_name(),
-                            executable_name: self.platform_exe_name(),
-                            bundle_identifier: self.bundle_identifier(),
-                            version: self.crate_version(),
-                            permissions,
-                            plist_entries,
-                            raw_plist,
-                            minimum_system_version: String::new(), // Not used for iOS
-                            url_schemes: mapper.ios_url_schemes.clone(),
-                            background_modes: mapper.ios_background_modes.clone(),
-                        },
-                    )
-                    .map_err(|e| e.into())
+                merge_info_plist(
+                    &base,
+                    &self.config.ios.plist,
+                    self.config.ios.raw.info_plist.as_deref(),
+                )
             }
             _ => Err(anyhow::anyhow!("Unsupported platform for Info.plist")),
         }
@@ -1946,25 +1939,91 @@ pub async fn create_framework_bundle(
     Ok(framework_dir)
 }
 
-/// Generate plist XML entries from a HashMap of key-value pairs
+/// Merge the user's `[ios.plist]`/`[macos.plist]` entries and `raw.info_plist` XML into the
+/// generated Info.plist.
 ///
-/// Converts a HashMap like `{ "UIBackgroundModes" = ["location", "fetch"] }` to plist XML:
-/// ```xml
-/// <key>UIBackgroundModes</key>
-/// <array>
-///     <string>location</string>
-///     <string>fetch</string>
-/// </array>
-/// ```
-fn generate_plist_entries(plist: &std::collections::HashMap<String, serde_json::Value>) -> String {
-    let mut output = String::new();
+/// A plain key replaces the generated value. A key prefixed with `+` (e.g. `"+UIBackgroundModes"`)
+/// appends its array to the generated array, or sets it if the key is absent. Table entries are
+/// applied first (plain keys, then `+` keys), then raw XML entries in document order.
+fn merge_info_plist(
+    base: &str,
+    entries: &std::collections::HashMap<String, serde_json::Value>,
+    raw: Option<&str>,
+) -> Result<String> {
+    let mut plist = plist::Value::from_reader_xml(base.as_bytes())
+        .context("Failed to parse generated Info.plist")?;
+    let dict = plist
+        .as_dictionary_mut()
+        .context("Generated Info.plist is not a dictionary")?;
 
-    for (key, value) in plist {
-        output.push_str(&format!("\t<key>{}</key>\n", key));
-        output.push_str(&value_to_plist_xml(value, 1));
+    let mut keys: Vec<&String> = entries.keys().collect();
+    keys.sort_by_key(|k| (k.starts_with('+'), *k));
+    for key in keys {
+        if let Some(value) = json_to_plist_value(&entries[key]) {
+            merge_info_plist_entry(dict, key, value)?;
+        }
     }
 
-    output
+    if let Some(raw) = raw.filter(|raw| !raw.trim().is_empty()) {
+        let wrapped = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict>{raw}</dict></plist>"#
+        );
+        let raw = plist::Value::from_reader_xml(wrapped.as_bytes())
+            .context("Failed to parse raw Info.plist XML")?
+            .into_dictionary()
+            .context("Raw Info.plist XML is not a sequence of <key>/value pairs")?;
+        for (key, value) in raw {
+            merge_info_plist_entry(dict, &key, value)?;
+        }
+    }
+
+    let mut out = Vec::new();
+    plist::to_writer_xml(&mut out, &plist).context("Failed to write Info.plist")?;
+    Ok(String::from_utf8(out)?)
+}
+
+fn merge_info_plist_entry(
+    dict: &mut plist::Dictionary,
+    key: &str,
+    value: plist::Value,
+) -> Result<()> {
+    let Some(key) = key.strip_prefix('+') else {
+        dict.insert(key.to_string(), value);
+        return Ok(());
+    };
+
+    let plist::Value::Array(items) = value else {
+        bail!("Info.plist key `+{key}` appends to an array, so its value must be an array");
+    };
+    match dict.get_mut(key) {
+        Some(plist::Value::Array(existing)) => existing.extend(items),
+        Some(_) => bail!("Info.plist key `+{key}` appends to `{key}`, which is not an array"),
+        None => {
+            dict.insert(key.to_string(), plist::Value::Array(items));
+        }
+    }
+    Ok(())
+}
+
+fn json_to_plist_value(value: &serde_json::Value) -> Option<plist::Value> {
+    Some(match value {
+        serde_json::Value::Null => return None,
+        serde_json::Value::Bool(b) => plist::Value::Boolean(*b),
+        serde_json::Value::Number(n) => match (n.as_i64(), n.as_u64()) {
+            (Some(i), _) => plist::Value::Integer(i.into()),
+            (_, Some(u)) => plist::Value::Integer(u.into()),
+            _ => plist::Value::Real(n.as_f64().unwrap_or_default()),
+        },
+        serde_json::Value::String(s) => plist::Value::String(s.clone()),
+        serde_json::Value::Array(arr) => {
+            plist::Value::Array(arr.iter().filter_map(json_to_plist_value).collect())
+        }
+        serde_json::Value::Object(obj) => plist::Value::Dictionary(
+            obj.iter()
+                .filter_map(|(k, v)| Some((k.clone(), json_to_plist_value(v)?)))
+                .collect(),
+        ),
+    })
 }
 
 /// Convert a serde_json::Value to plist XML format
@@ -2005,5 +2064,161 @@ fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
             output
         }
         serde_json::Value::Null => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_info_plist;
+    use std::collections::HashMap;
+
+    const BASE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>App</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+</dict>
+</plist>"#;
+
+    fn merged(entries: &[(&str, serde_json::Value)], raw: Option<&str>) -> plist::Dictionary {
+        let entries: HashMap<String, serde_json::Value> = entries
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect();
+        let xml = merge_info_plist(BASE, &entries, raw).unwrap();
+        plist::Value::from_reader_xml(xml.as_bytes())
+            .unwrap()
+            .into_dictionary()
+            .unwrap()
+    }
+
+    fn strings(value: &plist::Value) -> Vec<&str> {
+        value
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_string().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn plain_key_replaces_default() {
+        let dict = merged(
+            &[
+                ("CFBundleName", serde_json::json!("Other")),
+                ("UIBackgroundModes", serde_json::json!(["fetch"])),
+                ("LSUIElement", serde_json::json!(true)),
+            ],
+            None,
+        );
+        assert_eq!(dict["CFBundleName"].as_string(), Some("Other"));
+        assert_eq!(strings(&dict["UIBackgroundModes"]), ["fetch"]);
+        assert_eq!(dict["LSUIElement"].as_boolean(), Some(true));
+        assert_eq!(dict.len(), 3);
+    }
+
+    #[test]
+    fn plus_key_appends_to_array() {
+        let dict = merged(
+            &[
+                ("+UIBackgroundModes", serde_json::json!(["fetch"])),
+                ("+NewArray", serde_json::json!([1])),
+            ],
+            None,
+        );
+        assert_eq!(strings(&dict["UIBackgroundModes"]), ["location", "fetch"]);
+        assert_eq!(dict["NewArray"].as_array().unwrap().len(), 1);
+        assert!(!dict.contains_key("+UIBackgroundModes"));
+    }
+
+    #[test]
+    fn plain_key_applies_before_plus_key() {
+        let dict = merged(
+            &[
+                ("+UIBackgroundModes", serde_json::json!(["fetch"])),
+                ("UIBackgroundModes", serde_json::json!(["audio"])),
+            ],
+            None,
+        );
+        assert_eq!(strings(&dict["UIBackgroundModes"]), ["audio", "fetch"]);
+    }
+
+    #[test]
+    fn plus_key_requires_arrays() {
+        let entries = HashMap::from([("+UIBackgroundModes".to_string(), serde_json::json!("x"))]);
+        assert!(merge_info_plist(BASE, &entries, None).is_err());
+
+        let entries = HashMap::from([("+CFBundleName".to_string(), serde_json::json!(["x"]))]);
+        assert!(merge_info_plist(BASE, &entries, None).is_err());
+
+        let raw = "<key>+UIBackgroundModes</key><string>x</string>";
+        assert!(merge_info_plist(BASE, &HashMap::new(), Some(raw)).is_err());
+    }
+
+    #[test]
+    fn templates_parse_as_plists() {
+        let data = serde_json::json!({
+            "display_name": "A & B",
+            "bundle_name": "A & B",
+            "bundle_identifier": "com.example.app",
+            "executable_name": "app",
+            "version": "0.1.0",
+            "minimum_system_version": "10.15",
+            "permissions": [{ "key": "NSCameraUsageDescription", "description": "Camera" }],
+            "url_schemes": ["myapp"],
+            "background_modes": ["location"],
+        });
+        let entries = HashMap::from([
+            (
+                "+UIBackgroundModes".to_string(),
+                serde_json::json!(["fetch"]),
+            ),
+            (
+                "NSCameraUsageDescription".to_string(),
+                serde_json::json!("Override"),
+            ),
+        ]);
+        for template in [
+            include_str!("../../assets/ios/ios.plist.hbs"),
+            include_str!("../../assets/macos/mac.plist.hbs"),
+        ] {
+            let base = handlebars::Handlebars::new()
+                .render_template(template, &data)
+                .unwrap();
+            let xml = merge_info_plist(&base, &entries, None).unwrap();
+            let dict = plist::Value::from_reader_xml(xml.as_bytes())
+                .unwrap()
+                .into_dictionary()
+                .unwrap();
+            assert_eq!(dict["CFBundleDisplayName"].as_string(), Some("A & B"));
+            assert_eq!(
+                dict["NSCameraUsageDescription"].as_string(),
+                Some("Override")
+            );
+            assert_eq!(
+                xml.matches("<key>NSCameraUsageDescription</key>").count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn raw_xml_is_merged() {
+        let raw = r#"
+            <key>CFBundleName</key>
+            <string>Raw</string>
+            <key>+UIBackgroundModes</key>
+            <array><string>audio</string></array>
+            <key>CustomKey</key>
+            <dict><key>Nested</key><integer>1</integer></dict>
+        "#;
+        let dict = merged(&[("CFBundleName", serde_json::json!("Table"))], Some(raw));
+        assert_eq!(dict["CFBundleName"].as_string(), Some("Raw"));
+        assert_eq!(strings(&dict["UIBackgroundModes"]), ["location", "audio"]);
+        assert!(dict["CustomKey"].as_dictionary().is_some());
     }
 }
