@@ -1,5 +1,5 @@
 use crate::{CliSettings, Result, Workspace};
-use anyhow::{Context, anyhow};
+use anyhow::{Context, anyhow, bail};
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
@@ -19,13 +19,17 @@ impl TailwindCli {
         Self { version }
     }
 
+    /// Run tailwind once, without watching.
+    ///
+    /// Errors if no tailwind input is found or if tailwind exits with a non-zero status.
     pub(crate) async fn run_once(
         manifest_dir: PathBuf,
         input_path: Option<PathBuf>,
         output_path: Option<PathBuf>,
     ) -> Result<()> {
         let Some(tailwind) = Self::autodetect(&manifest_dir, &input_path) else {
-            return Ok(());
+            let input = manifest_dir.join(input_path.unwrap_or_else(|| "tailwind.css".into()));
+            bail!("no tailwind input found at {}", input.display());
         };
 
         if !tailwind.get_binary_path()?.exists() {
@@ -38,10 +42,15 @@ impl TailwindCli {
             .wait_with_output()
             .await?;
 
-        if !output.stderr.is_empty() {
-            tracing::warn!(
-                "Warnings while running tailwind: {}",
-                String::from_utf8_lossy(&output.stdout)
+        Self::check_output(&tailwind.version, output)
+    }
+
+    fn check_output(version: &str, output: std::process::Output) -> Result<()> {
+        if !output.status.success() {
+            bail!(
+                "tailwindcss@{version} failed ({}):\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
             );
         }
 
@@ -151,7 +160,9 @@ impl TailwindCli {
             .kill_on_drop(true)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            // Capture stderr for one-shot runs so failures can be reported. The watcher is never
+            // drained, so it keeps discarding stderr.
+            .stderr(if watch { Stdio::null() } else { Stdio::piped() })
             .spawn()?;
 
         Ok(proc)
@@ -257,5 +268,33 @@ impl TailwindCli {
             self.version,
             self.downloaded_bin_name()?
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn run_once_errors_on_missing_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = TailwindCli::run_once(dir.path().to_path_buf(), None, None)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("no tailwind input found"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn check_output_reports_failure_with_stderr() {
+        let failed = std::process::Command::new("sh")
+            .args(["-c", "echo bad input >&2; exit 1"])
+            .output()
+            .unwrap();
+        let err = TailwindCli::check_output("v4", failed).unwrap_err();
+        assert!(err.to_string().contains("bad input"), "{err}");
+
+        let ok = std::process::Command::new("true").output().unwrap();
+        TailwindCli::check_output("v4", ok).unwrap();
     }
 }
