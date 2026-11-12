@@ -13,6 +13,8 @@ const STYLE: Asset = asset!("/assets/style.css");
 
 After cargo builds your app, the asset path is embedded directly in the data section. A tool like the Dioxus CLI can extract this metadata and post-process these assets.
 
+Without CLI post-processing, file assets are embedded in debug and release builds and served by native asset resolvers. Set `MANGANIS_EMBED_ASSETS=0` or `false` to disable embedding and use source paths, or `1` or `true` to enable it. The CLI disables embedding by default. Folder assets are not embedded.
+
 ```rust, ignore
 use manganis::{ImageFormat, Asset, asset, ImageSize, AssetOptions};
 // You can collect arbitrary files. Absolute paths are resolved relative to the package root
