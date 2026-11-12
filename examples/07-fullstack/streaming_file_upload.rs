@@ -119,13 +119,14 @@ async fn upload_file_as_filestream(mut upload: FileStream) -> Result<u32> {
 
     info!("Received file upload: {:?}", upload);
 
-    // Create a temporary file to write the uploaded data to.
-    let upload_file = std::path::absolute(temp_dir().join(upload.file_name()))?;
+    // The file name comes from the client, so only keep its final component. Joining the raw name
+    // would let names like `../foo` or `/foo` write outside of the temp directory.
+    let Some(file_name) = std::path::Path::new(upload.file_name()).file_name() else {
+        return HttpError::bad_request("Invalid file name")?;
+    };
 
-    // Reject paths that are outside the temp directory for security reasons.
-    if !upload_file.starts_with(temp_dir()) {
-        HttpError::bad_request("Invalid file path")?;
-    }
+    // Create a temporary file to write the uploaded data to.
+    let upload_file = temp_dir().join(file_name);
 
     info!(
         "Uploading bytes of {:?} file to {:?}",
