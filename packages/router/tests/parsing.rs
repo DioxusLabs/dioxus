@@ -19,6 +19,31 @@ fn Dynamic(id: usize) -> Element {
     unimplemented!()
 }
 
+// `String` segments parse infallibly: wrapping their uninhabited error must
+// not raise `unreachable_code` (flagged since Rust 1.100)
+#[test]
+#[deny(unreachable_code)]
+fn string_segments_parse_without_unreachable_code() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum Route {
+        #[route("/:lang/:slug")]
+        Page { lang: String, slug: String },
+    }
+
+    #[component]
+    fn Page(lang: String, slug: String) -> Element {
+        unimplemented!()
+    }
+
+    assert_eq!(
+        Route::from_str("/fr/boards").unwrap(),
+        Route::Page {
+            lang: "fr".into(),
+            slug: "boards".into()
+        }
+    );
+}
+
 // Make sure trailing '/'s work correctly
 #[test]
 fn trailing_slashes_parse() {

@@ -525,6 +525,9 @@ impl RouteEnum {
             impl ::std::str::FromStr for #name {
                 type Err = dioxus_router::routable::RouteParseError<#error_name>;
 
+                // A segment whose parse error is uninhabited (`Infallible` for
+                // a `String` segment) makes wrapping that error unreachable
+                #[allow(unreachable_code)]
                 fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
                     let route = s;
                     let (route, raw_hash) = route.split_once('#').unwrap_or((route, ""));
