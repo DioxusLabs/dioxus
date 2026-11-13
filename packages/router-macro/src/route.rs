@@ -259,7 +259,7 @@ impl Route {
                                     None
                                 },
                                 // Try to parse the child route and turn it into a parent route
-                                format_route_as_root_route: |#field_name| Self::#name { #field_name: #field_name }.to_string(),
+                                format_route_as_root_route: |#field_name| Self::#name { #field_name }.to_string(),
                             }
                         }
                     }

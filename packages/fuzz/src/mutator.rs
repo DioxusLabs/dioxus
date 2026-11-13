@@ -134,6 +134,7 @@ fn shrink_case(candidates: &mut Candidates<'_>, case: &mut FuzzCase) -> MutatisR
         })?;
     }
 
+    #[allow(clippy::needless_range_loop)]
     for index in 0..len {
         let replacements = simplified_ops(&case.ops[index]);
         if replacements.is_empty() {
