@@ -526,7 +526,7 @@ pub struct IosRawConfig {
 /// ```toml
 /// [android]
 /// min_sdk = 24
-/// target_sdk = 34
+/// target_sdk = 36
 /// identifier = "com.example.myapp.android"  # Override bundle.identifier for Android
 /// features = ["android.hardware.location.gps"]
 ///
@@ -595,10 +595,14 @@ pub struct AndroidConfig {
     pub min_sdk: Option<u32>,
 
     /// Target SDK version.
+    ///
+    /// Defaults to 36, the minimum Google Play accepts for new apps and updates.
     #[serde(default)]
     pub target_sdk: Option<u32>,
 
     /// Compile SDK version.
+    ///
+    /// Defaults to 37. If a newer minor release of that platform is installed, dx builds against it.
     #[serde(default)]
     pub compile_sdk: Option<u32>,
 

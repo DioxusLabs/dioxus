@@ -161,6 +161,9 @@ BundleConfig
 ├── resources: Vec<PathBuf>
 ├── deb / macos / windows / android: Platform-specific
 ```
+### Android Gradle Generation
+
+`dx` generates an AGP 9 Android project and bundles source plugins as library subprojects. It enables `BuildConfig` for library modules and removes AGP 8 Kotlin plugin declarations, `kotlinOptions`, and library `targetSdk` before running Gradle.
 
 ## Hot-Patching
 
