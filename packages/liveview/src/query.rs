@@ -9,24 +9,21 @@ use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 
 const DIOXUS_CODE: &str = r#"
-let dioxus = {
-    recv: function () {
-        return new Promise((resolve, _reject) => {
-            // Ever 50 ms check for new data
-            let timeout = setTimeout(() => {
-                let __msg = null;
-                while (true) {
-                    let __data = _message_queue.shift();
-                    if (__data) {
-                        __msg = __data;
-                        break;
-                    }
-                }
-                clearTimeout(timeout);
-                resolve(__msg);
-            }, 50);
-        });
+const message_reader = new ReadableStream({
+    start(controller) {
+        window.__msg_queues[_request_id] = {
+            enqueue(value) {
+                controller.enqueue(value);
+            },
+            abort() {
+                controller.error(queryClosed);
+            },
+        };
     },
+}).getReader();
+
+let dioxus = {
+    recv: async () => (await message_reader.read()).value,
 
     send: function (value) {
         window.ipc.postMessage(
@@ -100,18 +97,15 @@ impl QueryEngine {
         // We embed the return of the eval in a function so we can send it back to the main thread
         if let Err(err) = self.query_tx.send(format!(
             r#"(function(){{
+                const queryClosed = new DOMException("Query closed", "AbortError");
                 (async (resolve, _reject) => {{
-                    {DIOXUS_CODE}
                     if (!window.{QUEUE_NAME}) {{
                         window.{QUEUE_NAME} = [];
                     }}
 
                     let _request_id = {request_id};
 
-                    if (!window.{QUEUE_NAME}[{request_id}]) {{
-                        window.{QUEUE_NAME}[{request_id}] = [];
-                    }}
-                    let _message_queue = window.{QUEUE_NAME}[{request_id}];
+                    {DIOXUS_CODE}
 
                     {script}
                 }})().then((result)=>{{
@@ -126,6 +120,10 @@ impl QueryEngine {
                     window.ipc.postMessage(
                         JSON.stringify(returned_value)
                     );
+                }}).catch((error)=>{{
+                    if (error !== queryClosed) {{
+                        console.error("Dioxus LiveView query failed", error);
+                    }}
                 }})
             }})();"#
         )) {
@@ -182,14 +180,11 @@ impl<V: DeserializeOwned> Query<V> {
         let data = message.to_string();
         let script = format!(
             r#"
-            if (!window.{QUEUE_NAME}) {{
-                window.{QUEUE_NAME} = [];
+            const query = window.{QUEUE_NAME}?.[{queue_id}];
+            if (!query) {{
+                throw new Error("Dioxus LiveView query {queue_id} has no receive channel");
             }}
-
-            if (!window.{QUEUE_NAME}[{queue_id}]) {{
-                window.{QUEUE_NAME}[{queue_id}] = [];
-            }}
-            window.{QUEUE_NAME}[{queue_id}].push({data});
+            query.enqueue({data});
             "#
         );
 
@@ -246,12 +241,10 @@ impl<V: DeserializeOwned> Drop for Query<V> {
 
         _ = self.query_engine.query_tx.send(format!(
             r#"
-            if (!window.{QUEUE_NAME}) {{
-                window.{QUEUE_NAME} = [];
-            }}
-
-            if (window.{QUEUE_NAME}[{queue_id}]) {{
-                window.{QUEUE_NAME}[{queue_id}] = [];
+            const query = window.{QUEUE_NAME}?.[{queue_id}];
+            if (query) {{
+                query.abort();
+                delete window.{QUEUE_NAME}[{queue_id}];
             }}
             "#
         ));
