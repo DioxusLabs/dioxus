@@ -113,7 +113,7 @@ impl AssetOptionsBuilder<CssAssetOptions> {
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
         AssetOptions {
-            add_hash: true,
+            add_hash: self.add_hash,
             variant: AssetVariant::Css(self.variant),
         }
     }
