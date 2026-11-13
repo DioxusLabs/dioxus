@@ -53,7 +53,7 @@ impl Autoformat {
             refactor_file(file, split_line_attributes, format_rust_code)?;
         } else if let Some(raw) = raw {
             // Format raw text.
-            let indent = indentation_for(".", self.split_line_attributes)?;
+            let indent = indentation_for(CURRENT_DIR_CONFIG_PROBE, self.split_line_attributes)?;
             let formatted =
                 dioxus_autofmt::fmt_block(&raw, 0, indent).context("error formatting codeblock")?;
             println!("{}", formatted);
@@ -87,7 +87,11 @@ fn refactor_file(
     split_line_attributes: bool,
     format_rust_code: bool,
 ) -> Result<(), Error> {
-    let indent = indentation_for(".", split_line_attributes)?;
+    let config_path = match file.as_str() {
+        "-" => CURRENT_DIR_CONFIG_PROBE,
+        file => file,
+    };
+    let indent = indentation_for(config_path, split_line_attributes)?;
     let file_content = if file == "-" {
         let mut contents = String::new();
         std::io::stdin().read_to_string(&mut contents)?;
@@ -196,6 +200,11 @@ fn autoformat_project(
 
     Ok(())
 }
+
+/// `rustfmt --print-config current <path>` looks for the config starting from the parent of
+/// `<path>`, so `.` would skip the current directory. Pass a (possibly nonexistent) file inside it
+/// instead.
+const CURRENT_DIR_CONFIG_PROBE: &str = "./main.rs";
 
 fn indentation_for(
     file_or_dir: impl AsRef<Path>,
