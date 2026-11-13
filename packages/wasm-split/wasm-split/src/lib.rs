@@ -24,6 +24,7 @@ impl std::fmt::Display for SplitLoaderError {
         }
     }
 }
+impl std::error::Error for SplitLoaderError {}
 
 /// A lazy loader that can be used to load a function from a split out `.wasm` file.
 ///
@@ -202,7 +203,11 @@ impl Future for SplitLoaderFuture {
                         Rc::<SplitLoader>::into_raw(self.loader.clone()) as *const c_void,
                     )
                 };
-                Poll::Pending
+                if let SplitLoaderState::Completed(value) = self.loader.state.get() {
+                    Poll::Ready(value)
+                } else {
+                    Poll::Pending
+                }
             }
             SplitLoaderState::Pending => {
                 self.loader.waker.set(Some(cx.waker().clone()));
