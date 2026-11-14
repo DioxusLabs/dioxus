@@ -1177,8 +1177,49 @@ VIAddVersionKey "LegalCopyright" "{{copyright}}"
 !insertmacro MUI_LANGUAGE "{{this}}"
 {{/each}}
 
+{{#if install_webview}}
+!define WEBVIEW2_CLIENT_KEY "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+
+; Evergreen registers machine installs in the 32-bit view, even on 64-bit Windows.
+; https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution#detect-if-a-webview2-runtime-is-already-installed
+Function ReadWebView2Version
+    SetRegView 32
+    ReadRegStr $1 HKLM "${WEBVIEW2_CLIENT_KEY}" "pv"
+    StrCmp $1 "" check_current_user
+    StrCmp $1 "0.0.0.0" 0 done
+
+check_current_user:
+    ReadRegStr $1 HKCU "${WEBVIEW2_CLIENT_KEY}" "pv"
+    StrCmp $1 "0.0.0.0" 0 done
+    StrCpy $1 ""
+
+done:
+    SetRegView lastused
+    ClearErrors
+FunctionEnd
+{{/if}}
+
 ; Installer section
 Section "Install"
+
+    {{#if install_webview}}
+    Call ReadWebView2Version
+    StrCmp $1 "" 0 webview2_ready
+
+    DetailPrint "Installing the WebView2 Runtime..."
+    StrCpy $0 -1
+    {{webview_install_code}}
+
+    ; The runtime can become available while the installer is running.
+    Call ReadWebView2Version
+    StrCmp $1 "" 0 webview2_ready
+    DetailPrint "WebView2 Runtime is unavailable after setup (installer exit code: $0)."
+    MessageBox MB_OK|MB_ICONSTOP "The WebView2 Runtime could not be installed (installer exit code: $0)." /SD IDOK
+    SetErrorLevel 1
+    Abort
+
+webview2_ready:
+    {{/if}}
     SetOutPath $INSTDIR
 
     ; Install main binary
@@ -1222,11 +1263,6 @@ Section "Install"
     IntFmt $0 "0x%08X" $0
     WriteRegDWORD SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{bundle_id}}" \
         "EstimatedSize" "$0"
-
-    {{#if install_webview}}
-    ; WebView2 installation
-    {{webview_install_code}}
-    {{/if}}
 
 SectionEnd
 
