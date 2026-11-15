@@ -509,7 +509,9 @@ export function extractSerializedFormValues(event: Event, target: HTMLElement): 
       || event.type === "reset"
       || event.type === "click"
     ) {
-      contents = retrieveFormValues(form);
+      // Passing the submitter includes the name/value of the button that submitted the form
+      const submitter = event instanceof SubmitEvent ? event.submitter : null;
+      contents = retrieveFormValues(form, submitter);
     }
   }
 
@@ -518,8 +520,8 @@ export function extractSerializedFormValues(event: Event, target: HTMLElement): 
 
 // todo: maybe encode spaces or something?
 // We encode select multiple as a comma separated list which breaks... when there's commas in the values
-function retrieveFormValues(form: HTMLFormElement): SerializedFormData {
-  const formData = new FormData(form);
+function retrieveFormValues(form: HTMLFormElement, submitter: HTMLElement | null): SerializedFormData {
+  const formData = new FormData(form, submitter);
   const contents: SerializedFormObject[] = [];
 
   formData.forEach((value, key) => {

@@ -75,6 +75,7 @@ features = [
     "ScrollRestoration",
     "ScrollToOptions",
     "Selection",
+    "SubmitEvent",
     "Text",
     "Touch",
     "TouchEvent",
