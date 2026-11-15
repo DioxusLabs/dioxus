@@ -54,9 +54,10 @@ impl Autoformat {
         } else if let Some(raw) = raw {
             // Format raw text.
             let indent = indentation_for(".", self.split_line_attributes)?;
+            let (raw, crlf) = normalize_line_endings(raw);
             let formatted =
                 dioxus_autofmt::fmt_block(&raw, 0, indent).context("error formatting codeblock")?;
-            println!("{}", formatted);
+            println!("{}", restore_line_endings(formatted, crlf));
         } else {
             // Default to formatting the project.
             let crate_dir = if let Some(package) = self.package {
@@ -95,7 +96,7 @@ fn refactor_file(
     } else {
         fs::read_to_string(&file)
     };
-    let mut s = file_content.context("failed to open file")?;
+    let (mut s, crlf) = normalize_line_endings(file_content.context("failed to open file")?);
 
     if format_rust_code {
         s = format_rust(&s)?;
@@ -105,7 +106,7 @@ fn refactor_file(
     let edits =
         dioxus_autofmt::try_fmt_file(&s, &parsed, indent).context("failed to format file")?;
 
-    let out = dioxus_autofmt::apply_formats(&s, edits);
+    let out = restore_line_endings(dioxus_autofmt::apply_formats(&s, edits), crlf);
 
     if file == "-" {
         print!("{out}");
@@ -123,7 +124,7 @@ fn format_file(
     indent: IndentOptions,
     format_rust_code: bool,
 ) -> Result<usize> {
-    let mut contents = fs::read_to_string(&path)?;
+    let (mut contents, crlf) = normalize_line_endings(fs::read_to_string(&path)?);
     let mut if_write = false;
     if format_rust_code {
         let formatted = format_rust(&contents).context("Syntax Error")?;
@@ -143,7 +144,7 @@ fn format_file(
     }
 
     if if_write {
-        let out = dioxus_autofmt::apply_formats(&contents, edits);
+        let out = restore_line_endings(dioxus_autofmt::apply_formats(&contents, edits), crlf);
         fs::write(path, out)?;
     }
 
@@ -239,6 +240,29 @@ fn indentation_for(
     ))
 }
 
+/// dioxus-autofmt and prettyplease only write `\n` line endings. A file that uses `\r\n` (detected
+/// from its first line break, like rustfmt's default `newline_style = "Auto"`) is formatted with
+/// `\n` and converted back by [`restore_line_endings`], so it doesn't end up with mixed line
+/// endings or get reported as unformatted on every run.
+fn normalize_line_endings(contents: String) -> (String, bool) {
+    let crlf = contents
+        .find('\n')
+        .is_some_and(|i| contents[..i].ends_with('\r'));
+    if crlf {
+        (contents.replace("\r\n", "\n"), true)
+    } else {
+        (contents, false)
+    }
+}
+
+fn restore_line_endings(contents: String, crlf: bool) -> String {
+    if crlf {
+        contents.replace('\n', "\r\n")
+    } else {
+        contents
+    }
+}
+
 /// Format rust code using prettyplease
 fn format_rust(input: &str) -> Result<String> {
     let syntax_tree = syn::parse_file(input)
@@ -282,4 +306,37 @@ async fn test_auto_fmt() {
     };
 
     fmt.autoformat().await.unwrap();
+}
+
+#[test]
+fn format_file_keeps_crlf_line_endings() {
+    let dir = tempfile::tempdir().unwrap();
+    let lf_path = dir.path().join("lf.rs");
+    let crlf_path = dir.path().join("crlf.rs");
+    let unformatted = "fn app() -> Element {\n    rsx! { div { class: \"a\", p { \"hello\" } span { \"world\" } } }\n}\n";
+    fs::write(&lf_path, unformatted).unwrap();
+    fs::write(&crlf_path, unformatted.replace('\n', "\r\n")).unwrap();
+
+    let indent = IndentOptions::new(IndentType::Spaces, 4, false);
+    assert_eq!(format_file(&lf_path, indent.clone(), false).unwrap(), 1);
+    assert_eq!(format_file(&crlf_path, indent.clone(), false).unwrap(), 1);
+
+    let lf = fs::read_to_string(&lf_path).unwrap();
+    assert_ne!(lf, unformatted);
+    assert_eq!(
+        fs::read_to_string(&crlf_path).unwrap(),
+        lf.replace('\n', "\r\n")
+    );
+
+    // Nothing is left to format, so `dx fmt --check` passes on the CRLF file.
+    assert_eq!(format_file(&crlf_path, indent.clone(), false).unwrap(), 0);
+
+    // `--all-code` runs the whole file through prettyplease.
+    fs::write(&crlf_path, unformatted.replace('\n', "\r\n")).unwrap();
+    format_file(&crlf_path, indent, true).unwrap();
+    let all_code = fs::read_to_string(&crlf_path).unwrap();
+    assert_eq!(
+        all_code.matches('\n').count(),
+        all_code.matches("\r\n").count()
+    );
 }
