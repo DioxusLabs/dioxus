@@ -1015,12 +1015,12 @@ impl FfiBridgeParser {
 
         quote! {
             pub fn #fn_name(#(#rust_args),*) -> Result<#return_type, &'static str> {
-                unsafe {
+                manganis::objc2::rc::autoreleasepool(|_pool| unsafe {
                     #(#arg_conversions)*
                     let result: *mut manganis::objc2::runtime::AnyObject = #msg_send_call;
 
                     #result_conversion
-                }
+                })
             }
         }
     }
