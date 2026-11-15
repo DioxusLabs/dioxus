@@ -410,9 +410,17 @@ export class NativeInterpreter extends JSChannel_ {
     const byteArray = this.queuedBytes;
     this.queuedBytes = [];
 
-    for (let bytes of byteArray) {
-      // @ts-ignore
-      this.run_from_bytes(bytes);
+    for (let i = 0; i < byteArray.length; i++) {
+      try {
+        // @ts-ignore
+        this.run_from_bytes(byteArray[i]);
+      } catch (e) {
+        // Keep the batches queued behind the failing one instead of dropping
+        // them, and let the ack below still fire.
+        this.queuedBytes = byteArray.slice(i + 1).concat(this.queuedBytes);
+        console.error("failed to apply edits batch", e);
+        break;
+      }
     }
   }
 
@@ -426,8 +434,14 @@ export class NativeInterpreter extends JSChannel_ {
     } else {
       this.enqueueBytes(bytes);
       requestAnimationFrame(() => {
-        this.flushQueuedBytes();
-        this.markEditsFinished();
+        // The native side blocks until the ack arrives, and a batch that threw
+        // used to skip it — permanently wedging every later render. Ack in a
+        // `finally` so a failed batch can never do that again.
+        try {
+          this.flushQueuedBytes();
+        } finally {
+          this.markEditsFinished();
+        }
       });
     }
   }
