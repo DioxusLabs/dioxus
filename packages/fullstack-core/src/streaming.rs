@@ -204,6 +204,20 @@ impl FullstackContext {
         }
     }
 
+    /// Appends a header to the response, if the header name (key) is already in the HeaderMap it will be appended
+    /// allowing multiple headers with the same name in the same response (e.g. Set-Cookie).
+    /// This will be sent to the client when the response is committed.
+    pub fn append_response_header(
+        &self,
+        key: impl Into<http::header::HeaderName>,
+        value: impl Into<http::header::HeaderValue>,
+    ) {
+        let mut lock = self.lock.write();
+        if let Some(headers) = lock.response_headers.as_mut() {
+            let _ = headers.append(key.into(), value.into());
+        }
+    }
+
     /// Take the response headers out of the context. This will leave the context without any headers,
     /// so it should only be called once when the response is being committed.
     pub fn take_response_headers(&self) -> Option<HeaderMap> {
