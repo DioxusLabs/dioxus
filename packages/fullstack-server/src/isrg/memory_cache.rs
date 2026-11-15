@@ -51,7 +51,7 @@ impl InMemoryCache {
             let (timestamp, _) = memory_cache.try_get_or_insert(route.to_string(), or_insert)?;
 
             let now = Utc::now();
-            let elapsed = timestamp.signed_duration_since(now);
+            let elapsed = now.signed_duration_since(*timestamp);
             let age = elapsed.num_seconds();
             // The cache entry is out of date, so we need to remove it.
             if let Some(invalidate_after) = self.invalidate_after {
