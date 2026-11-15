@@ -756,15 +756,22 @@ impl BuildRequest {
         }
 
         // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
-        for env in [
-            "RUSTFLAGS".to_string(),
-            format!("CARGO_TARGET_{triple}_RUSTFLAGS"),
-        ] {
-            if let Ok(flags) = std::env::var(env) {
-                rustflags
-                    .flags
-                    .extend(cargo_config2::Flags::from_space_separated(&flags).flags);
-            }
+        //
+        // `CARGO_ENCODED_RUSTFLAGS` outranks `RUSTFLAGS` in cargo's resolution of
+        // `build.rustflags`, so the plain variable is only read when the encoded one
+        // is unset. https://doc.rust-lang.org/cargo/reference/config.html#buildrustflags
+        let env_rustflags = if let Ok(flags) = std::env::var("CARGO_ENCODED_RUSTFLAGS") {
+            cargo_config2::Flags::from_encoded(&flags)
+        } else if let Ok(flags) = std::env::var("RUSTFLAGS") {
+            cargo_config2::Flags::from_space_separated(&flags)
+        } else {
+            cargo_config2::Flags::default()
+        };
+        rustflags.flags.extend(env_rustflags.flags);
+        if let Ok(flags) = std::env::var(format!("CARGO_TARGET_{triple}_RUSTFLAGS")) {
+            rustflags
+                .flags
+                .extend(cargo_config2::Flags::from_space_separated(&flags).flags);
         }
 
         // Use the user's linker if the specify it at the target level
@@ -1948,12 +1955,26 @@ impl BuildRequest {
         let rust_flags = self.rustflags.clone();
 
         // Set the rust flags for the build if they're not empty.
+        //
+        // `CARGO_ENCODED_RUSTFLAGS` outranks `RUSTFLAGS`, so publishing only the
+        // plain form would let an inherited encoded value silently discard these
+        // flags (and with them the target-specific rustflags from
+        // `.cargo/config.toml`). Publish the assembled set in the encoded form
+        // too, which cargo reads first.
+        // https://doc.rust-lang.org/cargo/reference/config.html#buildrustflags
         if !rust_flags.flags.is_empty() {
             env_vars.push((
                 "RUSTFLAGS".into(),
                 rust_flags
                     .encode_space_separated()
                     .context("Failed to encode RUSTFLAGS")?
+                    .into(),
+            ));
+            env_vars.push((
+                "CARGO_ENCODED_RUSTFLAGS".into(),
+                rust_flags
+                    .encode()
+                    .context("Failed to encode CARGO_ENCODED_RUSTFLAGS")?
                     .into(),
             ));
         }
