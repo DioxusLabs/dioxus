@@ -56,7 +56,7 @@ jobs:
               - 'Makefile.toml'
       - id: toolchains
         run: |
-          echo "rust_stable=1.94.0" >> "$GITHUB_OUTPUT"
+          echo "rust_stable=1.94.1" >> "$GITHUB_OUTPUT"
           echo "rust_nightly=nightly-2026-05-01" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
