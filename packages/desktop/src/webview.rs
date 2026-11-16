@@ -564,7 +564,10 @@ impl WebviewInstance {
         if cfg.disable_context_menu {
             // in release mode, we don't want to show the dev tool or reload menus
             webview = webview.with_initialization_script(INITIALIZATION_SCRIPT)
-        } else {
+        } else if cfg!(any(
+            debug_assertions,
+            not(any(target_os = "android", target_os = "ios"))
+        )) {
             // in debug, we are okay with the reload menu showing and dev tool
             webview = webview.with_devtools(true);
         }
