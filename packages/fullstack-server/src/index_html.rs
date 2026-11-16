@@ -104,12 +104,14 @@ impl IndexHtml {
     /// This will not include any customizations to the HTML nor any JavaScript to bootstrap a client-side app.
     pub fn ssr_only() -> Self {
         const DEFAULT: &str = r#"<!DOCTYPE html>
-        <html>
-            <head> </head>
-            <body>
-                <div id="main"></div>
-            </body>
-        </html>"#;
+<html>
+    <head>
+        <title></title>
+    </head>
+    <body>
+        <div id="main"></div>
+    </body>
+</html>"#;
 
         Self::new(DEFAULT, "main").expect("Failed to load default index.html")
     }
