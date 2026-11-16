@@ -273,6 +273,24 @@ test("svg elements can receive hydrated listeners", async ({ page }) => {
   );
 });
 
+// Regression for https://github.com/DioxusLabs/dioxus/issues/6086.
+test("element with a dynamic child before a static sibling keeps its id", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (err) => errors.push(err.message));
+
+  await page.goto(URL);
+  await page.waitForTimeout(2000);
+
+  const button = page.locator("#listener-child-before-static");
+  await expect(button).toHaveAttribute("data-clicks", "0");
+  await button.click();
+  await expect(button).toHaveAttribute("data-clicks", "1");
+  await expect(button).toHaveText("click");
+  expect(errors).toEqual([]);
+});
+
 // Regression for https://github.com/DioxusLabs/dioxus/issues/5548: `textarea`
 // content is raw text, so SSR cannot wrap it in hydration markers. The body must
 // hydrate from the server-rendered text and stay patchable afterwards.

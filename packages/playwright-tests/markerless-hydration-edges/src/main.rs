@@ -24,6 +24,7 @@ fn app() -> Element {
         RemovePlaceholder {}
         RootTrailingPlaceholder {}
         SvgHydratedListener {}
+        ListenerWithChildBeforeStatic {}
         EmptyRootHydration {}
         StreamedEmptyHydration {}
         TextareaHydration {}
@@ -462,6 +463,26 @@ fn NestedTrailingPlaceholder() -> Element {
 
 // SVG nodes implement `Element`/`EventTarget`, not `HTMLElement`. Hydrated
 // listeners must bind to them.
+// Regression for https://github.com/DioxusLabs/dioxus/issues/6086: a dynamic
+// child followed by a static sibling is anchored to that sibling. The button
+// must still hydrate under its own id, so its listener fires and its dynamic
+// attribute stays patchable.
+#[component]
+fn ListenerWithChildBeforeStatic() -> Element {
+    let mut clicks = use_signal(|| 0);
+    rsx! {
+        button {
+            id: "listener-child-before-static",
+            "data-clicks": "{clicks}",
+            onclick: move |_| clicks += 1,
+            if clicks() == 0 {
+                span { "first " }
+            }
+            span { "click" }
+        }
+    }
+}
+
 #[component]
 fn SvgHydratedListener() -> Element {
     let mut clicks = use_signal(|| 0);

@@ -62,6 +62,22 @@ fn dynamic_attr_and_trailing_dynamic_child() -> Element {
     }
 }
 
+fn dynamic_attr_with_child_before_static_sibling() -> Element {
+    let open = "true";
+    let show = true;
+
+    rsx! {
+        aside {
+            "data-open": "{open}",
+            onclick: |_| {},
+            if show {
+                span { "dynamic" }
+            }
+            p { "static sibling" }
+        }
+    }
+}
+
 #[component]
 fn TailComponent(id: i32) -> Element {
     rsx! {
@@ -355,4 +371,34 @@ fn no_op_rebuild_places_separated_empty_fragment_inside_static_parent() {
         "empty fragment should be inserted into its static parent, not the renderer root: {:#?}",
         mutations.edits
     );
+}
+
+// Regression for https://github.com/DioxusLabs/dioxus/issues/6086: a dynamic child
+// followed by a static sibling is anchored to that sibling. Hydration takes an
+// element's id from its dynamic anchors, so yielding the child anchor here bound
+// the element's listeners and attributes to the sibling's id.
+#[test]
+fn element_dynamic_anchors_skip_child_anchored_to_static_sibling() {
+    let mut dom = VirtualDom::new(dynamic_attr_with_child_before_static_sibling);
+    dom.rebuild_in_place();
+    let vnode = dom
+        .get_scope(ScopeId::APP)
+        .and_then(|scope| scope.try_mounted_root_node())
+        .expect("mounted root");
+    let aside = root_element(&vnode);
+
+    let child_anchor = vnode
+        .dynamic_anchors()
+        .find(|anchor| {
+            anchor.parent_element_op_index() == Some(aside.op()) && anchor.nodes().len() > 0
+        })
+        .expect("dynamic child anchor");
+    let element_anchors = aside.dynamic_anchors().collect::<Vec<_>>();
+    assert_eq!(element_anchors.len(), 1);
+    assert_eq!(element_anchors[0].attrs().len(), 2);
+
+    let element_id = vnode.mounted_anchor_node(element_anchors[0], &dom);
+    let child_id = vnode.mounted_anchor_node(child_anchor, &dom);
+    assert!(element_id.is_some());
+    assert_ne!(element_id, child_id);
 }

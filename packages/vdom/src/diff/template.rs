@@ -80,11 +80,15 @@ impl<'a> StaticElement<'a> {
         self.children().next().is_some()
     }
 
-    /// Iterate dynamic anchors with attributes that target this element.
+    /// Iterate dynamic anchors that target this element: its dynamic attributes and any dynamic
+    /// children after its last static child.
+    ///
+    /// A dynamic child followed by a static sibling is anchored to that sibling, so it is not
+    /// yielded here.
     pub fn dynamic_anchors(self) -> impl Iterator<Item = DynamicAnchor<'a>> + 'a {
-        self.vnode
-            .dynamic_anchors()
-            .filter(move |anchor| anchor.parent_element_op_index() == Some(self.op))
+        self.vnode.dynamic_anchors().filter(move |anchor| {
+            anchor.parent_element_op_index() == Some(self.op) && anchor.static_path() == self.path
+        })
     }
 }
 
