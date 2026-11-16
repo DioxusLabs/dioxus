@@ -45,7 +45,7 @@ impl NativeFileData for WebFileData {
         let file = self.file.clone();
         Box::pin(async move {
             let (rx, tx) = oneshot::channel();
-            let on_load: Closure<dyn FnMut()> = Closure::new({
+            let on_load: Closure<dyn FnMut()> = Closure::own_aborting({
                 let mut rx = Some(rx);
                 move || {
                     let result = file_reader.result();
@@ -78,7 +78,7 @@ impl NativeFileData for WebFileData {
         let file = self.file.clone();
         Box::pin(async move {
             let (rx, tx) = oneshot::channel();
-            let on_load: Closure<dyn FnMut()> = Closure::new({
+            let on_load: Closure<dyn FnMut()> = Closure::own_aborting({
                 let mut rx = Some(rx);
                 move || {
                     let result = file_reader.result();
