@@ -64,6 +64,7 @@ fn app() -> Element {
         WebSysClosure {}
         DocumentElements {}
         MergeStyles {}
+        StyleAttributeDropsDeclarations {}
         SelectMultiple {}
     }
 }
@@ -193,6 +194,27 @@ fn MergeStyles() -> Element {
             id: "merge-styles-div",
             style: "width: {px}px; height: {px}px",
             background_color: "red",
+        }
+    }
+}
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/5810
+#[component]
+fn StyleAttributeDropsDeclarations() -> Element {
+    let mut include_background = use_signal(|| true);
+    rsx! {
+        div {
+            id: "style-attribute-div",
+            style: if include_background() {
+                "color: red; background: blue"
+            } else {
+                "color: red"
+            }
+        }
+        button {
+            class: "toggle-style-attribute-button",
+            onclick: move |_| include_background.toggle(),
+            "Toggle style"
         }
     }
 }
