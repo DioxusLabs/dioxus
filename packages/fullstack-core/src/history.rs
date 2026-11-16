@@ -55,10 +55,11 @@ pub(crate) fn finalize_route() {
 /// be called in the same order on the client and server after the hydration context is created
 pub fn provide_fullstack_history_context<H: History + 'static>(history: H) {
     let entry = crate::transport::serialize_context().create_entry();
-    provide_context(RouteEntry {
+    let route_entry = RouteEntry {
         entry: Rc::new(RefCell::new(Some(entry.clone()))),
-    });
-    provide_history_context(Rc::new(FullstackHistory::new(history)));
+    };
+    provide_context(route_entry.clone());
+    provide_history_context(Rc::new(FullstackHistory::new(history, route_entry)));
 }
 
 #[derive(Clone)]
@@ -70,12 +71,22 @@ struct RouteEntry {
 #[derive(Clone)]
 struct FullstackHistory<H> {
     history: H,
+    route_entry: RouteEntry,
 }
 
 impl<H> FullstackHistory<H> {
     /// Create a new `FullstackHistory` with the given history.
-    pub fn new(history: H) -> Self {
-        Self { history }
+    pub fn new(history: H, route_entry: RouteEntry) -> Self {
+        Self {
+            history,
+            route_entry,
+        }
+    }
+
+    /// On the server, the route is sent to the client when the initial chunk is committed. Navigating
+    /// after that would render a different route than the client hydrates, so it is left to the client.
+    fn route_committed(&self) -> bool {
+        cfg!(feature = "server") && self.route_entry.entry.borrow().is_none()
     }
 
     /// Get the initial route of the history.
@@ -129,18 +140,26 @@ impl<H: History> History for FullstackHistory<H> {
     }
 
     fn go_back(&self) {
-        self.history.go_back();
+        if !self.route_committed() {
+            self.history.go_back();
+        }
     }
 
     fn go_forward(&self) {
-        self.history.go_forward();
+        if !self.route_committed() {
+            self.history.go_forward();
+        }
     }
 
     fn push(&self, route: String) {
-        self.history.push(route);
+        if !self.route_committed() {
+            self.history.push(route);
+        }
     }
 
     fn replace(&self, path: String) {
-        self.history.replace(path);
+        if !self.route_committed() {
+            self.history.replace(path);
+        }
     }
 }
