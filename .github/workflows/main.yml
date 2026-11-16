@@ -601,6 +601,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: nixbuild/nix-quick-install-action@master
+        with:
+          nix_conf: |
+            keep-outputs = true
       - uses: jkelleyrtp/cache-nix-action@jk/use-warpbuild
         with:
           primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}-${{ hashFiles('Cargo.lock') }}
@@ -608,12 +611,22 @@ jobs:
             nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}-
             nix-${{ runner.os }}-${{ runner.arch }}-
           backend: warpbuild
+          save: ${{ github.ref == 'refs/heads/main' }}
+          # Before saving, delete every store path not reachable from a GC root: the dioxus-cli
+          # result link, the dev shell profile and the flake inputs rooted below (with keep-outputs,
+          # also the build-time dependencies of the result, such as crane's dependency artifacts).
+          gc-max-store-size: 0
+      - name: Root the flake inputs
+        run: |
+          mkdir -p "$RUNNER_TEMP/nix-roots"
+          nix build --out-link "$RUNNER_TEMP/nix-roots/flake-input" \
+            $(nix flake archive --json | jq -r '.inputs | .. | .path? // empty')
       - name: Build dioxus-cli from the flake
         run: nix build .#dioxus-cli
       - name: Smoke test devShell
         shell: bash
         run: |
-          nix develop .#default -c bash -lc '
+          nix develop .#default --profile "$RUNNER_TEMP/nix-roots/dev-shell" -c bash -lc '
             cargo --version
             rustc --version
             pkg-config --modversion openssl
