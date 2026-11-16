@@ -201,15 +201,19 @@ fn indentation_for(
     file_or_dir: impl AsRef<Path>,
     split_line_attributes: bool,
 ) -> Result<IndentOptions> {
-    let out = std::process::Command::new("cargo")
-        .args(["fmt", "--", "--print-config", "current"])
+    // `cargo fmt -- --print-config` only forwards these arguments to rustfmt, so run rustfmt
+    // directly (honoring `RUSTFMT` like cargo-fmt does) and skip starting cargo and cargo-fmt.
+    let rustfmt = std::env::var_os("RUSTFMT").unwrap_or_else(|| "rustfmt".into());
+    let out = std::process::Command::new(rustfmt)
+        .args(["--print-config", "current"])
         .arg(file_or_dir.as_ref())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::inherit())
-        .output()?;
+        .output()
+        .context("failed to run rustfmt")?;
 
     if !out.status.success() {
-        bail!("cargo fmt failed with status: {out:?}");
+        bail!("rustfmt failed with status: {out:?}");
     }
 
     let config = String::from_utf8_lossy(&out.stdout);
