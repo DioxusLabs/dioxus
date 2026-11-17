@@ -24,7 +24,6 @@ bench = false
 dioxus-const-vec = { workspace = true }
 dioxus-vdom-macro = { workspace = true }
 dioxus-vdom-template = { workspace = true }
-dioxus-base-types = { workspace = true }
 const_format = { workspace = true }
 futures-channel = { workspace = true }
 generational-box = { workspace = true }
@@ -38,6 +37,7 @@ futures-util = { workspace = true, default-features = false, features = ["alloc"
 serde = { workspace = true, optional = true, features = ["derive"] }
 subsecond = { workspace = true }
 anyhow = { workspace = true }
+manganis-core = { workspace = true, optional = true }
 xxhash-rust = { workspace = true, features = ["const_xxh64"] }
 
 [dev-dependencies]
@@ -60,6 +60,7 @@ features = ["Document", "HtmlElement", "Window"]
 
 [features]
 serialize = ["dep:serde", "dioxus-vdom-template/serialize"]
+manganis_08 = ["dep:manganis-core"]
 
 [[bench]]
 name = "jsframework"

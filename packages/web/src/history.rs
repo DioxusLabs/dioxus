@@ -56,7 +56,7 @@ impl WebHistory {
 
         let prefix = prefix
             // If there isn't a base path, try to grab one from the CLI
-            .or_else(dioxus_cli_config::web_base_path)
+            .or_else(dx_env::web_base_path)
             // Normalize the prefix to start and end with no slashes
             .as_ref()
             .map(|prefix| prefix.trim_matches('/'))

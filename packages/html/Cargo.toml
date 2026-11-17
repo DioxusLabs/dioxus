@@ -12,8 +12,7 @@ keywords = ["dom", "ui", "gui", "react"]
 [dependencies]
 dioxus-vdom = { workspace = true }
 dioxus-vdom-macro = { workspace = true }
-dioxus-base-types = { workspace = true }
-dioxus-rsx = { workspace = true, optional = true }
+dioxus-rsx-hotreload = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
 dioxus-hooks = { workspace = true }
 generational-box = { workspace = true }
@@ -40,7 +39,6 @@ serde_json = { workspace = true }
 dioxus = { workspace = true }
 dioxus-web = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
-manganis = { workspace = true }
 
 [features]
 default = ["serialize"]
@@ -53,9 +51,9 @@ serialize = [
     "dioxus-vdom/serialize",
     "bytes/serde"
 ]
-hot-reload-context = ["dep:dioxus-rsx"]
+hot-reload = ["dep:dioxus-rsx-hotreload"]
 html-to-rsx = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-feature = ["html-to-rsx", "hot-reload-context", "html-to-rsx"]
+feature = ["html-to-rsx", "hot-reload"]

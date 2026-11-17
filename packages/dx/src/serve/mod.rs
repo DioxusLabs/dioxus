@@ -13,7 +13,7 @@ mod server;
 mod update;
 
 use anyhow::bail;
-use dioxus_dx_wire_format::BuildStage;
+use dx_wire_format::BuildStage;
 pub(crate) use output::*;
 pub(crate) use runner::*;
 pub(crate) use server::*;

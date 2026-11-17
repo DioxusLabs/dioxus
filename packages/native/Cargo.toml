@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [features]
 default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "woff", "text-transform-icu", "apple-font-embolden"]
-prelude = ["dep:dioxus-vdom-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
+prelude = ["dep:dioxus-vdom-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis", "dioxus-vdom/manganis_08"]
 
 # DOM features
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
@@ -103,7 +103,7 @@ dioxus-hooks = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-stores = { workspace = true, optional = true }
 dioxus-vdom-macro = { workspace = true, optional = true }
-manganis = { workspace = true, features = ["dioxus"], optional = true }
+manganis = { workspace = true, optional = true }
 
 # Windowing & Input
 winit = { workspace = true }

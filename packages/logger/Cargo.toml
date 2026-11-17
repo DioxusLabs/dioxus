@@ -13,7 +13,7 @@ categories = ["development-tools::debugging"]
 
 
 [dependencies]
-dioxus-cli-config = { workspace = true }
+dx-env = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["registry", "std", "env-filter"] }
 

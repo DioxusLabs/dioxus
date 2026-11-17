@@ -82,7 +82,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             futures_util::select! {
                 msg = hotreload_rx.next() => {
                     if let Some(msg) = msg
-                        && msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                        && msg.for_build_id == Some(dx_env::build_id()) {
                             dioxus_devtools::apply_changes(&virtual_dom, &msg);
                         }
                 }
@@ -227,7 +227,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 crate::devtools::invalidate_browser_asset_cache();
             }
 
-            if hr_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+            if hr_msg.for_build_id == Some(dx_env::build_id()) {
                 devtools::show_toast(
                     "Hot-patch success!",
                     &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),

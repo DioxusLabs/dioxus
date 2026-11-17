@@ -107,7 +107,7 @@ cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-indivi
    Afterwards, confirm `gh api repos/DioxusLabs/dioxus/releases/latest` still returns the last stable release.
 3. **CLI binaries:** the release must exist first, because the workflow uploads to it:
    `gh workflow run publish.yml --ref main -f post=vNEW -f channel=vNEW`.
-   It takes about 30 minutes; Intel macOS is the slowest job. When it finishes, the release should have 16 files: `.zip`, `.tar.gz` and `.sha256` for each of 6 targets (Windows has no `.tar.gz`).
+   It takes about 30 minutes; Intel macOS is the slowest job. When it finishes, the release should have 22 files: `.zip`, `.tar.gz` and `.sha256` for each of 8 targets (Windows has no `.tar.gz`).
 
 ## 6. Verify
 

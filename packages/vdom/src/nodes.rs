@@ -6,7 +6,6 @@ use crate::{
     properties::ComponentFunction,
     view::ViewExt,
 };
-use dioxus_base_types::DioxusFormattable;
 
 use std::ops::Deref;
 use std::rc::Rc;
@@ -919,14 +918,10 @@ impl<T: ToOwned<Owned = R>, R: IntoAttributeValue> IntoAttributeValue for &T {
     }
 }
 
-#[doc(hidden)]
-pub struct AnyFmtMarker;
-impl<T> IntoAttributeValue<AnyFmtMarker> for T
-where
-    T: DioxusFormattable,
-{
+#[cfg(feature = "manganis_08")]
+impl IntoAttributeValue for manganis_core::Asset {
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.format().to_string())
+        AttributeValue::Text(self.to_string())
     }
 }
 

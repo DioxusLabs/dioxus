@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-dx-wire-format"
+name = "dx-wire-format"
 edition = "2024"
 version.workspace = true
 publish = true

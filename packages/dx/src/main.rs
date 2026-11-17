@@ -34,7 +34,7 @@ use std::process::ExitCode;
 pub(crate) use build::*;
 pub(crate) use cli::*;
 pub(crate) use config::*;
-pub(crate) use dioxus_dx_wire_format::*;
+pub(crate) use dx_wire_format::*;
 pub(crate) use error::*;
 pub(crate) use link::*;
 pub(crate) use logging::*;
@@ -44,6 +44,11 @@ pub(crate) use settings::*;
 pub(crate) use tailwind::*;
 pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
+
+// musl's malloc is slow under multithreaded load
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() -> ExitCode {

@@ -21,7 +21,7 @@ packages/
 ├── hooks/            # Built-in hooks (use_signal, use_effect, etc.)
 ├── router/           # Type-safe routing with #[derive(Routable)]
 ├── fullstack/        # SSR, hydration, #[server] functions
-├── cli/              # `dx` build tool, dev server, bundling
+├── dx/               # `dx` build tool, dev server, bundling
 ├── web/              # WASM renderer
 ├── desktop/          # Wry/Tao webview renderer
 ├── native/           # Blitz/Vello GPU renderer

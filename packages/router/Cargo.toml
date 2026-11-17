@@ -20,7 +20,7 @@ dioxus-router-macro = { workspace = true }
 tracing = { workspace = true }
 percent-encoding = { workspace = true }
 url = { workspace = true }
-dioxus-cli-config = { workspace = true }
+dx-env = { workspace = true }
 rustversion = { workspace = true }
 
 [features]

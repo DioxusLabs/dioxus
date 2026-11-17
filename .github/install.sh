@@ -51,26 +51,24 @@ if [ $# -gt 2 ]; then
     error 'Too many arguments, only 2 are allowed. The first can be a specific tag of dx to install. (e.g. "dx-v0.7.1") or `nightly` or `pr <PR_NUMBER>` to install the latest nightly or PR build.'
 fi
 
+# The gnu builds need glibc 2.35+, so use the static musl build on musl distros (eg Alpine)
+# and on systems with an older glibc (eg Amazon Linux 2023)
+linux_libc() {
+    glibc_version=$(getconf GNU_LIBC_VERSION 2>/dev/null || true)
+    case "${glibc_version#glibc }" in
+    2.3[5-9]* | 2.[4-9][0-9]* | [3-9].*) echo "gnu" ;;
+    *) echo "musl" ;;
+    esac
+}
+
 if [ "$OS" = "Windows_NT" ]; then
     target="x86_64-pc-windows-msvc"
 else
     case $(uname -sm) in
     "Darwin x86_64") target="x86_64-apple-darwin" ;;
     "Darwin arm64") target="aarch64-apple-darwin" ;;
-    "Linux aarch64")
-        if [ -f /etc/alpine-release ]; then
-            target="aarch64-unknown-linux-musl"
-        else
-            target="aarch64-unknown-linux-gnu"
-        fi
-        ;;
-    *)
-        if [ -f /etc/alpine-release ]; then
-            target="x86_64-unknown-linux-musl"
-        else
-            target="x86_64-unknown-linux-gnu"
-        fi
-        ;;
+    "Linux aarch64") target="aarch64-unknown-linux-$(linux_libc)" ;;
+    *) target="x86_64-unknown-linux-$(linux_libc)" ;;
     esac
 fi
 

@@ -1,4 +1,4 @@
-use dioxus_dx_wire_format::StructuredBuildArtifacts;
+use dx_wire_format::StructuredBuildArtifacts;
 
 use crate::{
     Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,

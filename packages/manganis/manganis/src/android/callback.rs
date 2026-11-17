@@ -4,7 +4,7 @@ use jni::{
     sys::jlong,
 };
 
-use crate::android::java::Result;
+use crate::android::java::JniResult;
 
 /// Generic callback system for loading DEX classes and registering native methods
 pub struct CallbackSystem {
@@ -47,7 +47,7 @@ impl CallbackSystem {
     /// # Returns
     ///
     /// Returns a `GlobalRef` to the loaded class, or an error if loading fails
-    pub fn load_and_register(&self, env: &mut JNIEnv<'_>) -> Result<GlobalRef> {
+    pub fn load_and_register(&self, env: &mut JNIEnv<'_>) -> JniResult<GlobalRef> {
         let callback_class = self.load_dex_class(env)?;
         self.register_native_callback(env, &callback_class)?;
         let global = env.new_global_ref(callback_class)?;
@@ -55,7 +55,7 @@ impl CallbackSystem {
     }
 
     /// Load the DEX class from bytecode
-    fn load_dex_class<'a>(&self, env: &mut JNIEnv<'a>) -> Result<JClass<'a>> {
+    fn load_dex_class<'a>(&self, env: &mut JNIEnv<'a>) -> JniResult<JClass<'a>> {
         const IN_MEMORY_LOADER: &str = "dalvik/system/InMemoryDexClassLoader";
 
         // Create a ByteBuffer from our DEX bytecode
@@ -92,7 +92,7 @@ impl CallbackSystem {
         &self,
         env: &mut JNIEnv<'a>,
         callback_class: &JClass<'a>,
-    ) -> Result<()> {
+    ) -> JniResult<()> {
         env.register_native_methods(
             callback_class,
             &[NativeMethod {

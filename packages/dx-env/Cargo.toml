@@ -1,0 +1,16 @@
+[package]
+name = "dx-env"
+edition = "2024"
+version.workspace = true
+authors = ["Jonathan Kelley", "Evan Almloff"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+description = "Environment variables that dx sets for the apps it launches"
+keywords = ["web", "desktop", "mobile", "gui", "wasm"]
+
+[dependencies]
+wasm-bindgen = { workspace = true, optional = true }
+
+[features]
+web = ["dep:wasm-bindgen"]
