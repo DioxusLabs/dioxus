@@ -7,12 +7,12 @@ use anyhow::Context;
 /// Perform a system analysis to verify the system install is working correctly.
 #[derive(Clone, Debug, Subcommand)]
 pub(crate) enum Print {
-    /// Print the cargo args dioxus uses to build the server app.
+    /// Print the cargo args dioxus uses to build the client app.
     /// Environment variables will be set with the `env` command.
     #[clap(name = "client-args")]
     ClientArgs(PrintCargoArgs),
 
-    /// Print the cargo args dioxus uses to build the client app.
+    /// Print the cargo args dioxus uses to build the server app.
     /// Environment variables will be set with the `env` command.
     #[clap(name = "server-args")]
     ServerArgs(PrintCargoArgs),
@@ -159,7 +159,7 @@ impl Print {
             }
             PrintStyle::Json | PrintStyle::PrettyJson => {
                 let output = serde_json::json!({
-                    "env": env.iter().map(|(k, v)| (k.as_ref(), v)).collect::<std::collections::HashMap<_, _>>(),
+                    "env": env.iter().map(|(k, v)| (k.as_ref(), v.to_string_lossy())).collect::<std::collections::HashMap<_, _>>(),
                     "args": args
                 });
                 if matches!(style, PrintStyle::PrettyJson) {
