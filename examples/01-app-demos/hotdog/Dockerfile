@@ -7,11 +7,17 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
-COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
-COPY . .
 RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/DioxusLabs/dioxus/refs/heads/main/.github/install.sh | bash
-RUN /.cargo/bin/dx bundle --platform web --features production
+RUN rustup target add wasm32-unknown-unknown
+COPY --from=planner /app/recipe.json recipe.json
+COPY Dioxus.toml .
+RUN cargo chef cook --no-build --recipe-path recipe.json \
+    && client="$(dx print client-args --platform web --release --features production)" \
+    && eval "$client" \
+    && server="$(dx print server-args --platform web --release --features production)" \
+    && eval "$server"
+COPY . .
+RUN dx bundle --platform web --release --features production
 
 FROM chef AS runtime
 COPY --from=builder /app/target/dx/hotdog/release/web/ /usr/local/app
