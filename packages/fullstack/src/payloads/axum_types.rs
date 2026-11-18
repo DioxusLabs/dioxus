@@ -83,6 +83,12 @@ impl FromResponse for axum::response::Response {
     }
 }
 
+impl FromResponseParts for StatusCode {
+    fn from_response_parts(parts: &mut http::response::Parts) -> Result<Self, ServerFnError> {
+        Ok(parts.status)
+    }
+}
+
 /// Implementation of `IntoRequest` for `axum::extract::Request`.
 ///
 /// This allows converting an `axum::Request` (from server-side extraction)

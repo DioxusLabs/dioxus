@@ -289,6 +289,12 @@ mod http_ext {
         }
         Ok(())
     }
+
+    /// We can return a StatusCode directly
+    #[get("/myendpoint2")]
+    async fn can_return_status_code() -> Result<StatusCode, StatusCode> {
+        Ok(StatusCode::OK)
+    }
 }
 
 mod input_types {
