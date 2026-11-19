@@ -46,6 +46,7 @@ fn app() -> Element {
             test_focus_out_div {}
             test_form_input {}
             test_form_submit {}
+            test_form_submit_with_submitter {}
             test_select_multiple_options {}
             test_unicode {}
             test_before_input {}
@@ -575,6 +576,42 @@ fn test_form_submit() -> Element {
                 input { r#type: "radio", name: "color", value: "blue" }
                 button { r#type: "submit", value: "Submit", "Submit the form" }
             }
+        }
+    }
+}
+
+fn test_form_submit_with_submitter() -> Element {
+    // The submitter is passed to the event the same way the browser does when a submit button is clicked
+    utils::mock_event(
+        "form-with-submitter",
+        r#"new SubmitEvent("submit", {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            submitter: document.getElementById("form-submit-button"),
+        })"#,
+    );
+
+    rsx! {
+        form {
+            id: "form-with-submitter",
+            onsubmit: move |ev: FormEvent| {
+                let values = ev.values();
+                assert_eq!(values.iter().find(|f| f.0 == "username").unwrap().1, "goodbye");
+                assert_eq!(values.iter().find(|f| f.0 == "action").unwrap().1, "save");
+                // Only the button that submitted the form is included
+                assert_eq!(values.iter().filter(|f| f.0 == "action").count(), 1);
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            },
+            input { r#type: "text", name: "username", value: "goodbye" }
+            button {
+                id: "form-submit-button",
+                r#type: "submit",
+                name: "action",
+                value: "save",
+                "Save"
+            }
+            button { r#type: "submit", name: "action", value: "delete", "Delete" }
         }
     }
 }

@@ -199,3 +199,15 @@ test("select multiple", async ({ page }) => {
   await dynamicSelect.selectOption(["1", "2"]);
   await expect(dynamicSelect).toHaveValues(["1", "2"]);
 });
+
+test("form submitter value", async ({ page }) => {
+  await page.goto("http://localhost:9990");
+  const result = page.locator("#form-submitter-result");
+
+  // Only the button that submitted the form is included in the form values
+  await page.locator("#form-submitter-save").click();
+  await expect(result).toHaveText("save");
+
+  await page.locator("#form-submitter-delete").click();
+  await expect(result).toHaveText("delete");
+});
