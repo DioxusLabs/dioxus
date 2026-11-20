@@ -22,6 +22,21 @@ use crate::{AddressArguments, Anonymized, BuildArgs, TraceController};
 ///     client --package frontend \
 ///     server --package backend
 /// ```
+#[derive(Clone, Debug, Parser)]
+pub(crate) struct Serve {
+    /// Skip hot patches triggered by matching non-Rust build inputs
+    ///
+    /// Repeat this option to add more gitignore-style patterns relative to the Cargo
+    /// workspace root. Quote patterns such as '/assets/**/*.png'. Bundled assets
+    /// still update normally, and files in the public directory keep their usual
+    /// rebuild behavior.
+    #[arg(long, value_name = "PATTERN")]
+    hot_patch_ignore: Vec<String>,
+
+    #[clap(flatten)]
+    args: ServeArgs,
+}
+
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub(crate) struct ServeArgs {
@@ -84,7 +99,11 @@ pub(crate) struct PlatformServeArgs {
     pub(crate) args: String,
 }
 
-impl ServeArgs {
+impl Serve {
+    pub(crate) fn has_hot_patch_ignore_patterns(&self) -> bool {
+        !self.hot_patch_ignore.is_empty()
+    }
+
     /// Start the tui, builder, etc by resolving the arguments and then running the actual top-level serve function
     ///
     /// Make sure not to do any intermediate logging since our tracing infra has now enabled much
@@ -93,20 +112,28 @@ impl ServeArgs {
     /// We also set up proper panic handling since the TUI has a tendency to corrupt the terminal.
     pub(crate) async fn serve(self, tracer: &TraceController) -> Result<StructuredOutput> {
         // Redirect all logging the cli logger - if there's any pending after a panic, we flush it
-        let is_interactive_tty = self.is_interactive_tty();
+        let is_interactive_tty = self.args.is_interactive_tty();
         if is_interactive_tty {
             tracer.redirect_to_tui();
         }
 
-        crate::serve::serve_all(self, tracer)
+        crate::serve::serve_all(self.args, &self.hot_patch_ignore, tracer)
             .await
             .map(|_| StructuredOutput::Success)
     }
+}
 
+impl ServeArgs {
     /// Check if the server is running in interactive mode. This involves checking the terminal as well
     pub(crate) fn is_interactive_tty(&self) -> bool {
         use std::io::IsTerminal;
         std::io::stdout().is_terminal() && self.interactive.unwrap_or(true)
+    }
+}
+
+impl Anonymized for Serve {
+    fn anonymized(&self) -> Value {
+        self.args.anonymized()
     }
 }
 

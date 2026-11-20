@@ -62,7 +62,7 @@ pub(crate) enum Commands {
 
     /// Build, watch, and serve the project.
     #[clap(name = "serve")]
-    Serve(serve::ServeArgs),
+    Serve(serve::Serve),
 
     /// Bundle the Dioxus app into a shippable object.
     #[clap(name = "bundle")]
