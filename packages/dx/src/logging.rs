@@ -790,12 +790,16 @@ impl TraceController {
     /// if a particular session is failing in some way.
     pub(crate) fn to_invoked_event(arg: &crate::Commands) -> TelemetryEventData {
         let (message, anonymized) = Self::command_anonymized(arg);
+        let event =
+            TelemetryEventData::new("cli_invoked", message).with_value("arguments", anonymized);
+        // Ignore patterns can contain project filenames in either space-delimited or equals form.
+        if matches!(arg, crate::Commands::Serve(serve) if serve.has_hot_patch_ignore_patterns()) {
+            return event;
+        }
         let raw_arguments = std::env::args()
             .map(|s| dioxus_cli_telemetry::strip_paths(&s))
             .collect::<Vec<_>>();
-        TelemetryEventData::new("cli_invoked", message)
-            .with_value("raw_arguments", raw_arguments)
-            .with_value("arguments", anonymized)
+        event.with_value("raw_arguments", raw_arguments)
     }
 
     /// Returns arguments that we're curious about
@@ -1357,6 +1361,34 @@ impl PrettyUptime {
             elapsed.as_secs(),
             elapsed.subsec_millis() / 10
         )
+    }
+}
+
+#[cfg(test)]
+mod invoked_event_tests {
+    use super::TraceController;
+    use clap::Parser;
+
+    #[test]
+    fn serve_ignore_patterns_are_omitted_from_invocation_telemetry() {
+        let serve = crate::Cli::try_parse_from([
+            "dx",
+            "serve",
+            "--hot-patch-ignore",
+            "assets/private/*.png",
+            "--hot-patch-ignore=assets/internal/*.css",
+        ])
+        .unwrap();
+        let event = TraceController::to_invoked_event(&serve.action);
+        assert!(event.values.contains_key("arguments"));
+        assert!(!event.values.contains_key("raw_arguments"));
+        let serialized = serde_json::to_string(&event).unwrap();
+        assert!(!serialized.contains("assets/private"));
+        assert!(!serialized.contains("assets/internal"));
+
+        let default_serve = crate::Cli::try_parse_from(["dx", "serve"]).unwrap();
+        let event = TraceController::to_invoked_event(&default_serve.action);
+        assert!(event.values.contains_key("raw_arguments"));
     }
 }
 

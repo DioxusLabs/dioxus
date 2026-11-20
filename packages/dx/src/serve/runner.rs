@@ -16,6 +16,7 @@ use dx_wire_format::BuildStage;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use futures_util::future::OptionFuture;
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use krates::NodeId;
 use notify::{
     Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
@@ -57,6 +58,7 @@ pub(crate) struct AppServer {
 
     // Resolved args related to how we go about processing the rebuilds and logging
     pub(crate) hotreload_mode: HotReloadMode,
+    hot_patch_ignore: Gitignore,
     pub(crate) interactive: bool,
     pub(crate) _force_sequential: bool,
     pub(crate) open_browser: bool,
@@ -109,8 +111,18 @@ pub(crate) enum HotReloadMode {
 
 impl AppServer {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
-    pub(crate) async fn new(args: ServeArgs) -> Result<Self> {
+    pub(crate) async fn new(args: ServeArgs, hot_patch_ignore: &[String]) -> Result<Self> {
         let workspace = Workspace::current().await?;
+        let mut ignore_builder = GitignoreBuilder::new(workspace.workspace_root());
+        for (index, pattern) in hot_patch_ignore.iter().enumerate() {
+            // Fatal errors can be included in telemetry, so identify the argument by position.
+            ignore_builder.add_line(None, pattern).map_err(|_| {
+                anyhow::anyhow!("Invalid --hot-patch-ignore pattern #{}", index + 1)
+            })?;
+        }
+        let hot_patch_ignore = ignore_builder
+            .build()
+            .map_err(|_| anyhow::anyhow!("Failed to compile --hot-patch-ignore patterns"))?;
 
         // Resolve the simpler args
         let interactive = args.is_interactive_tty();
@@ -209,6 +221,7 @@ impl AppServer {
             applied_client_hot_reload_message: Default::default(),
             watch_fs,
             hotreload_mode,
+            hot_patch_ignore,
             client,
             server,
             open_browser,
@@ -413,6 +426,16 @@ impl AppServer {
         // when this is true.
         let mut needs_deep_rebuild = false;
 
+        // While recovering from a failed build, an edit to any build input can fix the failure.
+        let skip_hot_patch_inputs = !self.hot_patch_ignore.is_empty()
+            && self.hotreload_mode == HotReloadMode::Hotpatch
+            && self.client.stage == BuildStage::Success
+            && self
+                .server
+                .as_ref()
+                .is_none_or(|server| server.stage == BuildStage::Success)
+            && self.has_hotpatchable_builds();
+
         // We attempt to hotreload rsx blocks without a full rebuild
         for path in files {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
@@ -555,24 +578,16 @@ impl AppServer {
             }
 
             // If it's not a rust file, then it might be depended on via include! or similar
-            if ext != "rs" {
-                if let Some(artifacts) = self.client.artifacts.as_ref() {
-                    // Check if the path is directly in depinfo
-                    if artifacts.depinfo.files.contains(path) {
-                        needs_rust_rebuild = true;
-                        break;
-                    }
-                    // Also check if the path is under a directory that's in depinfo
-                    // (for directories added via cargo:rerun-if-changed=dir)
-                    for dep_path in &artifacts.depinfo.files {
-                        if dep_path.is_dir() && path.starts_with(dep_path) {
-                            needs_rust_rebuild = true;
-                            break;
-                        }
-                    }
-                    if needs_rust_rebuild {
-                        break;
-                    }
+            if ext != "rs"
+                && let Some(artifacts) = self.client.artifacts.as_ref()
+            {
+                needs_rust_rebuild |= non_rust_input_requires_rebuild(
+                    path,
+                    &artifacts.depinfo.files,
+                    skip_hot_patch_inputs.then_some(&self.hot_patch_ignore),
+                );
+                if needs_rust_rebuild {
+                    break;
                 }
             }
         }
@@ -1794,6 +1809,27 @@ impl AppServer {
     }
 }
 
+fn non_rust_input_requires_rebuild(
+    path: &Path,
+    inputs: &[PathBuf],
+    hot_patch_ignore: Option<&Gitignore>,
+) -> bool {
+    if hot_patch_ignore.is_some_and(|ignore| {
+        path.strip_prefix(ignore.path()).is_ok_and(|relative| {
+            ignore
+                .matched_path_or_any_parents(relative, path.is_dir())
+                .is_ignore()
+        })
+    }) {
+        return false;
+    }
+
+    // Build scripts can register directories with cargo:rerun-if-changed.
+    inputs
+        .iter()
+        .any(|input| input == path || (path.starts_with(input) && input.is_dir()))
+}
+
 /// Bind a listener to any point and return it
 /// When the listener is dropped, the socket will be closed, but we'll still have a port that we
 /// can bind our proxy to.
@@ -2315,6 +2351,44 @@ fn analyze_dioxus_value(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hot_patch_ignore_suppresses_matching_non_rust_inputs() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = temp_dir.path().join("workspace");
+        let assets = workspace.join("assets");
+        std::fs::create_dir_all(&assets).unwrap();
+
+        let style = assets.join("theme.css");
+        let texture = assets.join("nested/texture.png");
+        let label = workspace.join("label.txt");
+        let external = temp_dir.path().join("external/assets/theme.css");
+        let inputs = vec![style.clone(), assets, label.clone(), external.clone()];
+
+        let mut builder = GitignoreBuilder::new(&workspace);
+        builder.add_line(None, "/assets/").unwrap();
+        builder.add_line(None, "!/assets/**/*.png").unwrap();
+        let ignore = builder.build().unwrap();
+
+        assert!(non_rust_input_requires_rebuild(&style, &inputs, None));
+        assert!(!non_rust_input_requires_rebuild(
+            &style,
+            &inputs,
+            Some(&ignore)
+        ));
+        assert!(!non_rust_input_requires_rebuild(
+            &workspace.join("assets/nested/font.ttf"),
+            &inputs,
+            Some(&ignore)
+        ));
+        for path in [texture, label, external] {
+            assert!(non_rust_input_requires_rebuild(
+                &path,
+                &inputs,
+                Some(&ignore)
+            ));
+        }
+    }
 
     fn parse(s: &str) -> toml::Value {
         toml::from_str(s).expect("valid toml")

@@ -30,7 +30,7 @@ impl RunArgs {
         self.args.hot_reload = Some(false);
         self.args.watch = Some(false);
 
-        let mut builder = AppServer::new(self.args).await?;
+        let mut builder = AppServer::new(self.args, &[]).await?;
         let mut devserver = WebServer::start(&builder)?;
 
         builder.initialize();
