@@ -255,7 +255,7 @@ pub(crate) enum BundleFormat {
     Windows,
 
     /// Targeting the linux desktop bundle structure
-    #[cfg_attr(target_os = "linux", serde(alias = "desktop"))]
+    #[cfg_attr(all(unix, not(target_os = "macos")), serde(alias = "desktop"))]
     #[serde(rename = "linux")]
     Linux,
 
@@ -281,7 +281,7 @@ impl BundleFormat {
             Self::MacOS
         } else if cfg!(target_os = "windows") {
             Self::Windows
-        } else if cfg!(target_os = "linux") {
+        } else if cfg!(unix) {
             Self::Linux
         } else {
             Self::Web

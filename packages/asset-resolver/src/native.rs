@@ -162,13 +162,19 @@ fn get_asset_root() -> PathBuf {
             .join("Resources");
     }
 
-    // In linux bundles, the assets are placed in the lib/$product_name directory
+    // In Linux and BSD desktop bundles, the assets are placed in the lib/$product_name directory
     // bin/
     //   main
     // lib/
     //   $product_name/
     //     assets/
-    if cfg!(target_os = "linux") {
+    if cfg!(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "netbsd",
+        target_os = "openbsd",
+    )) {
         if let Some(lib_dir) = cur_exe
             .parent()
             .and_then(|parent| parent.parent())

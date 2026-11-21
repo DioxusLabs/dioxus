@@ -277,9 +277,11 @@ impl BuildRequest {
         // Add more search paths for the linker
         let mut command_envs = args.envs.clone();
 
-        // On linux, we need to set a more complete PATH for the linker to find its libraries
-        if cfg!(target_os = "linux") {
-            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
+        // On unix targets like Linux and FreeBSD, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(all(unix, not(target_os = "macos"))) {
+            if let Ok(path) = std::env::var("PATH") {
+                command_envs.push(("PATH".to_string(), path));
+            }
         }
 
         // Run the linker directly!
@@ -1134,9 +1136,11 @@ impl BuildRequest {
         // Add more search paths for the linker
         let mut command_envs = rustc_args.envs.clone();
 
-        // On linux, we need to set a more complete PATH for the linker to find its libraries
-        if cfg!(target_os = "linux") {
-            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
+        // On unix targets like Linux and FreeBSD, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(all(unix, not(target_os = "macos"))) {
+            if let Ok(path) = std::env::var("PATH") {
+                command_envs.push(("PATH".to_string(), path));
+            }
         }
 
         // Run the linker directly!
@@ -1263,29 +1267,7 @@ impl BuildRequest {
             }
         }
 
-        match self.triple.environment {
-            target_lexicon::Environment::Gnu
-            | target_lexicon::Environment::Gnuabi64
-            | target_lexicon::Environment::Gnueabi
-            | target_lexicon::Environment::Gnueabihf
-            | target_lexicon::Environment::GnuLlvm => LinkerFlavor::Gnu,
-            target_lexicon::Environment::Musl => LinkerFlavor::Gnu,
-            target_lexicon::Environment::Android => LinkerFlavor::Gnu,
-            target_lexicon::Environment::Msvc => LinkerFlavor::Msvc,
-            target_lexicon::Environment::Macabi => LinkerFlavor::Darwin,
-            _ => match self.triple.operating_system {
-                OperatingSystem::Darwin(_) => LinkerFlavor::Darwin,
-                OperatingSystem::IOS(_) => LinkerFlavor::Darwin,
-                OperatingSystem::MacOSX(_) => LinkerFlavor::Darwin,
-                OperatingSystem::Linux => LinkerFlavor::Gnu,
-                OperatingSystem::Windows => LinkerFlavor::Msvc,
-                _ => match self.triple.architecture {
-                    target_lexicon::Architecture::Wasm32 => LinkerFlavor::WasmLld,
-                    target_lexicon::Architecture::Wasm64 => LinkerFlavor::WasmLld,
-                    _ => LinkerFlavor::Unsupported,
-                },
-            },
-        }
+        linker_flavor_for_triple(&self.triple)
     }
 
     /// Select the linker to use for this platform.
@@ -1514,4 +1496,58 @@ fn dep_info_path_for_rustc_args(args: &[String]) -> Option<PathBuf> {
     let out_dir = out_dir?;
     let crate_name = crate_name?;
     Some(PathBuf::from(out_dir).join(format!("{crate_name}{extra}.d")))
+}
+
+fn linker_flavor_for_triple(triple: &target_lexicon::Triple) -> LinkerFlavor {
+    match triple.environment {
+        target_lexicon::Environment::Gnu
+        | target_lexicon::Environment::Gnuabi64
+        | target_lexicon::Environment::Gnueabi
+        | target_lexicon::Environment::Gnueabihf
+        | target_lexicon::Environment::GnuLlvm => LinkerFlavor::Gnu,
+        target_lexicon::Environment::Musl => LinkerFlavor::Gnu,
+        target_lexicon::Environment::Android => LinkerFlavor::Gnu,
+        target_lexicon::Environment::Msvc => LinkerFlavor::Msvc,
+        target_lexicon::Environment::Macabi => LinkerFlavor::Darwin,
+        _ => match triple.operating_system {
+            OperatingSystem::Darwin(_) => LinkerFlavor::Darwin,
+            OperatingSystem::IOS(_) => LinkerFlavor::Darwin,
+            OperatingSystem::MacOSX(_) => LinkerFlavor::Darwin,
+            OperatingSystem::Linux
+            | OperatingSystem::Freebsd
+            | OperatingSystem::Netbsd
+            | OperatingSystem::Openbsd
+            | OperatingSystem::Dragonfly => LinkerFlavor::Gnu,
+            OperatingSystem::Windows => LinkerFlavor::Msvc,
+            _ => match triple.architecture {
+                target_lexicon::Architecture::Wasm32 => LinkerFlavor::WasmLld,
+                target_lexicon::Architecture::Wasm64 => LinkerFlavor::WasmLld,
+                _ => LinkerFlavor::Unsupported,
+            },
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn bsd_triples_use_gnu_linker_flavor() {
+        for triple in [
+            "x86_64-unknown-freebsd",
+            "aarch64-unknown-freebsd",
+            "x86_64-unknown-netbsd",
+            "x86_64-unknown-openbsd",
+            "x86_64-unknown-dragonfly",
+        ] {
+            let parsed = target_lexicon::Triple::from_str(triple).unwrap();
+            assert_eq!(
+                linker_flavor_for_triple(&parsed),
+                LinkerFlavor::Gnu,
+                "expected Gnu linker flavor for {triple}"
+            );
+        }
+    }
 }
