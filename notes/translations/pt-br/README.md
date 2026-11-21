@@ -50,7 +50,7 @@
 
 <br/>
 
-> 💡 Este é um documento traduzido voluntariamente. Se você viu erros de tradução e/ou erros de digitação, entre em contato: [@amindWalker](https://github.com/amindWalker), [GMail](bhrochamail@gmail.com) ou **_melhor ainda, envie um PR_**.
+> 💡 Este é um documento traduzido voluntariamente. Se você viu erros de tradução e/ou erros de digitação, entre em contato: [@amindWalker](https://github.com/amindWalker), [GMail](mailto:bhrochamail@gmail.com) ou **_melhor ainda, envie um PR_**.
 
 <br>
 
