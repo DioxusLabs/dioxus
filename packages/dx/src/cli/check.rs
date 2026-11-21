@@ -58,7 +58,7 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 
 /// Read every .rs file accessible when considering the .gitignore and check it
 ///
-/// Runs using Tokio for multithreading, so it should be really really fast
+/// Runs using Tokio for multithreading, so it should be really fast
 ///
 /// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
 async fn check_project_and_report(build: &BuildRequest) -> Result<()> {
