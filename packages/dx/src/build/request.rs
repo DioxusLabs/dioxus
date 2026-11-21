@@ -560,10 +560,10 @@ impl BuildRequest {
                     Renderer::Webview | Renderer::Native => {
                         if cfg!(target_os = "macos") {
                             platform = Platform::MacOS;
-                        } else if cfg!(target_os = "linux") {
-                            platform = Platform::Linux;
                         } else if cfg!(target_os = "windows") {
                             platform = Platform::Windows;
+                        } else if cfg!(unix) {
+                            platform = Platform::Linux;
                         }
                     }
                     Renderer::Server => platform = Platform::Server,
@@ -1807,7 +1807,11 @@ impl BuildRequest {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path/Frameworks".to_string());
                 cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
             }
-            OperatingSystem::Linux => {
+            OperatingSystem::Linux
+            | OperatingSystem::Freebsd
+            | OperatingSystem::Netbsd
+            | OperatingSystem::Openbsd
+            | OperatingSystem::Dragonfly => {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
