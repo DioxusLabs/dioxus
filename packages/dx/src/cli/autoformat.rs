@@ -152,7 +152,7 @@ fn format_file(
 
 /// Read every .rs file accessible when considering the .gitignore and try to format it
 ///
-/// Runs using rayon for multithreading, so it should be really really fast
+/// Runs using rayon for multithreading, so it should be really fast
 ///
 /// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
 fn autoformat_project(
