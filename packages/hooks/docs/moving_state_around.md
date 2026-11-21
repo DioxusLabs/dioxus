@@ -40,7 +40,7 @@ struct MyState {
 }
 
 fn ParentComponent() -> Element {
-    // Use context provider provides an unique type to all children of this component
+    // Use context provider provides a unique type to all children of this component
     use_context_provider(|| MyState { count: Signal::new(0) });
 
     rsx! {
