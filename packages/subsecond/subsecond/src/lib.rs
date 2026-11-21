@@ -754,7 +754,7 @@ pub fn aslr_reference() -> usize {
 /// If the device isn't rooted, then we can't push the library there.
 /// This is a workaround to copy the library to a memfd and then dlopen it.
 ///
-/// I haven't tested it on device yet, so if if it doesn't work, then we can simply revert to using
+/// I haven't tested it on device yet, so if it doesn't work, then we can simply revert to using
 /// "adb root" and then pushing the library to the /data/data folder instead of the tmp folder.
 ///
 /// Android provides us a flag when calling dlopen to use a file descriptor instead of a path, presumably
