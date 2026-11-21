@@ -92,7 +92,7 @@ impl WriteMutations for WebsysDom {
         let text_value = match value {
             BorrowedAttributeValue::Text(txt) => txt,
             BorrowedAttributeValue::Float(f) => {
-                owned = f.to_string();
+                owned = String::from(js_sys::Number::from(f).to_string(10).unwrap_or_default());
                 owned.as_str()
             }
             BorrowedAttributeValue::Int(n) => {
