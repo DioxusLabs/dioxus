@@ -516,9 +516,9 @@ impl<'a> Splitter<'a> {
                     if symbol.which_data_segment == 0 {
                         let data_id = out.data.iter().nth(symbol.which_data_segment).unwrap().id();
                         let data = out.data.get_mut(data_id);
-                        for i in symbol.segment_offset..symbol.segment_offset + symbol.symbol_size {
-                            data.value[i] = 0;
-                        }
+                        data.value
+                            [symbol.segment_offset..symbol.segment_offset + symbol.symbol_size]
+                            .fill(0);
                     }
                 }
             }

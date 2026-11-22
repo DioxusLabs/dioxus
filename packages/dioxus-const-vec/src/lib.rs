@@ -294,9 +294,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     {
         assert!(first < self.len as usize);
         assert!(second < self.len as usize);
-        let temp = self.memory[first];
-        self.memory[first] = self.memory[second];
-        self.memory[second] = temp;
+        self.memory.swap(first, second);
     }
 
     /// Pop a value off the end of the [`ConstVec`].
