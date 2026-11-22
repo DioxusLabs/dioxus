@@ -15,17 +15,21 @@ interface ListenerElement extends Element {
 // `null` for nodes pushed positionally (e.g. cloned template children).
 type StackEntry = [Node, NodeId | null];
 
+interface ListenerRecord {
+  bubbles: boolean;
+  count: number;
+  callback: EventListener | null;
+}
+
 export class BaseInterpreter {
   // non bubbling events listen at the element the listener was created at
   global: {
     [key: string]: { active: number; callback: EventListener };
   };
-  // bubbling events can listen at the root element
-  local: {
-    [key: string]: {
-      [key: string]: EventListener;
-    };
-  };
+  // Weak metadata follows physical nodes, independently of reused ElementIds.
+  private nodeIds: WeakMap<Node, Set<NodeId>>;
+  private listeners: WeakMap<Element, Map<string, ListenerRecord>>;
+  private queuedMounted: [NodeId, Node][];
 
   root: HTMLElement;
   handler: EventListener;
@@ -42,10 +46,13 @@ export class BaseInterpreter {
 
   initialize(root: HTMLElement, handler: EventListener | null = null) {
     this.global = {};
-    this.local = {};
+    this.nodeIds = new WeakMap();
+    this.listeners = new WeakMap();
+    this.queuedMounted = [];
     this.root = root;
 
-    this.nodes = [root];
+    this.nodes = [];
+    this.setNode(0, root);
     this.stack = [[root, 0]];
 
     this.handler = handler;
@@ -56,6 +63,7 @@ export class BaseInterpreter {
 
   handleResizeEvent(entry: ResizeObserverEntry) {
     const target = entry.target;
+    if (!this.listeners.get(target)?.has("resize")) return;
 
     let event = new CustomEvent<ResizeObserverEntry>("resize", {
       bubbles: false,
@@ -85,6 +93,7 @@ export class BaseInterpreter {
 
   handleIntersectionEvent(entry: IntersectionObserverEntry) {
     const target = entry.target;
+    if (!this.listeners.get(target)?.has("visible")) return;
 
     let event = new CustomEvent<IntersectionObserverEntry>("visible", {
       bubbles: false,
@@ -112,12 +121,24 @@ export class BaseInterpreter {
     }
   }
 
-  createListener(event_name: string, element: Element, bubbles: boolean) {
-    if (event_name == "resize") {
-      this.createResizeObserver(element);
-    } else if (event_name == "visible") {
-      this.createIntersectionObserver(element);
+  createListener(event_name: string, element: ListenerElement, bubbles: boolean) {
+    let records = this.listeners.get(element);
+    if (!records) {
+      records = new Map();
+      this.listeners.set(element, records);
     }
+    let record = records.get(event_name);
+    if (record) {
+      record.count++;
+    } else {
+      // Native mounted registrations route IPC immediately; there is no DOM event.
+      record = { bubbles, count: 1, callback: event_name === "mounted" ? null : this.handler };
+      records.set(event_name, record);
+      if (!bubbles && record.callback) element.addEventListener(event_name, record.callback);
+      if (event_name === "resize") this.createResizeObserver(element);
+      else if (event_name === "visible") this.createIntersectionObserver(element);
+    }
+    element.listening = (element.listening || 0) + 1;
 
     if (bubbles) {
       if (this.global[event_name] === undefined) {
@@ -126,60 +147,110 @@ export class BaseInterpreter {
       } else {
         this.global[event_name].active++;
       }
-    } else {
-      const id = element.getAttribute("data-dioxus-id");
-      if (!this.local[id]) {
-        this.local[id] = {};
-      }
-      element.addEventListener(event_name, this.handler);
     }
   }
 
-  removeListener(element: Element, event_name: string, bubbles: boolean) {
-    if (event_name == "resize") {
-      this.removeResizeObserver(element);
-    } else if (event_name == "visible") {
-      this.removeIntersectionObserver(element);
-    } else if (bubbles) {
-      this.removeBubblingListener(event_name);
-    } else {
-      this.removeNonBubblingListener(element, event_name);
+  removeListener(element: ListenerElement, event_name: string) {
+    const records = this.listeners.get(element);
+    const record = records?.get(event_name);
+    if (!record) return;
+
+    if (record.bubbles) this.removeBubblingListener(event_name);
+    if (--record.count === 0) {
+      if (!record.bubbles && record.callback) element.removeEventListener(event_name, record.callback);
+      if (event_name === "resize") this.removeResizeObserver(element);
+      else if (event_name === "visible") this.removeIntersectionObserver(element);
+      records.delete(event_name);
+      if (records.size === 0) this.listeners.delete(element);
     }
+    element.listening--;
+    if (element.listening === 0) element.removeAttribute("data-dioxus-id");
   }
 
   removeBubblingListener(event_name: string) {
-    this.global[event_name].active--;
-    if (this.global[event_name].active === 0) {
-      this.root.removeEventListener(
-        event_name,
-        this.global[event_name].callback,
-      );
+    const listener = this.global[event_name];
+    if (--listener.active === 0) {
+      this.root.removeEventListener(event_name, listener.callback);
       delete this.global[event_name];
     }
   }
 
-  removeNonBubblingListener(element: Element, event_name: string) {
-    const id = element.getAttribute("data-dioxus-id");
-    delete this.local[id][event_name];
-    if (Object.keys(this.local[id]).length === 0) {
-      delete this.local[id];
+  // All assignments, including hydration, must register the reverse association.
+  setNode(id: NodeId, node: Node) {
+    const previous = this.nodes[id];
+    if (previous) {
+      const previousIds = this.nodeIds.get(previous);
+      previousIds?.delete(id);
+      if (previousIds?.size === 0) this.nodeIds.delete(previous);
     }
-    element.removeEventListener(event_name, this.handler);
+    this.nodes[id] = node;
+    let ids = this.nodeIds.get(node);
+    if (!ids) {
+      ids = new Set();
+      this.nodeIds.set(node, ids);
+    }
+    ids.add(id);
   }
 
-  removeAllNonBubblingListeners(element: Element) {
-    const id = element.getAttribute("data-dioxus-id");
-    delete this.local[id];
+  // Only call for a subtree retired by Remove/Replace, after moving replacement
+  // operands out of it. Disconnected templates and pending stack nodes are live.
+  retireSubtree(root: Node) {
+    const pending = [root];
+    while (pending.length) {
+      const node = pending.pop();
+      // The renderer root (ElementId 0) is not an ordinary retired subtree.
+      if (node === this.root) continue;
+      for (const child of node.childNodes) pending.push(child);
+
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as ListenerElement;
+        const records = this.listeners.get(element);
+        if (records) {
+          for (const [name, record] of records) {
+            if (record.bubbles) {
+              for (let i = 0; i < record.count; i++) this.removeBubblingListener(name);
+            } else if (record.callback) {
+              element.removeEventListener(name, record.callback);
+            }
+            if (name === "resize") this.removeResizeObserver(element);
+            else if (name === "visible") this.removeIntersectionObserver(element);
+          }
+          this.listeners.delete(element);
+        }
+        element.removeAttribute("data-dioxus-id");
+        delete element.listening;
+      }
+      const ids = this.nodeIds.get(node);
+      if (ids) {
+        for (const id of ids) {
+          // The slot may have been rebound before the old physical node retired.
+          if (id !== 0 && this.nodes[id] === node) this.nodes[id] = undefined;
+        }
+        this.nodeIds.delete(node);
+      }
+    }
+  }
+
+  queueMounted(id: NodeId) {
+    this.queuedMounted.push([id, this.nodes[id]]);
+  }
+
+  queueTopMounted() {
+    const [node] = this.stack[this.stack.length - 1];
+    this.queuedMounted.push([this.currentTopId(), node]);
+  }
+
+  takeMountedIds(): Uint32Array {
+    const queued = this.queuedMounted;
+    this.queuedMounted = [];
+    return Uint32Array.from(
+      queued.filter(([id, node]) => node && this.nodes[id] === node),
+      ([id]) => id
+    );
   }
 
   getNode(id: NodeId): Node {
     return this.nodes[id];
-  }
-
-  // Bind an ElementId to a DOM node. Used by the Rust hydration cursor to
-  // record the nodes it matches against the server-rendered DOM.
-  setNode(id: NodeId, node: Node) {
-    this.nodes[id] = node;
   }
 
   // Attach an event listener to a previously-bound node. Mirrors
@@ -187,8 +258,6 @@ export class BaseInterpreter {
   // working stack, so the Rust hydration cursor can drive it directly.
   setNodeListener(id: NodeId, event_name: string, bubbles: boolean) {
     const node = this.nodes[id] as ListenerElement;
-    if (node.listening) node.listening += 1;
-    else node.listening = 1;
     node.setAttribute("data-dioxus-id", `${id}`);
     this.createListener(event_name, node, bubbles);
   }
@@ -204,13 +273,13 @@ export class BaseInterpreter {
   popId(id: NodeId) {
     const entry = this.stack.pop();
     if (!entry) throw new Error("popId: empty stack");
-    this.nodes[id] = entry[0];
+    this.setNode(id, entry[0]);
   }
 
   setId(id: NodeId) {
     const top = this.stack[this.stack.length - 1];
     if (!top) throw new Error("setId: empty stack");
-    this.nodes[id] = top[0];
+    this.setNode(id, top[0]);
     top[1] = id;
   }
 
@@ -259,12 +328,11 @@ export class BaseInterpreter {
     const target = this.stack[targetIdx][0];
     const items = this.stack.splice(targetIdx + 1, many);
     this.stack.pop();
-    const real = target as ListenerElement;
-    if (real.listening) this.removeAllNonBubblingListeners(real);
     const parent = target.parentNode as Node;
     const next = target.nextSibling;
     (target as ChildNode).remove();
     this.applyChunk(items, parent, next);
+    if (!items.some(([node]) => node === target)) this.retireSubtree(target);
   }
 
   insertAfterTop(many: number) {
@@ -289,8 +357,8 @@ export class BaseInterpreter {
     const targetEntry = this.stack.pop();
     if (!targetEntry) return;
     const node = targetEntry[0] as ListenerElement;
-    if (node.listening) this.removeAllNonBubblingListeners(node);
     (node as ChildNode).remove();
+    this.retireSubtree(node);
   }
 
   setTopAttribute(field: string, value: string, ns: string | null) {
@@ -333,8 +401,6 @@ export class BaseInterpreter {
   addTopEventListener(event_name: string, bubbles: boolean) {
     const node = this.stack[this.stack.length - 1][0] as ListenerElement;
     const id = this.currentTopId();
-    if (node.listening) node.listening += 1;
-    else node.listening = 1;
     node.setAttribute("data-dioxus-id", `${id}`);
     this.createListener(event_name, node, bubbles);
   }
@@ -342,10 +408,9 @@ export class BaseInterpreter {
   addTopForeignEventListener(event_name: string, bubbles: boolean) {
     const node = this.stack[this.stack.length - 1][0] as ListenerElement;
     const id = this.currentTopId();
-    if (node.listening) node.listening += 1;
-    else node.listening = 1;
     node.setAttribute("data-dioxus-id", `${id}`);
 
+    this.createListener(event_name, node, bubbles);
     if (event_name === "mounted") {
       (window as any).ipc.postMessage(
         this.sendSerializedEvent({
@@ -355,18 +420,12 @@ export class BaseInterpreter {
           bubbles,
         }),
       );
-    } else {
-      this.createListener(event_name, node, bubbles);
     }
   }
 
   removeTopEventListener(event_name: string, bubbles: boolean) {
     const node = this.stack[this.stack.length - 1][0] as ListenerElement;
-    node.listening = (node.listening ?? 1) - 1;
-    this.removeListener(node, event_name, bubbles);
-    if (node.listening <= 0) {
-      node.removeAttribute("data-dioxus-id");
-    }
+    this.removeListener(node, event_name);
   }
 
   // Insert each node in `items` into `parent` before `cursorBefore`, appending

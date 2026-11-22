@@ -177,7 +177,10 @@ impl WebsysDom {
 
         #[cfg(feature = "mounted")]
         for anchor_id in dynamic_attrs.mounted_events {
-            self.send_mount_event(anchor_id);
+            // Hydration binds physical nodes directly, outside the mutation stream.
+            self.interpreter
+                .base()
+                .queue_mounted(anchor_id.raw() as u32);
         }
         for (event_name, bubbles) in dynamic_attrs.listeners {
             cursor.attach_listener(id_arg, event_name, bubbles);
