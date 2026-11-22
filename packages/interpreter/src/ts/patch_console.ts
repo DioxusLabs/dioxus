@@ -1,3 +1,15 @@
+function stringify(args: any[]): string[] {
+  return args.map((a) => {
+    if (typeof a === "string") return a;
+    try {
+      const s = JSON.stringify(a);
+      return s === undefined ? String(a) : s;
+    } catch {
+      return String(a);
+    }
+  });
+}
+
 
 export function monkeyPatchConsole(ws: WebSocket) {
   const console = window.console;
@@ -10,7 +22,7 @@ export function monkeyPatchConsole(ws: WebSocket) {
   console.log = function (...args: any[]) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
-        "Log": { level: "log", messages: args }
+        "Log": { level: "log", messages: stringify(args) }
       }));
     }
     log.apply(console, args);
@@ -19,7 +31,7 @@ export function monkeyPatchConsole(ws: WebSocket) {
   console.info = function (...args: any[]) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
-        "Log": { level: "info", messages: args }
+        "Log": { level: "info", messages: stringify(args) }
       }));
     }
     info.apply(console, args);
@@ -28,7 +40,7 @@ export function monkeyPatchConsole(ws: WebSocket) {
   console.warn = function (...args: any[]) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
-        "Log": { level: "warn", messages: args }
+        "Log": { level: "warn", messages: stringify(args) }
       }));
     }
     warn.apply(console, args);
@@ -37,7 +49,7 @@ export function monkeyPatchConsole(ws: WebSocket) {
   console.error = function (...args: any[]) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
-        "Log": { level: "error", messages: args }
+        "Log": { level: "error", messages: stringify(args) }
       }));
     }
     error.apply(console, args);
@@ -46,7 +58,7 @@ export function monkeyPatchConsole(ws: WebSocket) {
   console.debug = function (...args: any[]) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
-        "Log": { level: "debug", messages: args }
+        "Log": { level: "debug", messages: stringify(args) }
       }));
     }
     debug.apply(console, args);
