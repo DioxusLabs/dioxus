@@ -1,3 +1,5 @@
+#![deny(clippy::empty_enums)]
+
 use std::{fmt::Display, marker::PhantomData};
 
 use dioxus::prelude::*;
