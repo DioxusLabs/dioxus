@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{DioxusConfig, Result, StructuredOutput, TargetArgs, Workspace, verbosity_or_default};
+use crate::{DioxusConfig, Result, StructuredOutput, Workspace, verbosity_or_default};
 use anyhow::{Context, bail};
 use clap::Parser;
 use dioxus_component_manifest::{
@@ -21,7 +21,7 @@ pub enum ComponentCommand {
     /// Add a component from a registry
     Add {
         #[clap(flatten)]
-        target: TargetArgs,
+        target: ComponentPackageArgs,
 
         #[clap(flatten)]
         component: ComponentArgs,
@@ -38,7 +38,7 @@ pub enum ComponentCommand {
     /// Remove a component
     Remove {
         #[clap(flatten)]
-        target: TargetArgs,
+        target: ComponentPackageArgs,
 
         #[clap(flatten)]
         component: ComponentArgs,
@@ -51,7 +51,7 @@ pub enum ComponentCommand {
     /// Update a component registry
     Update {
         #[clap(flatten)]
-        target: TargetArgs,
+        target: ComponentPackageArgs,
 
         /// The registry to update
         #[clap(flatten)]
@@ -61,7 +61,7 @@ pub enum ComponentCommand {
     /// List available components in a registry
     List {
         #[clap(flatten)]
-        target: TargetArgs,
+        target: ComponentPackageArgs,
 
         /// The registry to list components in
         #[clap(flatten)]
@@ -73,6 +73,26 @@ pub enum ComponentCommand {
 
     /// Print the schema for component manifests
     Schema,
+}
+
+#[derive(Clone, Debug, Parser)]
+pub struct ComponentPackageArgs {
+    /// The package to build
+    #[clap(short, long, help_heading = "Target Options")]
+    package: Option<String>,
+}
+
+struct ComponentConfig {
+    config: DioxusConfig,
+    root: PathBuf,
+}
+
+impl Deref for ComponentConfig {
+    type Target = DioxusConfig;
+
+    fn deref(&self) -> &Self::Target {
+        &self.config
+    }
 }
 
 /// Arguments for a component and component module location
@@ -232,7 +252,7 @@ impl ComponentCommand {
             Self::Update { registry, target } => {
                 let config = Self::resolve_config(target.package).await?;
                 registry
-                    .unwrap_or(config.components.registry.remote)
+                    .unwrap_or(config.config.components.registry.remote)
                     .update()
                     .await?;
             }
@@ -306,14 +326,22 @@ impl ComponentCommand {
     }
 
     /// Load the config
-    async fn resolve_config(package: Option<String>) -> Result<DioxusConfig> {
+    async fn resolve_config(package: Option<String>) -> Result<ComponentConfig> {
         let workspace = Workspace::current().await?;
 
         let crate_package = workspace.find_main_package(package)?;
 
-        Ok(workspace
-            .load_dioxus_config(crate_package, None)?
-            .unwrap_or_default())
+        Ok(ComponentConfig {
+            config: workspace
+                .load_dioxus_config(crate_package, None)?
+                .unwrap_or_default(),
+            root: workspace.krates[crate_package]
+                .manifest_path
+                .parent()
+                .context("Package manifest must have a parent directory")?
+                .as_std_path()
+                .to_path_buf(),
+        })
     }
 
     /// Resolve a registry from the config if none is provided
@@ -552,12 +580,12 @@ fn find_component(components: &[ResolvedComponent], component: &str) -> Result<R
 }
 
 /// Get the path to the components module, defaulting to src/components
-fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<PathBuf> {
+fn components_root(module_path: Option<&Path>, config: &ComponentConfig) -> Result<PathBuf> {
     if let Some(module_path) = module_path {
         return Ok(PathBuf::from(module_path));
     }
 
-    let root = Workspace::crate_root_from_path()?;
+    let root = &config.root;
 
     if let Some(component_path) = &config.components.components_dir {
         return Ok(root.join(component_path));
@@ -567,16 +595,19 @@ fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<
 }
 
 /// Get the path to the global assets directory, defaulting to assets
-async fn global_assets_root(assets_path: Option<&Path>, config: &DioxusConfig) -> Result<PathBuf> {
+async fn global_assets_root(
+    assets_path: Option<&Path>,
+    config: &ComponentConfig,
+) -> Result<PathBuf> {
     if let Some(assets_path) = assets_path {
         return Ok(PathBuf::from(assets_path));
     }
 
     if let Some(asset_dir) = &config.application.asset_dir {
-        return Ok(asset_dir.clone());
+        return Ok(config.root.join(asset_dir));
     }
 
-    let root = Workspace::crate_root_from_path()?;
+    let root = &config.root;
 
     Ok(root.join("assets"))
 }
@@ -601,7 +632,7 @@ async fn add_component(
     component_path: Option<&Path>,
     component: &ResolvedComponent,
     behavior: ComponentExistsBehavior,
-    config: &DioxusConfig,
+    config: &ComponentConfig,
 ) -> Result<()> {
     // Copy the folder content to the components directory
     let components_root = components_root(component_path, config)?;
@@ -699,6 +730,31 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(package(command), Some("desktop".to_string()));
+    }
+
+    #[test]
+    fn component_commands_reject_build_flags() {
+        for flag in ["--release", "--platform", "--features"] {
+            assert!(
+                ComponentCommand::try_parse_from(["components", "add", "progress", flag]).is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn component_paths_use_selected_package() {
+        let config = ComponentConfig {
+            config: DioxusConfig::default(),
+            root: PathBuf::from("workspace/two"),
+        };
+        assert_eq!(
+            components_root(None, &config).unwrap(),
+            config.root.join("src/components")
+        );
+        assert_eq!(
+            global_assets_root(None, &config).await.unwrap(),
+            config.root.join("assets")
+        );
     }
 }
 
