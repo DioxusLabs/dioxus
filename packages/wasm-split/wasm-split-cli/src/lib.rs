@@ -15,7 +15,7 @@ use walrus::{
 };
 use wasmparser::{
     BinaryReader, Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry,
-    SymbolInfo,
+    RelocationType, SymbolInfo,
 };
 
 pub const MAKE_LOAD_JS: &str = include_str!("./__wasm_split.js");
@@ -1248,7 +1248,7 @@ impl<'a> ModuleWithRelocations<'a> {
                 assert!(reloc_range.start >= range.start);
                 assert!(reloc_range.end <= range.end);
 
-                if let Some(target) = self.get_symbol_dep_node(entry.index as usize)? {
+                if let Some(target) = self.relocation_target(entry)? {
                     let us = Node::Function(func_id);
                     self.call_graph.entry(us).or_default().insert(target);
                     self.relocation_map.entry(us).or_default().push(*entry);
@@ -1282,7 +1282,7 @@ impl<'a> ModuleWithRelocations<'a> {
                 assert!(reloc_range.start >= range.start);
                 assert!(reloc_range.end <= range.end);
 
-                if let Some(target) = self.get_symbol_dep_node(entry.index as usize)? {
+                if let Some(target) = self.relocation_target(entry)? {
                     let dep = Node::DataSymbol(symbol.index);
                     self.call_graph.entry(dep).or_default().insert(target);
                     self.relocation_map.entry(dep).or_default().push(*entry);
@@ -1316,6 +1316,19 @@ impl<'a> ModuleWithRelocations<'a> {
             .collect();
 
         Ok(relocations)
+    }
+
+    /// The node a relocation refers to.
+    ///
+    /// `R_WASM_TYPE_INDEX_LEB` carries a type index (the signature operand of a
+    /// `call_indirect`), not a symbol index. Reading it as a symbol links the caller to whatever
+    /// function or data symbol happens to sit at that index, which can drag a whole split module
+    /// into the main chunk.
+    fn relocation_target(&self, entry: &RelocationEntry) -> Result<Option<Node>> {
+        if entry.ty == RelocationType::TypeIndexLeb {
+            return Ok(None);
+        }
+        self.get_symbol_dep_node(entry.index as usize)
     }
 
     /// Get the symbol's corresponding entry in the call graph
