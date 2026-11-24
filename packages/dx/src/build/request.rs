@@ -1226,7 +1226,9 @@ impl BuildRequest {
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     ///
     /// `dx` compiles everything with `--target` which ends up with a structure like:
-    /// `target/<triple>/<profile>/.fingerprint/<package_name>-<hash>`
+    /// `target/<triple>/<profile>/.fingerprint/<package_name>-<hash>`, or with cargo's newer
+    /// build-dir layout, `target/<triple>/<profile>/build/<package_name>/<hash>/fingerprint`.
+    /// When `build.build-dir` is configured these live under that directory instead of `target`.
     ///
     /// Normally you can't rely on this structure (ie with `cargo build`) but the explicit
     /// target arg guarantees this will work.
@@ -1265,7 +1267,7 @@ impl BuildRequest {
 
         // Always bust the tip crate.
         let mut bust = HashSet::new();
-        bust.insert(self.package().name.clone());
+        bust.insert(self.tip_package_name());
 
         // Walk workspace deps of the tip crate. If we're missing cached args for any of
         // them, bust their fingerprint so the wrapper re-captures during this fat build.
@@ -1280,20 +1282,7 @@ impl BuildRequest {
             }
         }
 
-        let fingerprint_dir = self.cargo_fingerprint_dir();
-        for entry in std::fs::read_dir(&fingerprint_dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
-            if let Some(fname) = entry.file_name().to_str() {
-                if let Some((name, _)) = fname.rsplit_once('-') {
-                    if bust.contains(name) {
-                        _ = std::fs::remove_dir_all(entry.path());
-                    }
-                }
-            }
-        }
+        remove_cargo_fingerprints(&self.cargo_profile_dir(), &bust);
 
         Ok(())
     }
@@ -2754,7 +2743,7 @@ impl BuildRequest {
 
     /// Get the type of executable we are compiling
     pub(crate) fn executable_type(&self) -> TargetKind {
-        self.crate_target.kind[0].clone()
+        self.crate_target.kind[0]
     }
 
     /// The application name. PascalCase version of the crate name by default.
@@ -3169,11 +3158,11 @@ impl BuildRequest {
             .collect()
     }
 
-    fn cargo_fingerprint_dir(&self) -> PathBuf {
-        self.target_dir
+    fn cargo_profile_dir(&self) -> PathBuf {
+        self.workspace
+            .build_dir
             .join(self.triple.to_string())
             .join(&self.profile)
-            .join(".fingerprint")
     }
 
     fn is_apple_target(&self) -> bool {
@@ -3222,5 +3211,68 @@ impl BuildRequest {
         }
 
         deps
+    }
+}
+
+/// Delete cargo's fingerprints for the given packages (underscore-normalized names) in a
+/// `<target>/<triple>/<profile>` dir, handling both the legacy `.fingerprint/<package>-<hash>`
+/// layout and the newer `build/<package>/<hash>/fingerprint` build-dir layout.
+fn remove_cargo_fingerprints(profile_dir: &Path, packages: &HashSet<String>) {
+    let read_dir = |dir: PathBuf| std::fs::read_dir(dir).into_iter().flatten().flatten();
+    let busted = |name: &str| packages.contains(&name.replace('-', "_"));
+
+    for entry in read_dir(profile_dir.join(".fingerprint")) {
+        let fname = entry.file_name();
+        if let Some((name, _)) = fname.to_str().and_then(|f| f.rsplit_once('-')) {
+            if busted(name) {
+                _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+
+    for entry in read_dir(profile_dir.join("build")) {
+        if entry.file_name().to_str().is_some_and(busted) {
+            for unit in read_dir(entry.path()) {
+                _ = std::fs::remove_dir_all(unit.path().join("fingerprint"));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn removes_fingerprints_in_both_cargo_layouts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let paths = [
+            ".fingerprint/my-app-1111",
+            ".fingerprint/my-lib-2222",
+            ".fingerprint/other-3333",
+            "build/my-app/4444/fingerprint",
+            "build/my-app/4444/out",
+            "build/my-lib/5555/fingerprint",
+            "build/other/6666/fingerprint",
+            "build/my-app-7777/out",
+        ];
+        for path in paths {
+            std::fs::create_dir_all(dir.join(path)).unwrap();
+        }
+
+        let bust = HashSet::from(["my_app".to_string(), "my_lib".to_string()]);
+        remove_cargo_fingerprints(dir, &bust);
+
+        let remaining: Vec<_> = paths.iter().filter(|p| dir.join(p).exists()).collect();
+        assert_eq!(
+            remaining,
+            [
+                &".fingerprint/other-3333",
+                &"build/my-app/4444/out",
+                &"build/other/6666/fingerprint",
+                &"build/my-app-7777/out",
+            ]
+        );
     }
 }
