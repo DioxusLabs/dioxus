@@ -37,7 +37,12 @@ impl HasFormData for WebFormData {
 
         // try to fill in form values
         if let Some(form) = self.element.dyn_ref::<web_sys::HtmlFormElement>() {
-            let form_data = web_sys::FormData::new_with_form(form).unwrap();
+            // Passing the submitter includes the name/value of the button that submitted the form
+            let submitter = self
+                .event
+                .dyn_ref::<web_sys::SubmitEvent>()
+                .and_then(|event| event.submitter());
+            let form_data = form_data_with_submitter(form, submitter.as_ref());
 
             for entry in form_data.entries().into_iter().flatten() {
                 if let Ok(array) = entry.dyn_into::<Array>()
@@ -95,8 +100,13 @@ impl HasFileData for WebFormData {
     }
 }
 
-// web-sys does not expose the keys api for select data, so we need to manually bind to it
+// web-sys does not expose the keys api for select data or the submitter argument of the FormData
+// constructor, so we need to manually bind to them
 #[wasm_bindgen(inline_js = r#"
+export function form_data_with_submitter(form, submitter) {
+    return new FormData(form, submitter);
+}
+
 export function get_select_data(select) {
     let values = [];
     for (let i = 0; i < select.options.length; i++) {
@@ -110,5 +120,10 @@ export function get_select_data(select) {
 }
 "#)]
 extern "C" {
+    fn form_data_with_submitter(
+        form: &web_sys::HtmlFormElement,
+        submitter: Option<&web_sys::HtmlElement>,
+    ) -> web_sys::FormData;
+
     fn get_select_data(select: &web_sys::HtmlSelectElement) -> Vec<String>;
 }

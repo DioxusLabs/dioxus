@@ -65,6 +65,7 @@ fn app() -> Element {
         DocumentElements {}
         MergeStyles {}
         SelectMultiple {}
+        FormSubmitter {}
     }
 }
 
@@ -217,6 +218,32 @@ fn SelectMultiple() -> Element {
             option { label: "Value1", value: "1" }
             option { label: "Value2", value: "2" }
         }
+    }
+}
+
+// The button that submits a form should be included in the form values
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/3060
+#[component]
+fn FormSubmitter() -> Element {
+    let mut submitted = use_signal(String::new);
+    rsx! {
+        form {
+            onsubmit: move |evt| {
+                evt.prevent_default();
+                let actions: Vec<String> = evt
+                    .values()
+                    .into_iter()
+                    .filter_map(|(name, value)| match value {
+                        FormValue::Text(value) if name == "action" => Some(value),
+                        _ => None,
+                    })
+                    .collect();
+                submitted.set(actions.join(","));
+            },
+            button { id: "form-submitter-save", name: "action", value: "save", "Save" }
+            button { id: "form-submitter-delete", name: "action", value: "delete", "Delete" }
+        }
+        div { id: "form-submitter-result", "{submitted}" }
     }
 }
 
