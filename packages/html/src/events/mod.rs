@@ -10,6 +10,29 @@ pub fn set_event_converter(converter: Box<dyn HtmlEventConverter>) {
     *EVENT_CONVERTER.write().unwrap() = Some(converter);
 }
 
+/// Replaces the active global [`HtmlEventConverter`], returning the previously installed converter if any.
+///
+/// Do not call this from inside an [`HtmlEventConverter`] method, as the global converter lock is held during conversion.
+#[inline]
+pub fn swap_event_converter(
+    converter: Box<dyn HtmlEventConverter>,
+) -> Option<Box<dyn HtmlEventConverter>> {
+    EVENT_CONVERTER.write().unwrap().replace(converter)
+}
+
+/// Atomically updates the active global [`HtmlEventConverter`], passing the previously installed converter into `f`.
+///
+/// This enables embedded or secondary renderers to wrap an existing host converter without losing host event handling.
+/// Do not call this from inside an [`HtmlEventConverter`] method, as the global converter lock is held during conversion.
+#[inline]
+pub fn update_event_converter(
+    f: impl FnOnce(Option<Box<dyn HtmlEventConverter>>) -> Box<dyn HtmlEventConverter>,
+) {
+    let mut guard = EVENT_CONVERTER.write().unwrap();
+    let prev = guard.take();
+    *guard = Some(f(prev));
+}
+
 #[inline]
 pub(crate) fn with_event_converter<F, R>(f: F) -> R
 where
