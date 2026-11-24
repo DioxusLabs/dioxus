@@ -678,86 +678,6 @@ async fn add_component(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn package(command: ComponentCommand) -> Option<String> {
-        match command {
-            ComponentCommand::Add { target, .. }
-            | ComponentCommand::Remove { target, .. }
-            | ComponentCommand::Update { target, .. }
-            | ComponentCommand::List { target, .. } => target.package,
-            _ => panic!("expected a command that resolves a package"),
-        }
-    }
-
-    #[test]
-    fn component_commands_accept_package_selection() {
-        for subcommand in ["add", "remove", "update", "list"] {
-            let mut args = vec!["components", subcommand];
-            if matches!(subcommand, "add" | "remove") {
-                args.push("progress");
-            }
-            assert_eq!(
-                package(ComponentCommand::try_parse_from(&args).unwrap()),
-                None
-            );
-
-            for flag in ["--package", "-p"] {
-                let mut selected = args.clone();
-                selected.extend([flag, "desktop"]);
-                assert_eq!(
-                    package(ComponentCommand::try_parse_from(selected).unwrap()),
-                    Some("desktop".to_string())
-                );
-
-                let mut missing = args.clone();
-                missing.push(flag);
-                assert!(ComponentCommand::try_parse_from(missing).is_err());
-            }
-        }
-    }
-
-    #[test]
-    fn add_accepts_package_before_component() {
-        let command = ComponentCommand::try_parse_from([
-            "components",
-            "add",
-            "--package",
-            "desktop",
-            "progress",
-        ])
-        .unwrap();
-        assert_eq!(package(command), Some("desktop".to_string()));
-    }
-
-    #[test]
-    fn component_commands_reject_build_flags() {
-        for flag in ["--release", "--platform", "--features"] {
-            assert!(
-                ComponentCommand::try_parse_from(["components", "add", "progress", flag]).is_err()
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn component_paths_use_selected_package() {
-        let config = ComponentConfig {
-            config: DioxusConfig::default(),
-            root: PathBuf::from("workspace/two"),
-        };
-        assert_eq!(
-            components_root(None, &config).unwrap(),
-            config.root.join("src/components")
-        );
-        assert_eq!(
-            global_assets_root(None, &config).await.unwrap(),
-            config.root.join("assets")
-        );
-    }
-}
-
 /// Copy the component files. Returns true if the component was copied, false if it was skipped.
 async fn copy_component_files(
     src: &Path,
@@ -971,4 +891,84 @@ async fn copy_global_assets(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn package(command: ComponentCommand) -> Option<String> {
+        match command {
+            ComponentCommand::Add { target, .. }
+            | ComponentCommand::Remove { target, .. }
+            | ComponentCommand::Update { target, .. }
+            | ComponentCommand::List { target, .. } => target.package,
+            _ => panic!("expected a command that resolves a package"),
+        }
+    }
+
+    #[test]
+    fn component_commands_accept_package_selection() {
+        for subcommand in ["add", "remove", "update", "list"] {
+            let mut args = vec!["components", subcommand];
+            if matches!(subcommand, "add" | "remove") {
+                args.push("progress");
+            }
+            assert_eq!(
+                package(ComponentCommand::try_parse_from(&args).unwrap()),
+                None
+            );
+
+            for flag in ["--package", "-p"] {
+                let mut selected = args.clone();
+                selected.extend([flag, "desktop"]);
+                assert_eq!(
+                    package(ComponentCommand::try_parse_from(selected).unwrap()),
+                    Some("desktop".to_string())
+                );
+
+                let mut missing = args.clone();
+                missing.push(flag);
+                assert!(ComponentCommand::try_parse_from(missing).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn add_accepts_package_before_component() {
+        let command = ComponentCommand::try_parse_from([
+            "components",
+            "add",
+            "--package",
+            "desktop",
+            "progress",
+        ])
+        .unwrap();
+        assert_eq!(package(command), Some("desktop".to_string()));
+    }
+
+    #[test]
+    fn component_commands_reject_build_flags() {
+        for flag in ["--release", "--platform", "--features"] {
+            assert!(
+                ComponentCommand::try_parse_from(["components", "add", "progress", flag]).is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn component_paths_use_selected_package() {
+        let config = ComponentConfig {
+            config: DioxusConfig::default(),
+            root: PathBuf::from("workspace/two"),
+        };
+        assert_eq!(
+            components_root(None, &config).unwrap(),
+            config.root.join("src/components")
+        );
+        assert_eq!(
+            global_assets_root(None, &config).await.unwrap(),
+            config.root.join("assets")
+        );
+    }
 }
