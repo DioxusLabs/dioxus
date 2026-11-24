@@ -5,7 +5,6 @@ edition = "2024"
 description = "A logging utility to provide a standard interface whether you're targeting web desktop, fullstack, and more."
 authors = ["DogeDark", "Jonathan Kelley"]
 repository = "https://github.com/dioxuslabs/dioxus"
-homepage = "https://github.com/dioxuslabs/dioxus"
 readme = "README.md"
 license = "MIT"
 keywords = ["dioxus", "log", "logging"]

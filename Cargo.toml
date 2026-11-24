@@ -452,7 +452,6 @@ edition = "2024"
 description = "Top level crate for the Dioxus repository"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.85.0"
