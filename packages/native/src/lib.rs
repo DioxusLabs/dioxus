@@ -17,6 +17,7 @@ mod dioxus_renderer;
 mod event_handlers;
 mod hooks;
 mod link_handler;
+mod shortcut;
 
 #[cfg(feature = "prelude")]
 pub mod prelude;
@@ -54,16 +55,18 @@ pub fn current_android_app() -> android_activity::AndroidApp {
 #[cfg_attr(docsrs, doc(cfg(target_os = "android")))]
 pub use android_activity::AndroidApp;
 
-#[cfg(any(feature = "vello", feature = "vello-hybrid"))]
+#[cfg(any(feature = "vello", feature = "vello-gpu"))]
 pub use {
     dioxus_renderer::{Features, Limits},
     wgpu_context::DeviceHandle,
 };
 
+use blitz_dom::StyleThreading;
 pub use blitz_dom::{FontContext, Widget, build_single_font_ctx};
 pub use config::Config;
 pub use event_handlers::WinitEventHandlerId;
 pub use hooks::{use_back_button, use_window_event};
+pub use shortcut::KeyboardShortcut;
 pub use winit;
 pub use winit::dpi::{LogicalSize, PhysicalSize};
 pub use winit::window::WindowAttributes;
@@ -129,12 +132,12 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     }
 
     // Read config values
-    #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
+    #[cfg(any(feature = "vello", feature = "vello-gpu"))]
     let (mut features, mut limits) = (None, None);
     let mut window_attributes = None;
     let mut config = None;
     for mut cfg in configs {
-        #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
+        #[cfg(any(feature = "vello", feature = "vello-gpu"))]
         {
             cfg = try_read_config!(cfg, features, Features);
             cfg = try_read_config!(cfg, limits, Limits);
@@ -218,26 +221,32 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
             html_parser_provider,
             navigation_provider,
             font_ctx: config.font_ctx,
+            style_threading: StyleThreading::Parallel,
             ..Default::default()
         },
     );
-    #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
+    #[cfg(any(feature = "vello", feature = "vello-gpu"))]
     let renderer = DioxusNativeWindowRenderer::with_options(RendererOptions {
         base_color: config.base_color,
         alpha_mode: config.alpha_mode,
         features,
         limits,
     });
-    #[cfg(not(any(feature = "vello", feature = "vello-hybrid")))]
+    #[cfg(not(any(feature = "vello", feature = "vello-gpu")))]
     let renderer = DioxusNativeWindowRenderer::with_options(RendererOptions {
         base_color: config.base_color,
         alpha_mode: config.alpha_mode,
     });
+    #[cfg(feature = "devtools")]
+    let devtools_shortcuts = std::mem::take(&mut config.devtools_shortcuts);
     let config =
         WindowConfig::with_attributes(Box::new(doc) as _, renderer, config.window_attributes);
 
     // Create application
-    let application = DioxusNativeApplication::new(proxy, event_queue, config);
+    #[allow(unused_mut)]
+    let mut application = DioxusNativeApplication::new(proxy, event_queue, config);
+    #[cfg(feature = "devtools")]
+    application.set_devtools_shortcuts(devtools_shortcuts);
 
     // Run event loop
     event_loop.run_app(application).unwrap();
