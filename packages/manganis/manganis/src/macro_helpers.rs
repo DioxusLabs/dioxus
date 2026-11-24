@@ -11,13 +11,10 @@ use manganis_core::{
 /// This is a generic utility that works with any byte slice and can be used
 /// in const contexts to create fixed-size arrays from dynamic slices.
 pub const fn copy_bytes<const N: usize>(bytes: &[u8]) -> [u8; N] {
-    let mut out = [0; N];
-    let mut i = 0;
-    while i < N {
-        out[i] = bytes[i];
-        i += 1;
+    match bytes.first_chunk::<N>() {
+        Some(out) => *out,
+        None => panic!("not enough bytes to fill the buffer"),
     }
-    out
 }
 
 /// Serialize a SymbolData value into a const buffer
@@ -88,8 +85,8 @@ pub mod dx_macro_helpers {
         let data = ConstVec::new();
         let mut data = const_serialize::serialize_const(value, data);
         // Reserve the maximum size of the type
-        while data.len() < memory_layout_size {
-            data.push(0);
+        if data.len() < memory_layout_size {
+            data.resize(memory_layout_size, 0);
         }
         data
     }
@@ -110,8 +107,8 @@ pub mod dx_macro_helpers {
         let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
         data.extend(serialized.as_ref());
         // Reserve the maximum size of the type (pad to MEMORY_LAYOUT size)
-        while data.len() < memory_layout_size {
-            data.push(0);
+        if data.len() < memory_layout_size {
+            data.resize(memory_layout_size, 0);
         }
         data
     }
@@ -125,8 +122,8 @@ pub mod dx_macro_helpers {
         let serialized = const_serialize::serialize_const(value, ConstVec::new());
         let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
         data.extend(serialized.as_ref());
-        while data.len() < MAX_SIZE {
-            data.push(0);
+        if data.len() < MAX_SIZE {
+            data.resize(MAX_SIZE, 0);
         }
         data
     }

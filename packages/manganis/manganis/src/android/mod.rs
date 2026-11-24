@@ -18,13 +18,10 @@ pub mod macro_helpers {
 
     /// Copy a slice into a constant sized buffer at compile time
     pub const fn copy_bytes<const N: usize>(bytes: &[u8]) -> [u8; N] {
-        let mut out = [0; N];
-        let mut i = 0;
-        while i < N {
-            out[i] = bytes[i];
-            i += 1;
+        match bytes.first_chunk::<N>() {
+            Some(out) => *out,
+            None => panic!("not enough bytes to fill the buffer"),
         }
-        out
     }
 }
 

@@ -172,11 +172,68 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     where
         T: Copy,
     {
-        let mut i = 0;
-        while i < other.len() {
-            self.push(other[i]);
-            i += 1;
+        let len = self.len as usize;
+        if other.len() > MAX_SIZE - len {
+            panic!("const vec capacity exceeded");
         }
+        // Copy the whole slice at once. Const evaluation interprets loops one statement at a time,
+        // so a per-element loop here is much slower to compile than a single memcpy.
+        // SAFETY: `other` fits in the spare capacity checked above, and `other` cannot overlap
+        // `self.memory` because we hold a mutable borrow of `self`.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                other.as_ptr(),
+                self.memory.as_mut_ptr().add(len) as *mut T,
+                other.len(),
+            );
+        }
+        self.len += other.len() as u32;
+    }
+
+    /// Resize the [`ConstVec`] to `new_len`, filling any new slots with `value`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dioxus_const_vec::ConstVec;
+    /// const PADDED: ConstVec<u8, 8> = {
+    ///     let mut vec = ConstVec::new_with_max_size();
+    ///     vec.extend(&[1, 2, 3]);
+    ///     vec.resize(5, 0);
+    ///     vec
+    /// };
+    /// assert_eq!(PADDED.as_ref(), &[1, 2, 3, 0, 0]);
+    /// ```
+    pub const fn resize(&mut self, new_len: usize, value: T)
+    where
+        T: Copy,
+    {
+        if new_len > MAX_SIZE {
+            panic!("const vec capacity exceeded");
+        }
+        let len = self.len as usize;
+        if new_len > len {
+            self.memory[len] = MaybeUninit::new(value);
+            // Fill the rest by repeatedly doubling the initialized region so const evaluation does
+            // a logarithmic number of copies instead of one interpreted step per element.
+            let total = new_len - len;
+            let mut filled = 1;
+            while filled < total {
+                let count = if filled < total - filled {
+                    filled
+                } else {
+                    total - filled
+                };
+                // SAFETY: `[len, len + filled)` is initialized and `[len + filled, len + filled +
+                // count)` is within `MAX_SIZE`; the two ranges do not overlap.
+                unsafe {
+                    let base = self.memory.as_mut_ptr().add(len);
+                    std::ptr::copy_nonoverlapping(base, base.add(filled), count);
+                }
+                filled += count;
+            }
+        }
+        self.len = new_len as u32;
     }
 
     /// Get a reference to the value at the given index.
@@ -544,4 +601,53 @@ fn test_const_vec_extend() {
     };
     let vec = VEC;
     assert_eq!(vec.as_ref(), &[1234, 5678, 91011, 1213]);
+}
+
+#[test]
+fn test_const_vec_extend_capacity() {
+    const VEC: ConstVec<u8, 4> = {
+        let mut vec = ConstVec::new_with_max_size();
+        vec.extend(&[1, 2]);
+        vec.extend(&[]);
+        vec.extend(&[3, 4]);
+        vec
+    };
+    assert_eq!(VEC.as_ref(), &[1, 2, 3, 4]);
+}
+
+#[test]
+#[should_panic(expected = "const vec capacity exceeded")]
+fn test_const_vec_extend_overflow() {
+    let mut vec = ConstVec::<u8, 4>::new_with_max_size();
+    vec.extend(&[1, 2, 3]);
+    vec.extend(&[4, 5]);
+}
+
+#[test]
+fn test_const_vec_resize() {
+    const GROWN: ConstVec<u16, 4096> = {
+        let mut vec = ConstVec::new_with_max_size();
+        vec.extend(&[1, 2, 3]);
+        vec.resize(4096, 7);
+        vec
+    };
+    assert_eq!(GROWN.len(), 4096);
+    assert_eq!(&GROWN.as_ref()[..3], &[1, 2, 3]);
+    assert!(GROWN.as_ref()[3..].iter().all(|&v| v == 7));
+
+    for target in [0, 1, 2, 3, 4, 5, 17, 64, 100] {
+        let mut vec = ConstVec::<u32, 100>::new_with_max_size();
+        vec.extend(&[9, 8]);
+        vec.resize(target, 5);
+        let mut expected = vec![9, 8];
+        expected.resize(target, 5);
+        assert_eq!(vec.as_ref(), expected.as_slice(), "target {target}");
+    }
+}
+
+#[test]
+#[should_panic(expected = "const vec capacity exceeded")]
+fn test_const_vec_resize_overflow() {
+    let mut vec = ConstVec::<u8, 4>::new_with_max_size();
+    vec.resize(5, 0);
 }
