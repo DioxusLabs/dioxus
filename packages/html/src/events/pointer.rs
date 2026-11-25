@@ -15,11 +15,13 @@ pub struct PointerId(i32);
 
 impl PointerId {
     /// Construct an identifier from a raw pointer ID supplied by the renderer.
+    #[inline]
     pub const fn from_raw(id: i32) -> Self {
         Self(id)
     }
 
     /// Return the raw pointer ID for renderer interop.
+    #[inline]
     pub const fn raw(self) -> i32 {
         self.0
     }
