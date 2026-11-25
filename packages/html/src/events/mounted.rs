@@ -52,6 +52,22 @@ pub trait RenderedElementBacking: std::any::Any {
     fn set_focus(&self, _focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
     }
+
+    /// Capture pointer events for the given pointer on this element
+    fn set_pointer_capture(
+        &self,
+        _pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
+    /// Release pointer capture for the given pointer on this element
+    fn release_pointer_capture(
+        &self,
+        _pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
 }
 
 impl RenderedElementBacking for () {
@@ -198,6 +214,28 @@ impl MountedData {
     #[doc(alias = "blur")]
     pub fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.inner.set_focus(focus)
+    }
+
+    /// Capture events for an active pointer, even when it moves outside this element.
+    ///
+    /// Use the ID from [`PointerData::pointer_id`](super::PointerData::pointer_id), typically
+    /// from a pointer-down event. Capture is automatically released when the pointer goes up
+    /// or is canceled.
+    #[doc(alias = "setPointerCapture")]
+    pub fn set_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.set_pointer_capture(pointer_id)
+    }
+
+    /// Release pointer capture so that subsequent events follow normal hit testing.
+    #[doc(alias = "releasePointerCapture")]
+    pub fn release_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.release_pointer_capture(pointer_id)
     }
 
     /// Downcast this event to a concrete event type
