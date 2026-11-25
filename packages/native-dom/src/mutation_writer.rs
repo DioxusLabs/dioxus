@@ -562,8 +562,11 @@ fn is_bool_attr(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::{DioxusDocument, DocumentConfig};
+    use blitz_dom::Document as _;
     use blitz_dom::LocalName;
     use dioxus::prelude::*;
+    use dioxus_vdom::ScopeId;
+    use std::{cell::Cell, rc::Rc};
 
     fn build(app: fn() -> Element) -> DioxusDocument {
         let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
@@ -630,5 +633,31 @@ mod tests {
 
         // Non-boolean attributes keep their falsy-looking value.
         assert_eq!(attr(&doc, "#off", "title").as_deref(), Some("false"));
+    }
+
+    #[test]
+    fn boolean_attributes_follow_their_value_after_mount() {
+        fn app() -> Element {
+            let on = consume_context::<Rc<Cell<bool>>>().get();
+            rsx! {
+                input { id: "input", r#type: "checkbox", disabled: on, checked: on }
+            }
+        }
+
+        let on: Rc<Cell<bool>> = Rc::new(Cell::new(true));
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&on));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+        doc.inner.borrow_mut().resolve(0.0);
+
+        for value in [true, false, true, false] {
+            on.set(value);
+            doc.vdom.mark_dirty(ScopeId::APP);
+            doc.poll(None);
+
+            let expected = value.then_some("true");
+            assert_eq!(attr(&doc, "#input", "disabled").as_deref(), expected);
+            assert_eq!(attr(&doc, "#input", "checked").as_deref(), expected);
+        }
     }
 }

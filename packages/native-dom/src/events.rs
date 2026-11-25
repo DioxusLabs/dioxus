@@ -3,17 +3,19 @@ use blitz_dom::{
     ScrollLogicalPosition as BlitzScrollLogicalPosition,
 };
 use blitz_traits::events::{
-    BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, BlitzScrollEvent, BlitzWheelDelta,
-    BlitzWheelEvent, MouseEventButton,
+    BlitzDragEvent, BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, BlitzScrollEvent,
+    BlitzWheelDelta, BlitzWheelEvent, BlitzWheelPhase, BlitzWheelSource, MouseEventButton,
 };
+use blitz_traits::net::Bytes;
 use dioxus_html::{
-    AnimationData, BeforeInputData, CancelData, ClipboardData, CompositionData, DragData,
-    FocusData, FormData, FormValue, HasFileData, HasFocusData, HasFormData, HasKeyboardData,
-    HasMouseData, HasPointerData, HasScrollData, HasTouchData, HasTouchPointData, HasWheelData,
-    HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MountedError,
-    MountedResult, MouseData, PlatformEventData, PointerData, RenderedElementBacking, ResizeData,
-    ScrollBehavior, ScrollData, ScrollLogicalPosition, ScrollToOptions, SelectionData, ToggleData,
-    TouchData, TouchPoint, TransitionData, VisibleData, WheelData,
+    AnimationData, BeforeInputData, CancelData, ClipboardData, CompositionData, DataTransfer,
+    DragData, FileData, FocusData, FormData, FormValue, HasDataTransferData, HasDragData,
+    HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData, HasPointerData,
+    HasScrollData, HasTouchData, HasTouchPointData, HasWheelData, HtmlEventConverter, ImageData,
+    KeyboardData, MediaData, MountedData, MountedError, MountedResult, MouseData,
+    NativeDataTransfer, NativeFileData, PlatformEventData, PointerData, RenderedElementBacking,
+    ResizeData, ScrollBehavior, ScrollData, ScrollLogicalPosition, ScrollToOptions, SelectionData,
+    ToggleData, TouchData, TouchPoint, TransitionData, VisibleData, WheelData,
     geometry::{
         ClientPoint, ElementPoint, PagePoint, PixelsRect, PixelsSize, PixelsVector2D, ScreenPoint,
         WheelDelta,
@@ -24,12 +26,15 @@ use dioxus_html::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
 };
+use dioxus_vdom::CapturedError;
+use futures_util::{Stream, stream};
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::{
     any::Any,
     cell::{Ref, RefCell, RefMut},
     fmt::Display,
     future::Future,
+    path::PathBuf,
     pin::Pin,
     rc::Rc,
 };
@@ -85,8 +90,8 @@ impl HtmlEventConverter for NativeConverter {
         unimplemented!("todo: convert_composition_data in dioxus-native. requires support in blitz")
     }
 
-    fn convert_drag_data(&self, _event: &PlatformEventData) -> DragData {
-        unimplemented!("todo: convert_drag_data in dioxus-native. requires support in blitz")
+    fn convert_drag_data(&self, event: &PlatformEventData) -> DragData {
+        event.downcast::<NativeDragData>().unwrap().clone().into()
     }
 
     fn convert_image_data(&self, _event: &PlatformEventData) -> ImageData {
@@ -405,15 +410,19 @@ impl ModifiersInteraction for NativePointerData {
     }
 }
 
+fn blitz_mouse_button_to_dioxus_mouse_button(button: &MouseEventButton) -> MouseButton {
+    match button {
+        MouseEventButton::Main => MouseButton::Primary,
+        MouseEventButton::Auxiliary => MouseButton::Auxiliary,
+        MouseEventButton::Secondary => MouseButton::Secondary,
+        MouseEventButton::Fourth => MouseButton::Fourth,
+        MouseEventButton::Fifth => MouseButton::Fifth,
+    }
+}
+
 impl PointerInteraction for NativePointerData {
     fn trigger_button(&self) -> Option<MouseButton> {
-        Some(match self.0.button {
-            MouseEventButton::Main => MouseButton::Primary,
-            MouseEventButton::Auxiliary => MouseButton::Auxiliary,
-            MouseEventButton::Secondary => MouseButton::Secondary,
-            MouseEventButton::Fourth => MouseButton::Fourth,
-            MouseEventButton::Fifth => MouseButton::Fifth,
-        })
+        Some(blitz_mouse_button_to_dioxus_mouse_button(&self.0.button))
     }
 
     fn held_buttons(&self) -> MouseButtonSet {
@@ -602,8 +611,26 @@ impl HasScrollData for NativeScrollData {
     }
 }
 
+/// A wheel event's data, with what Dioxus's [`WheelData`] has no field for. Reach it
+/// from an `onwheel` handler with `let data = event.data();` then
+/// `data.downcast::<NativeWheelData>()`.
 #[derive(Clone)]
 pub struct NativeWheelData(pub(crate) BlitzWheelEvent);
+
+impl NativeWheelData {
+    /// Where the event falls in its gesture, as when the fingers land on or lift from
+    /// a trackpad. [`BlitzWheelPhase::Moved`] on a device that reports no gestures.
+    pub fn phase(&self) -> BlitzWheelPhase {
+        self.0.phase
+    }
+
+    /// What drives the event, such as a trackpad's momentum after the fingers lift.
+    /// [`BlitzWheelSource::Unknown`] where the platform doesn't say.
+    pub fn source(&self) -> BlitzWheelSource {
+        self.0.source
+    }
+}
+
 impl HasWheelData for NativeWheelData {
     fn as_any(&self) -> &dyn Any {
         self as &dyn Any
@@ -667,6 +694,184 @@ pub fn synthetic_click_event(node: &Node, modifiers: Modifiers) -> Box<dyn Any> 
     Box::new(NativePointerData(
         node.synthetic_click_event_data(modifiers),
     ))
+}
+#[derive(Clone)]
+pub struct NativeDragData(pub(crate) BlitzDragEvent);
+
+/// A file being dragged
+#[derive(Clone)]
+struct BlitzNativeFileData(PathBuf);
+
+impl NativeFileData for BlitzNativeFileData {
+    fn name(&self) -> String {
+        self.0
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
+    fn size(&self) -> u64 {
+        std::fs::metadata(&self.0).map(|m| m.len()).unwrap_or(0)
+    }
+
+    fn last_modified(&self) -> u64 {
+        std::fs::metadata(&self.0)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0)
+    }
+
+    fn content_type(&self) -> Option<String> {
+        None
+    }
+
+    fn path(&self) -> PathBuf {
+        self.0.clone()
+    }
+
+    fn inner(&self) -> &dyn Any {
+        &self.0
+    }
+
+    fn read_bytes(&self) -> Pin<Box<dyn Future<Output = Result<Bytes, CapturedError>> + 'static>> {
+        let path = self.0.clone();
+        Box::pin(async move {
+            std::fs::read(path)
+                .map(Bytes::from)
+                .map_err(CapturedError::new)
+        })
+    }
+
+    fn read_string(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<String, CapturedError>> + 'static>> {
+        let path = self.0.clone();
+        Box::pin(async move { std::fs::read_to_string(path).map_err(CapturedError::new) })
+    }
+
+    fn byte_stream(
+        &self,
+    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, CapturedError>> + 'static + Send>> {
+        use std::io::Read;
+
+        // The state is the open file, or `None` once the stream has ended
+        let file = std::fs::File::open(&self.0).map_err(CapturedError::new);
+        Box::pin(stream::unfold(Some(file), |file| async move {
+            let mut file = match file? {
+                Ok(file) => file,
+                Err(err) => return Some((Err(err), None)),
+            };
+            let mut buf = vec![0u8; 64 * 1024];
+            match file.read(&mut buf) {
+                Ok(0) => None,
+                Ok(n) => {
+                    buf.truncate(n);
+                    Some((Ok(Bytes::from(buf)), Some(Ok(file))))
+                }
+                Err(err) => Some((Err(CapturedError::new(err)), None)),
+            }
+        }))
+    }
+}
+
+impl NativeDataTransfer for NativeDragData {
+    fn get_data(&self, format: &str) -> Option<String> {
+        self.0.data_transfer().get_data(format)
+    }
+
+    fn set_data(&self, format: &str, data: &str) -> Result<(), String> {
+        self.0.data_transfer_mut().set_data(format, data)
+    }
+
+    fn clear_data(&self, format: Option<&str>) -> Result<(), String> {
+        self.0.data_transfer_mut().clear_data(format)
+    }
+
+    fn effect_allowed(&self) -> String {
+        self.0.data_transfer().effect_allowed_str().to_string()
+    }
+
+    fn set_effect_allowed(&self, effect: &str) {
+        self.0.data_transfer_mut().set_effect_allowed_str(effect);
+    }
+
+    fn drop_effect(&self) -> String {
+        self.0.data_transfer().drop_effect().as_str().to_string()
+    }
+
+    fn set_drop_effect(&self, effect: &str) {
+        self.0.data_transfer_mut().set_drop_effect_str(effect);
+    }
+
+    fn files(&self) -> Vec<FileData> {
+        self.0
+            .data_transfer()
+            .files()
+            .map(|path| FileData::new(BlitzNativeFileData(path.to_path_buf())))
+            .collect()
+    }
+}
+
+impl HasFileData for NativeDragData {
+    fn files(&self) -> Vec<FileData> {
+        NativeDataTransfer::files(self)
+    }
+}
+
+impl HasDataTransferData for NativeDragData {
+    fn data_transfer(&self) -> DataTransfer {
+        DataTransfer::new(self.clone())
+    }
+}
+
+impl HasDragData for NativeDragData {
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+}
+
+impl ModifiersInteraction for NativeDragData {
+    fn modifiers(&self) -> Modifiers {
+        self.0.mods
+    }
+}
+
+impl InteractionLocation for NativeDragData {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.0.client_x() as f64, self.0.client_y() as f64)
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.0.screen_x() as f64, self.0.screen_y() as f64)
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.0.page_x() as f64, self.0.page_y() as f64)
+    }
+}
+
+impl InteractionElementOffset for NativeDragData {
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.0.element_x() as f64, self.0.element_y() as f64)
+    }
+}
+
+impl PointerInteraction for NativeDragData {
+    fn trigger_button(&self) -> Option<MouseButton> {
+        Some(blitz_mouse_button_to_dioxus_mouse_button(&self.0.button))
+    }
+
+    fn held_buttons(&self) -> MouseButtonSet {
+        dioxus_html::input_data::decode_mouse_button_set(self.0.buttons.bits() as u16)
+    }
+}
+
+impl HasMouseData for NativeDragData {
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
 }
 
 pub fn synthetic_form_event(

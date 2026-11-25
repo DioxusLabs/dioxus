@@ -1,8 +1,8 @@
 //! Integration between Dioxus and Blitz
 use crate::NodeId;
 use crate::events::{
-    BlitzKeyboardData, NativeConverter, NativeFocusData, NativeFormData, NativePointerData,
-    NativeScrollData, NativeTouchData, NativeWheelData, NodeHandle,
+    BlitzKeyboardData, NativeConverter, NativeDragData, NativeFocusData, NativeFormData,
+    NativePointerData, NativeScrollData, NativeTouchData, NativeWheelData, NodeHandle,
 };
 use crate::mutation_writer::DioxusState;
 use crate::qual_name;
@@ -180,7 +180,11 @@ impl DioxusDocument {
     pub(crate) fn flush_queued_mounted_events(&mut self) {
         let mut queued_mounted_events = mem::take(&mut self.vdom_state.queued_mounted_events);
         for element_id in queued_mounted_events.drain(..) {
-            let node_id = self.vdom_state.element_to_node_id(element_id);
+            // The element may have been removed again since its mounted event was queued (in the
+            // same render), which unmaps its `ElementId`.
+            let Some(node_id) = self.vdom_state.try_element_to_node_id(element_id) else {
+                continue;
+            };
 
             if self.inner.borrow().get_node(node_id).is_some() {
                 let event = Event::new(
@@ -225,6 +229,10 @@ impl Document for DioxusDocument {
         // their own (e.g. JavaScript timers)
         let subdoc_changes = self.inner.borrow_mut().poll_subdocuments(Some(&waker));
 
+        // Dispatch events queued on the document since it was last driven, before running
+        // the vdom so that it picks up any work their handlers schedule.
+        self.flush_pending_dom_events();
+
         {
             let fut = self.vdom.wait_for_work();
             let mut pinned_fut = pin!(fut);
@@ -244,6 +252,13 @@ impl Document for DioxusDocument {
             .apply_buffered_mutations(&mut self.inner.borrow_mut());
         self.flush_queued_mounted_events();
 
+        // Applying mutations and running mounted handlers can queue events (e.g. focus
+        // events from a mounted handler calling `set_focus`). Their handlers may leave the
+        // vdom with more work, so ask to be polled again.
+        if self.flush_pending_dom_events() {
+            waker.wake_by_ref();
+        }
+
         true
     }
 
@@ -254,6 +269,21 @@ impl Document for DioxusDocument {
         };
         let mut driver = EventDriver::new(&mut self.inner, handler);
         driver.handle_ui_event(event);
+    }
+}
+
+impl DioxusDocument {
+    /// Dispatch the events queued on the document to the vdom. Returns whether there were any.
+    fn flush_pending_dom_events(&mut self) -> bool {
+        if !self.inner.borrow().has_pending_events() {
+            return false;
+        }
+        let handler = DioxusEventHandler {
+            vdom: &mut self.vdom,
+            vdom_state: &mut self.vdom_state,
+        };
+        EventDriver::new(&mut self.inner, handler).flush_pending_events();
+        true
     }
 }
 
@@ -331,6 +361,11 @@ impl EventHandler for DioxusEventHandler<'_> {
 
             // AppleStandardKeybinding events are not exposed to script
             DomEventData::AppleStandardKeybinding(_) => None,
+
+            DomEventData::DragEnter(devent)
+            | DomEventData::DragOver(devent)
+            | DomEventData::DragLeave(devent)
+            | DomEventData::Drop(devent) => Some(wrap_event_data(NativeDragData(devent.clone()))),
         };
 
         let Some(event_data) = event_data else {
@@ -668,6 +703,42 @@ mod tests {
     }
 
     #[test]
+    // Regression test: an input focused from `onmounted` (as in TodoMVC) is focused before its
+    // text editor is created by layout. IME must still end up enabled, as on macOS the standard
+    // key bindings (e.g. `deleteBackward:` for Backspace) are only delivered while it is.
+    fn input_focused_on_mount_enables_ime() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        #[derive(Default)]
+        struct ImeShellProvider(AtomicBool);
+        impl blitz_traits::shell::ShellProvider for ImeShellProvider {
+            fn set_ime_enabled(&self, is_enabled: bool) {
+                self.0.store(is_enabled, Ordering::SeqCst);
+            }
+        }
+
+        fn app() -> Element {
+            rsx!(input {
+                r#type: "text",
+                onmounted: async move |evt| evt.set_focus(true).await.unwrap(),
+            })
+        }
+
+        let shell_provider = std::sync::Arc::new(ImeShellProvider::default());
+        let config = DocumentConfig {
+            shell_provider: Some(shell_provider.clone() as _),
+            ..Default::default()
+        };
+        let mut doc = DioxusDocument::new(VirtualDom::new(app), config);
+        doc.initial_build();
+        poll_until_idle(&mut doc);
+        doc.inner.borrow_mut().resolve(0.0);
+
+        assert!(doc.inner.borrow().get_focussed_node_id().is_some());
+        assert!(shell_provider.0.load(Ordering::SeqCst));
+    }
+
+    #[test]
     // Regression test for a panic. Tasks are polled while the vdom renders, at which point
     // the document must not be borrowed.
     fn task_polled_during_render_can_access_document() {
@@ -705,6 +776,50 @@ mod tests {
             focussed.unwrap().attr(crate::LocalName::from("data-focus")),
             Some("true")
         );
+    }
+
+    #[test]
+    // Regression test for a panic. An element whose mounted event is queued can be removed again
+    // within the same render, when a scope rendered after it (here the app, dirtied by the
+    // child) drops it. Its `ElementId` is unmapped by the time the queue is flushed.
+    fn element_removed_before_its_mounted_event_is_flushed() {
+        #[derive(Default)]
+        struct State {
+            child: Cell<Option<ScopeId>>,
+            show: Cell<bool>,
+            hide_child: Cell<bool>,
+            mounted: Cell<usize>,
+        }
+
+        #[component]
+        fn Child() -> Element {
+            let state = consume_context::<Rc<State>>();
+            state.child.set(Some(dioxus_vdom::current_scope_id()));
+            if !state.show.get() {
+                return rsx!(span {});
+            }
+            state.hide_child.set(true);
+            dioxus_vdom::schedule_update_any()(ScopeId::APP);
+            rsx!(div {
+                onmounted: move |_| state.mounted.set(state.mounted.get() + 1),
+            })
+        }
+
+        fn app() -> Element {
+            let state = consume_context::<Rc<State>>();
+            rsx!(if !state.hide_child.get() {
+                Child {}
+            })
+        }
+
+        let state = Rc::new(State::default());
+        let vdom = VirtualDom::new(app).with_root_context(Rc::clone(&state));
+        let mut doc = DioxusDocument::new(vdom, DocumentConfig::default());
+        doc.initial_build();
+        state.show.set(true);
+        doc.vdom.mark_dirty(state.child.get().unwrap());
+        poll_until_idle(&mut doc);
+        assert_eq!(state.mounted.get(), 0);
     }
 
     #[test]

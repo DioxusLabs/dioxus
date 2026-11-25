@@ -1,7 +1,7 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: MIT
 use crate::Color;
-use anyrender::{PaintRef, PaintScene, RenderContext, ResourceId};
+use anyrender::{AntiAliasing, PaintRef, PaintScene, RenderContext, ResourceId};
 use blitz_dom::Widget;
 use blitz_dom::node::ComputedStyles;
 use dioxus_native::DeviceHandle;
@@ -74,6 +74,7 @@ impl Widget for DemoWidget {
                 }),
                 None,
                 &Rect::from_origin_size((0.0, 0.0), (width as f64, height as f64)),
+                AntiAliasing::Enabled,
             );
         } else {
             println!("WARNING: render returned None");

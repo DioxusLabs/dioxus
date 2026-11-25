@@ -39,10 +39,10 @@ keyboard-types = { workspace = true }
 
 # Other dependencies
 tracing = { workspace = true, optional = true }
-rustc-hash = { workspace = true }
 futures-util = { workspace = true }
 
 [dev-dependencies]
+blitz-html = { workspace = true }
 dioxus = { workspace = true }
 
 [package.metadata.docs.rs]

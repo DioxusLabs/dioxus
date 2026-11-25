@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "woff", "text-transform-icu", "apple-font-embolden"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "file-dialog", "vello-gpu", "woff", "text-transform-icu", "apple-font-embolden"]
 prelude = ["dep:dioxus-vdom-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis", "dioxus-vdom/manganis_08"]
 
 # DOM features
@@ -27,14 +27,13 @@ text-transform-icu = ["blitz-dom/text-transform-icu"]
 writing-mode = ["blitz-dom/writing-mode", "dioxus-native-dom/writing-mode"]
 
 # Shell Features
-clipboard = ["blitz-shell/clipboard"]
 file-dialog = ["blitz-shell/file-dialog"]
 accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 data-uri = ["blitz-shell/data-uri"]
 
 # Renderer features
 vello = ["dep:anyrender_vello", "dep:wgpu_context"]
-vello-hybrid = ["dep:anyrender_vello_hybrid", "dep:wgpu_context"]
+vello-gpu = ["dep:anyrender_vello_gpu", "dep:wgpu_context"]
 skia = ["dep:anyrender_skia"]
 skia-pixels = ["skia-raster-base", "anyrender_skia/pixels_window_renderer"]
 skia-softbuffer = ["skia-raster-base", "anyrender_skia/softbuffer_window_renderer"]
@@ -56,6 +55,8 @@ html = ["dep:blitz-html"]
 
 # Dev
 hot-reload = ["dep:dioxus-devtools"]
+devtools = ["blitz-shell/devtools"]
+embedded-devtools-frontend = ["devtools", "blitz-shell/embedded-devtools-frontend"]
 
 # Debug/Logging
 log-times = ["log-phase-times", "log-frame-times"]
@@ -63,7 +64,7 @@ log-phase-times = ["blitz-dom/log-phase-times"]
 log-frame-times = [
   "anyrender_vello_cpu?/log_frame_times",
   "anyrender_vello?/log_frame_times",
-  "anyrender_vello_hybrid?/log_frame_times",
+  "anyrender_vello_gpu?/log_frame_times",
   "anyrender_skia?/log_frame_times",
 ]
 tracing = ["dep:tracing", "dioxus-native-dom/tracing", "blitz-shell/tracing", "blitz-dom/tracing", "blitz-html/tracing", "blitz-net/tracing"]
@@ -81,7 +82,7 @@ blitz-shell = { workspace = true }
 anyrender = { workspace = true }
 peniko = { workspace = true }
 anyrender_vello = { workspace = true, optional = true}
-anyrender_vello_hybrid = { workspace = true, optional = true}
+anyrender_vello_gpu = { workspace = true, optional = true}
 anyrender_vello_cpu = { workspace = true, optional = true}
 anyrender_skia = { workspace = true, optional = true}
 wgpu_context = { workspace = true, optional = true}
@@ -115,10 +116,12 @@ webbrowser = { workspace = true }
 
 # Other dependencies
 tracing = { workspace = true, optional = true }
-rustc-hash = { workspace = true }
 futures-util = { workspace = true }
 cfg-if = "1.0.4"
 slotmap = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+anyrender_vello_gpu = { workspace = true, optional = true, features = ["webgl"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }

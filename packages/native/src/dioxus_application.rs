@@ -12,8 +12,12 @@ use winit::window::WindowId;
 use winit::platform::macos::ApplicationHandlerExtMacOS;
 
 use crate::DioxusNativeWindowRenderer;
+#[cfg(feature = "devtools")]
+use crate::KeyboardShortcut;
 use crate::event_handlers::WindowEventHandlers;
 use crate::{BlitzShellEvent, DioxusDocument, WindowConfig, contexts::DioxusNativeDocument};
+#[cfg(feature = "devtools")]
+use winit::keyboard::{ModifiersState, PhysicalKey};
 
 /// Dioxus-native specific event type
 pub enum DioxusNativeEvent {
@@ -36,6 +40,18 @@ pub struct DioxusNativeApplication {
     pending_window: Option<WindowConfig<DioxusNativeWindowRenderer>>,
     inner: BlitzApplication<DioxusNativeWindowRenderer>,
     event_handlers: Rc<WindowEventHandlers>,
+    #[cfg(feature = "devtools")]
+    devtools_shortcuts: DevtoolsShortcuts,
+}
+
+/// The state of [`Config::with_devtools_shortcuts`](crate::Config::with_devtools_shortcuts)
+#[cfg(feature = "devtools")]
+#[derive(Default)]
+struct DevtoolsShortcuts {
+    shortcuts: Vec<KeyboardShortcut>,
+    modifiers: ModifiersState,
+    /// A key whose press triggered a shortcut, whose release is also swallowed
+    pressed: Option<PhysicalKey>,
 }
 
 impl DioxusNativeApplication {
@@ -48,7 +64,49 @@ impl DioxusNativeApplication {
             pending_window: Some(config),
             inner: BlitzApplication::new(proxy, event_queue),
             event_handlers: Rc::new(WindowEventHandlers::default()),
+            #[cfg(feature = "devtools")]
+            devtools_shortcuts: DevtoolsShortcuts::default(),
         }
+    }
+
+    /// Open devtools on a window's document when one of `shortcuts` is pressed
+    #[cfg(feature = "devtools")]
+    pub(crate) fn set_devtools_shortcuts(&mut self, shortcuts: Vec<KeyboardShortcut>) {
+        self.devtools_shortcuts.shortcuts = shortcuts;
+    }
+
+    /// Open devtools on the window's document if `event` presses one of the
+    /// devtools shortcuts. Returns whether the event was consumed: the key's
+    /// press and release aren't delivered to the app.
+    #[cfg(feature = "devtools")]
+    fn handle_devtools_shortcut(&mut self, window_id: WindowId, event: &WindowEvent) -> bool {
+        let state = &mut self.devtools_shortcuts;
+        match event {
+            WindowEvent::ModifiersChanged(modifiers) => state.modifiers = modifiers.state(),
+            WindowEvent::KeyboardInput { event, .. } if !event.state.is_pressed() => {
+                if state.pressed == Some(event.physical_key) {
+                    state.pressed = None;
+                    return true;
+                }
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                let triggered = state
+                    .shortcuts
+                    .iter()
+                    .any(|shortcut| shortcut.matches(state.modifiers, event.physical_key));
+                if triggered && let Some(window) = self.inner.windows.get(&window_id) {
+                    // Key repeats of a shortcut are swallowed without reopening
+                    if !event.repeat {
+                        let doc_id = window.doc.inner().id();
+                        self.inner.open_devtools(doc_id);
+                    }
+                    self.devtools_shortcuts.pressed = Some(event.physical_key);
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        false
     }
 
     pub fn add_window(&mut self, window_config: WindowConfig<DioxusNativeWindowRenderer>) {
@@ -194,6 +252,10 @@ impl ApplicationHandler for DioxusNativeApplication {
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        #[cfg(feature = "devtools")]
+        if self.handle_devtools_shortcut(window_id, &event) {
+            return;
+        }
         self.event_handlers
             .apply_event(window_id, &event, event_loop);
         self.inner.window_event(event_loop, window_id, event);
