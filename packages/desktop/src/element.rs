@@ -1,7 +1,7 @@
-use std::rc::Rc;
+use std::{future::Future, pin::Pin, rc::Rc};
 
 use dioxus_html::{
-    MountedResult, RenderedElementBacking,
+    MountedError, MountedResult, RenderedElementBacking,
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
 };
 use dioxus_vdom::ElementId;
@@ -20,6 +20,34 @@ impl DesktopElement {
     pub(crate) fn new(id: ElementId, webview: DesktopContext, query: QueryEngine) -> Self {
         let webview = Rc::downgrade(&webview);
         Self { id, webview, query }
+    }
+
+    fn query_pointer_capture(
+        &self,
+        method: &str,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        let script = format!(
+            "return window.interpreter.{method}({}, {pointer_id});",
+            self.id.raw()
+        );
+        let Some(webview) = self.webview.upgrade() else {
+            return Box::pin(async {
+                Err(MountedError::OperationFailed(Box::new(
+                    DesktopQueryError::FailedToQuery,
+                )))
+            });
+        };
+        let query = self.query.new_query::<bool>(&script, webview).resolve();
+        Box::pin(async move {
+            match query.await {
+                Ok(true) => Ok(()),
+                Ok(false) => Err(MountedError::OperationFailed(Box::new(
+                    DesktopQueryError::FailedToQuery,
+                ))),
+                Err(err) => Err(MountedError::OperationFailed(Box::new(err))),
+            }
+        })
     }
 }
 
@@ -160,6 +188,20 @@ impl RenderedElementBacking for DesktopElement {
                 }
             }
         })
+    }
+
+    fn set_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.query_pointer_capture("setPointerCapture", pointer_id)
+    }
+
+    fn release_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.query_pointer_capture("releasePointerCapture", pointer_id)
     }
 }
 
