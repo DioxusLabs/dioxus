@@ -78,13 +78,26 @@ impl Parse for Component {
 
 impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let literal_ids = (0..self.literal_component_property_count()).collect::<Vec<_>>();
+        let literal_ids = self
+            .component_props()
+            .filter_map(|attr| {
+                if let AttributeValue::AttrLiteral(literal) = &attr.value {
+                    Some(literal.to_token_stream())
+                } else {
+                    None
+                }
+            })
+            .enumerate()
+            .collect::<Vec<_>>();
         tokens.append_all(self.to_tokens_with_literal_ids(&literal_ids));
     }
 }
 
 impl Component {
-    pub(crate) fn to_tokens_with_literal_ids(&self, literal_ids: &[usize]) -> TokenStream2 {
+    pub(crate) fn to_tokens_with_literal_ids(
+        &self,
+        literal_ids: &[(usize, TokenStream2)],
+    ) -> TokenStream2 {
         let Self { name, generics, .. } = self;
 
         // Create props either from manual props or from the builder approach
@@ -212,7 +225,7 @@ impl Component {
     /// Create the tokens we'll use for the props of the component
     ///
     /// todo: don't create the tokenstream from scratch and instead dump it into the existing streama
-    fn create_props(&self, literal_ids: &[usize]) -> TokenStream2 {
+    fn create_props(&self, literal_ids: &[(usize, TokenStream2)]) -> TokenStream2 {
         let manual_props = self.manual_props();
 
         let name = &self.name;
@@ -281,7 +294,7 @@ impl Component {
     fn add_fields_to_builder(
         &self,
         manual_props: Option<Ident>,
-        literal_ids: &[usize],
+        literal_ids: &[(usize, TokenStream2)],
     ) -> TokenStream2 {
         let mut dynamic_literal_index = 0;
         let mut tokens = TokenStream2::new();
@@ -290,17 +303,17 @@ impl Component {
 
             // In debug mode, we try to grab the value from the dynamic literal pool if possible
             let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
-                let idx = literal_ids
+                let (idx, debug_value) = literal_ids
                     .get(dynamic_literal_index)
-                    .copied()
-                    .unwrap_or(usize::MAX);
+                    .cloned()
+                    .unwrap_or_else(|| (usize::MAX, literal.to_token_stream()));
                 dynamic_literal_index += 1;
                 let debug_value = quote! {
                     match __hot_reload_template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
                         Some(Some(__template_read)) => {
-                            __dynamic_literal_pool.component_property(#idx, __template_read, #literal)
+                            __dynamic_literal_pool.component_property(#idx, __template_read, #debug_value)
                         }
-                        _ => #release_value,
+                        _ => #debug_value,
                     }
                 };
                 quote! {

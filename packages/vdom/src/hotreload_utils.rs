@@ -235,7 +235,8 @@ impl DynamicLiteralPool {
     }
 
     /// Render formatted segments using the current dynamic text pool.
-    fn render_formatted(&self, segments: &FmtedSegments) -> String {
+    #[doc(hidden)]
+    pub fn render_formatted(&self, segments: &FmtedSegments) -> String {
         segments.render_with(&self.dynamic_text)
     }
 }

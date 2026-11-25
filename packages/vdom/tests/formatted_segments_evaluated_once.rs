@@ -21,6 +21,15 @@ fn moving_formatted_attribute() {
 }
 
 #[test]
+fn moving_formatted_custom_attribute() {
+    let value = Some("data".to_string());
+    assert_eq!(
+        dioxus_ssr::render_element(rsx! { div { "data-value": "{value.unwrap_or_default()}" } }),
+        "<div data-value=\"data\"></div>"
+    );
+}
+
+#[test]
 fn moving_formatted_key() {
     let value = Some("data".to_string());
     let node = rsx! { div { key: "{value.unwrap_or_default()}" } }.unwrap();
@@ -51,7 +60,10 @@ fn formatted_text_and_attribute_evaluate_each_segment_once() {
     let html = dioxus_ssr::render_element(rsx! {
         div { class: "prefix-{next()}-suffix", "before {next()} / {next()} after" }
     });
-    assert_eq!(html, "<div class=\"prefix-data-suffix\">before data / data after</div>");
+    assert_eq!(
+        html,
+        "<div class=\"prefix-data-suffix\">before data / data after</div>"
+    );
     assert_eq!(calls.get(), 3);
 }
 

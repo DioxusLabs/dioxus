@@ -145,11 +145,18 @@ impl ToTokens for TemplateBody {
         // the more straightforward typed-builder evaluation order. The key is bound first because it
         // may borrow a value that one of those dynamic nodes moves.
         let node_hoists = &pieces.node_hoists;
-        let view_expr = match node.implicit_key() {
+        let key = node.implicit_key().map(|key| {
+            let release_value = quote! { #key.to_string() };
+            match &pieces.hot_reload_key {
+                Some(formatted) => ViewBuilder::formatted_value(formatted, release_value),
+                None => release_value,
+            }
+        });
+        let view_expr = match key {
             Some(key) => quote! {{
                 use dioxus_vdom::view::ViewKeyExt as _;
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes.
-                let __key = Some(#key.to_string());
+                let __key = Some(#key);
                 #(#node_hoists)*
                 #raw_view_expr.key(__key)
             }},
@@ -404,8 +411,9 @@ impl ViewBuilder {
             BodyNode::Element(element) => self.visit_element(element, implicit_key),
             BodyNode::Text(text) if text.is_static() => self.static_text(text),
             BodyNode::Text(text) => {
-                self.allocate_formatted(&text.input);
-                self.dynamic_node(quote! { #text })
+                let formatted = self.allocate_formatted(&text.input);
+                let value = Self::formatted_value(&formatted, quote! { #text });
+                self.dynamic_node(value)
             }
             BodyNode::Component(component) => {
                 let literal_ids = self.component_literal_ids(component, implicit_key);
@@ -500,34 +508,49 @@ impl ViewBuilder {
     }
 
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
-        self.track_dynamic_attr(attr);
+        let value = self.track_dynamic_attr(attr);
+        let mut attr = attr.clone();
+        if matches!(
+            attr.value,
+            AttributeValue::AttrLiteral(HotLiteral::Fmted(_))
+        ) {
+            attr.value = AttributeValue::AttrExpr(parse_quote! { #value });
+        }
         let attrs = attr.rendered_as_dynamic_attr();
         quote! { .attribute(dioxus_vdom::view::dynamic_attributes_builder(#attrs)) }
     }
 
     fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TokenStream2 {
-        self.track_dynamic_attr(attr);
+        let value = self.track_dynamic_attr(attr);
         let attr_value = &attr.value;
         let method = if attr.name.is_likely_event() {
             event_handler_method(&method, attr_value)
         } else {
             method
         };
-        let value = quote! { #attr_value };
         quote! { .#method(#value) }
     }
 
-    fn track_dynamic_attr(&mut self, attr: &Attribute) {
+    fn track_dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
         let id = self.dynamic_attr_count;
         self.dynamic_attr_count += 1;
         self.hot_reload_dynamic_attrs
             .push(quote! { dioxus_vdom::internal::HotReloadDynamicAttribute::Dynamic(#id) });
-        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
-            self.allocate_formatted(lit);
+        let value = &attr.value;
+        let release_value = quote! { #value };
+        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = value {
+            let formatted = self.allocate_formatted(lit);
+            Self::formatted_value(&formatted, release_value)
+        } else {
+            release_value
         }
     }
 
-    fn component_literal_ids(&mut self, component: &Component, implicit_key: bool) -> Vec<usize> {
+    fn component_literal_ids(
+        &mut self,
+        component: &Component,
+        implicit_key: bool,
+    ) -> Vec<(usize, TokenStream2)> {
         let mut literal_ids = Vec::with_capacity(component.literal_component_property_count());
 
         for property in &component.fields {
@@ -545,10 +568,15 @@ impl ViewBuilder {
                 continue;
             }
 
+            let mut debug_value = quote! { #literal };
             let hot_literal = match literal {
                 HotLiteral::Fmted(fmted) => {
-                    let fmted = self.allocate_formatted(fmted);
-                    quote! { dioxus_vdom::internal::HotReloadLiteral::Fmted(#fmted) }
+                    let formatted = self.allocate_formatted(fmted);
+                    if !fmted.is_static() {
+                        debug_value =
+                            quote! { __dynamic_literal_pool.render_formatted(&#formatted) };
+                    }
+                    quote! { dioxus_vdom::internal::HotReloadLiteral::Fmted(#formatted) }
                 }
                 HotLiteral::Float(value) => {
                     quote! { dioxus_vdom::internal::HotReloadLiteral::Float(#value as _) }
@@ -563,10 +591,19 @@ impl ViewBuilder {
 
             let id = self.component_value_tokens.len();
             self.component_value_tokens.push(hot_literal);
-            literal_ids.push(id);
+            literal_ids.push((id, debug_value));
         }
 
         literal_ids
+    }
+
+    fn formatted_value(formatted: &TokenStream2, release_value: TokenStream2) -> TokenStream2 {
+        quote! {{
+            #[cfg(debug_assertions)]
+            { __dynamic_literal_pool.render_formatted(&#formatted) }
+            #[cfg(not(debug_assertions))]
+            { #release_value }
+        }}
     }
 
     fn allocate_formatted(&mut self, formatted: &HotReloadFormattedSegment) -> TokenStream2 {
