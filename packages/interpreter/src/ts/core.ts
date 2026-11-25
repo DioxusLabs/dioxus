@@ -9,6 +9,8 @@ export type NodeId = number;
 // interpreter attaches at runtime.
 interface ListenerElement extends Element {
   listening?: number;
+  // Bubbling events this element registered on the root listener, released when it unmounts
+  bubbling?: string[];
 }
 
 // A stack entry pairs a DOM node with the ElementId it was pushed under, or
@@ -120,6 +122,8 @@ export class BaseInterpreter {
     }
 
     if (bubbles) {
+      const node = element as ListenerElement;
+      (node.bubbling ??= []).push(event_name);
       if (this.global[event_name] === undefined) {
         this.global[event_name] = { active: 1, callback: this.handler };
         this.root.addEventListener(event_name, this.handler);
@@ -141,13 +145,21 @@ export class BaseInterpreter {
     } else if (event_name == "visible") {
       this.removeIntersectionObserver(element);
     } else if (bubbles) {
-      this.removeBubblingListener(event_name);
+      // Only release a registration this element still owns, so a stale removal can't drop
+      // the root listener another element relies on
+      const registered = (element as ListenerElement).bubbling;
+      const idx = registered?.indexOf(event_name) ?? -1;
+      if (idx !== -1) {
+        registered.splice(idx, 1);
+        this.removeBubblingListener(event_name);
+      }
     } else {
       this.removeNonBubblingListener(element, event_name);
     }
   }
 
   removeBubblingListener(event_name: string) {
+    if (this.global[event_name] === undefined) return;
     this.global[event_name].active--;
     if (this.global[event_name].active === 0) {
       this.root.removeEventListener(
@@ -170,6 +182,25 @@ export class BaseInterpreter {
   removeAllNonBubblingListeners(element: Element) {
     const id = element.getAttribute("data-dioxus-id");
     delete this.local[id];
+  }
+
+  // Release the listeners of a node that is being removed and of every element under it.
+  // Core only emits the removal of the top node, not a RemoveEventListener per listener.
+  releaseListeners(node: Node) {
+    if (!(node instanceof Element)) return;
+    this.releaseElementListeners(node);
+    node
+      .querySelectorAll("[data-dioxus-id]")
+      .forEach((child) => this.releaseElementListeners(child));
+  }
+
+  releaseElementListeners(element: ListenerElement) {
+    if (!element.listening) return;
+    for (const event_name of element.bubbling ?? []) {
+      this.removeBubblingListener(event_name);
+    }
+    element.bubbling = undefined;
+    this.removeAllNonBubblingListeners(element);
   }
 
   getNode(id: NodeId): Node {
@@ -259,12 +290,12 @@ export class BaseInterpreter {
     const target = this.stack[targetIdx][0];
     const items = this.stack.splice(targetIdx + 1, many);
     this.stack.pop();
-    const real = target as ListenerElement;
-    if (real.listening) this.removeAllNonBubblingListeners(real);
     const parent = target.parentNode as Node;
     const next = target.nextSibling;
     (target as ChildNode).remove();
     this.applyChunk(items, parent, next);
+    // Release after the replacements are inserted, so nodes moved out of the target keep theirs
+    this.releaseListeners(target);
   }
 
   insertAfterTop(many: number) {
@@ -288,8 +319,8 @@ export class BaseInterpreter {
   removeTop() {
     const targetEntry = this.stack.pop();
     if (!targetEntry) return;
-    const node = targetEntry[0] as ListenerElement;
-    if (node.listening) this.removeAllNonBubblingListeners(node);
+    const node = targetEntry[0];
+    this.releaseListeners(node);
     (node as ChildNode).remove();
   }
 
