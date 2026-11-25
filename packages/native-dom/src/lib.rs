@@ -17,7 +17,10 @@ mod write_once_attr;
 pub use blitz_dom::DocumentConfig;
 pub use blitz_traits::events::{BlitzWheelPhase, BlitzWheelSource};
 pub use dioxus_document::DioxusDocument;
-pub use events::{NativeWheelData, NodeHandle, synthetic_click_event, synthetic_form_event};
+pub use events::{
+    NativeFocusData, NativeScrollData, NativeTouchData, NativeWheelData, NodeHandle,
+    synthetic_click_event, synthetic_form_event,
+};
 pub use write_once_attr::{CustomWidgetAttr, SubDocumentAttr};
 
 pub use blitz_dom::NodeId;
