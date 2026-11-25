@@ -1,7 +1,7 @@
 use std::{future::Future, pin::Pin, rc::Rc};
 
 use dioxus_html::{
-    MountedError, MountedResult, RenderedElementBacking,
+    MountedError, MountedResult, PointerId, RenderedElementBacking,
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
 };
 use dioxus_vdom::ElementId;
@@ -25,11 +25,12 @@ impl DesktopElement {
     fn query_pointer_capture(
         &self,
         method: &str,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         let script = format!(
-            "return window.interpreter.{method}({}, {pointer_id});",
-            self.id.raw()
+            "return window.interpreter.{method}({}, {});",
+            self.id.raw(),
+            pointer_id.raw()
         );
         let Some(webview) = self.webview.upgrade() else {
             return Box::pin(async {
@@ -192,14 +193,14 @@ impl RenderedElementBacking for DesktopElement {
 
     fn set_pointer_capture(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.query_pointer_capture("setPointerCapture", pointer_id)
     }
 
     fn release_pointer_capture(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.query_pointer_capture("releasePointerCapture", pointer_id)
     }

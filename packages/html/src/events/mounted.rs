@@ -6,6 +6,8 @@ use std::{
     pin::Pin,
 };
 
+use super::PointerId;
+
 /// An Element that has been rendered and allows reading and modifying information about it.
 ///
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
@@ -56,7 +58,7 @@ pub trait RenderedElementBacking: std::any::Any {
     /// Capture pointer events for the given pointer on this element
     fn set_pointer_capture(
         &self,
-        _pointer_id: i32,
+        _pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
     }
@@ -64,7 +66,7 @@ pub trait RenderedElementBacking: std::any::Any {
     /// Release pointer capture for the given pointer on this element
     fn release_pointer_capture(
         &self,
-        _pointer_id: i32,
+        _pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
     }
@@ -224,7 +226,7 @@ impl MountedData {
     #[doc(alias = "setPointerCapture")]
     pub fn set_pointer_capture(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.inner.set_pointer_capture(pointer_id)
     }
@@ -233,7 +235,7 @@ impl MountedData {
     #[doc(alias = "releasePointerCapture")]
     pub fn release_pointer_capture(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.inner.release_pointer_capture(pointer_id)
     }

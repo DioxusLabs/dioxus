@@ -7,6 +7,24 @@ use crate::{geometry::*, input_data::*, *};
 /// A synthetic event that wraps a web-style [`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent)
 pub type PointerEvent = Event<PointerData>;
 
+/// Identifies the pointer that caused a pointer event.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(transparent))]
+pub struct PointerId(i32);
+
+impl PointerId {
+    /// Construct an identifier from a raw pointer ID supplied by the renderer.
+    pub const fn from_raw(id: i32) -> Self {
+        Self(id)
+    }
+
+    /// Return the raw pointer ID for renderer interop.
+    pub const fn raw(self) -> i32 {
+        self.0
+    }
+}
+
 pub struct PointerData {
     inner: Box<dyn HasPointerData>,
 }
@@ -73,7 +91,7 @@ impl PartialEq for PointerData {
 /// A trait for any object that has the data for a pointer event
 pub trait HasPointerData: PointerInteraction {
     /// Gets the unique identifier of the pointer causing the event.
-    fn pointer_id(&self) -> i32;
+    fn pointer_id(&self) -> PointerId;
 
     /// Gets the width (magnitude on the X axis), in CSS pixels, of the contact geometry of the pointer.
     fn width(&self) -> f64;
@@ -108,7 +126,7 @@ pub trait HasPointerData: PointerInteraction {
 
 impl PointerData {
     /// Gets the unique identifier of the pointer causing the event.
-    pub fn pointer_id(&self) -> i32 {
+    pub fn pointer_id(&self) -> PointerId {
         self.inner.pointer_id()
     }
 
@@ -203,7 +221,7 @@ pub struct SerializedPointerData {
     point_data: crate::point_interaction::SerializedPointInteraction,
 
     /// The unique identifier of the pointer causing the event.
-    pointer_id: i32,
+    pointer_id: PointerId,
 
     /// The width (magnitude on the X axis), in CSS pixels, of the contact geometry of the pointer.
     width: f64,
@@ -235,7 +253,7 @@ pub struct SerializedPointerData {
 
 #[cfg(feature = "serialize")]
 impl HasPointerData for SerializedPointerData {
-    fn pointer_id(&self) -> i32 {
+    fn pointer_id(&self) -> PointerId {
         self.pointer_id
     }
 
@@ -353,5 +371,34 @@ impl<'de> serde::Deserialize<'de> for PointerData {
         Ok(Self {
             inner: Box::new(data),
         })
+    }
+}
+
+#[cfg(all(test, feature = "serialize"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pointer_event_id_serializes_as_an_integer() {
+        let event = PointerData::new(SerializedPointerData {
+            point_data: Default::default(),
+            pointer_id: PointerId::from_raw(-1),
+            width: 1.0,
+            height: 1.0,
+            pressure: 0.0,
+            tangential_pressure: 0.0,
+            tilt_x: 0,
+            tilt_y: 0,
+            twist: 0,
+            pointer_type: "mouse".into(),
+            is_primary: true,
+        });
+
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["pointer_id"], -1);
+
+        let decoded: PointerData = serde_json::from_value(json).unwrap();
+        assert_eq!(decoded.pointer_id().raw(), -1);
+        assert_eq!(decoded, event);
     }
 }

@@ -1,6 +1,6 @@
 use dioxus_html::{
     HasPointerData, InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
-    PointerInteraction,
+    PointerId, PointerInteraction,
     geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, decode_mouse_button_set},
 };
@@ -9,8 +9,8 @@ use web_sys::PointerEvent;
 use super::{Synthetic, WebEventExt};
 
 impl HasPointerData for Synthetic<PointerEvent> {
-    fn pointer_id(&self) -> i32 {
-        self.event.pointer_id()
+    fn pointer_id(&self) -> PointerId {
+        PointerId::from_raw(self.event.pointer_id())
     }
 
     fn width(&self) -> f64 {
