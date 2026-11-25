@@ -30,15 +30,22 @@ impl<D: Document> Document for FullstackWebDocument<D> {
         self.document.supports_global_listeners()
     }
 
-    fn add_global_listener(
+    fn add_window_listener(
         &self,
-        target: GlobalListenerTarget,
         name: &'static str,
         options: &GlobalListenerOptions,
         callback: GlobalEventCallback,
     ) -> Option<GlobalListenerRegistration> {
-        self.document
-            .add_global_listener(target, name, options, callback)
+        self.document.add_window_listener(name, options, callback)
+    }
+
+    fn add_document_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        self.document.add_document_listener(name, options, callback)
     }
 
     /// Set the title of the document

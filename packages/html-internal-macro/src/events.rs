@@ -176,7 +176,7 @@ fn global_bindings(events: &[(Ident, Ident, String)]) -> TokenStream2 {
     quote! {
         pub mod plain {
             use crate::events::*;
-            use crate::events::global::bind;
+            use crate::events::global::{GlobalEventBinding, bind};
             use dioxus_vdom::{Event, SpawnIfAsync};
 
             #(#plain)*
@@ -184,7 +184,7 @@ fn global_bindings(events: &[(Ident, Ident, String)]) -> TokenStream2 {
 
         pub mod contextual {
             use crate::events::*;
-            use crate::events::global::bind;
+            use crate::events::global::{GlobalEventBinding, bind};
             use dioxus_vdom::{Event, SpawnIfAsync};
 
             #(#contextual)*

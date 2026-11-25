@@ -1,5 +1,5 @@
 use crate::Document;
-use dioxus_html::events::GlobalEventBinding;
+use dioxus_html::events::__private::GlobalEventBinding;
 use dioxus_vdom::{Runtime, current_scope_id, queue_effect, try_consume_context, use_hook};
 use std::{cell::RefCell, rc::Rc};
 
@@ -7,12 +7,9 @@ pub use dioxus_html::events::{Containment, GlobalListenerContext, ViewportResize
 #[doc(hidden)]
 pub use dioxus_html::events::{GlobalEventCallback, GlobalEventInput, GlobalEventPayload};
 
-/// The target of a scoped global listener.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GlobalListenerTarget {
-    /// The owning window.
+enum GlobalListenerTarget {
     Window,
-    /// The owning document.
     Document,
 }
 
@@ -79,8 +76,21 @@ struct ListenerState {
     )>,
 }
 
-#[doc(hidden)]
-pub fn use_global_listener(
+pub fn use_window_listener(
+    binding: GlobalEventBinding,
+    options: GlobalListenerOptions,
+) -> GlobalListenerSupport {
+    use_global_listener(GlobalListenerTarget::Window, binding, options)
+}
+
+pub fn use_document_listener(
+    binding: GlobalEventBinding,
+    options: GlobalListenerOptions,
+) -> GlobalListenerSupport {
+    use_global_listener(GlobalListenerTarget::Document, binding, options)
+}
+
+fn use_global_listener(
     target: GlobalListenerTarget,
     binding: GlobalEventBinding,
     options: GlobalListenerOptions,
@@ -127,9 +137,15 @@ pub fn use_global_listener(
                     _ => Default::default(),
                 }
             });
-            if let Some(registration) =
-                document.add_global_listener(target, binding.name, &options, callback)
-            {
+            let registration = match target {
+                GlobalListenerTarget::Window => {
+                    document.add_window_listener(binding.name, &options, callback)
+                }
+                GlobalListenerTarget::Document => {
+                    document.add_document_listener(binding.name, &options, callback)
+                }
+            };
+            if let Some(registration) = registration {
                 state.borrow_mut().registration =
                     Some((target, binding.name, options, registration));
             } else {
@@ -167,10 +183,33 @@ pub fn use_global_listener(
 ///     rsx! { "Press Escape" }
 /// }
 /// ```
+///
+/// ```compile_fail
+/// use dioxus_document::use_global_listener;
+/// ```
 #[macro_export]
 macro_rules! use_window_listener {
     ($name:ident, $handler:expr $(, $option:ident : $value:expr)* $(,)?) => {
-        $crate::__use_global_listener!(Window, window_events, $name, $handler; $($option : $value),*)
+        $crate::use_window_listener!(@register use_window_listener, window_events, $name, $handler; $($option : $value),*)
+    };
+    (@register $hook:ident, $module:ident, $name:ident, $handler:expr; $($option:ident : $value:expr),*) => {{
+        let options = $crate::GlobalListenerOptions {
+            $($option: $crate::use_window_listener!(@value $option, $value),)*
+            ..Default::default()
+        };
+        let binding = $crate::use_window_listener!(@bind $module, $name, $handler; $($option),*);
+        $crate::__private::$hook(binding, options)
+    }};
+    (@value containment_root, $value:expr) => { Some(::std::convert::Into::<String>::into($value)) };
+    (@value $option:ident, $value:expr) => { $value };
+    (@bind $module:ident, $name:ident, $handler:expr; containment_root $(, $tail:ident)*) => {
+        $crate::__private::$module::contextual::$name($handler)
+    };
+    (@bind $module:ident, $name:ident, $handler:expr; $option:ident $(, $tail:ident)*) => {
+        $crate::use_window_listener!(@bind $module, $name, $handler; $($tail),*)
+    };
+    (@bind $module:ident, $name:ident, $handler:expr;) => {
+        $crate::__private::$module::plain::$name($handler)
     };
 }
 
@@ -181,31 +220,7 @@ macro_rules! use_window_listener {
 #[macro_export]
 macro_rules! use_document_listener {
     ($name:ident, $handler:expr $(, $option:ident : $value:expr)* $(,)?) => {
-        $crate::__use_global_listener!(Document, global_events, $name, $handler; $($option : $value),*)
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __use_global_listener {
-    ($target:ident, $module:ident, $name:ident, $handler:expr; $($option:ident : $value:expr),*) => {{
-        let options = $crate::GlobalListenerOptions {
-            $($option: $crate::__use_global_listener!(@value $option, $value),)*
-            ..Default::default()
-        };
-        let binding = $crate::__use_global_listener!(@bind $module, $name, $handler; $($option),*);
-        $crate::__private::use_global_listener($crate::GlobalListenerTarget::$target, binding, options)
-    }};
-    (@value containment_root, $value:expr) => { Some(::std::convert::Into::<String>::into($value)) };
-    (@value $option:ident, $value:expr) => { $value };
-    (@bind $module:ident, $name:ident, $handler:expr; containment_root $(, $tail:ident)*) => {
-        $crate::__private::$module::contextual::$name($handler)
-    };
-    (@bind $module:ident, $name:ident, $handler:expr; $option:ident $(, $tail:ident)*) => {
-        $crate::__use_global_listener!(@bind $module, $name, $handler; $($tail),*)
-    };
-    (@bind $module:ident, $name:ident, $handler:expr;) => {
-        $crate::__private::$module::plain::$name($handler)
+        $crate::use_window_listener!(@register use_document_listener, global_events, $name, $handler; $($option : $value),*)
     };
 }
 
@@ -219,6 +234,7 @@ mod tests {
     #[derive(Default)]
     struct TestDocument {
         attached: Cell<usize>,
+        document_attached: Cell<usize>,
         detached: Rc<Cell<usize>>,
         callback: RefCell<Option<GlobalEventCallback>>,
     }
@@ -232,9 +248,8 @@ mod tests {
             true
         }
 
-        fn add_global_listener(
+        fn add_window_listener(
             &self,
-            _: GlobalListenerTarget,
             _: &'static str,
             _: &GlobalListenerOptions,
             callback: GlobalEventCallback,
@@ -245,6 +260,17 @@ mod tests {
             Some(GlobalListenerRegistration::new(move || {
                 detached.set(detached.get() + 1);
             }))
+        }
+
+        fn add_document_listener(
+            &self,
+            name: &'static str,
+            _: &GlobalListenerOptions,
+            _: GlobalEventCallback,
+        ) -> Option<GlobalListenerRegistration> {
+            assert_eq!(name, "keydown");
+            self.document_attached.set(self.document_attached.get() + 1);
+            Some(GlobalListenerRegistration::new(|| {}))
         }
     }
 
@@ -257,8 +283,7 @@ mod tests {
                 ..Default::default()
             }),
         };
-        use_global_listener(
-            GlobalListenerTarget::Window,
+        use_window_listener(
             binding,
             GlobalListenerOptions {
                 enabled: version != 2,
@@ -314,6 +339,21 @@ mod tests {
         drop(dom);
         assert_eq!(document.detached.get(), 2);
         assert!(!emit());
+    }
+
+    #[test]
+    fn document_macro_registers_on_document() {
+        let mut dom = VirtualDom::new(|| {
+            let support = crate::use_document_listener!(keydown, move |_| {});
+            assert_eq!(support, GlobalListenerSupport::Supported);
+            VNode::empty()
+        });
+        let document = Rc::new(TestDocument::default());
+        dom.insert_any_root_context(Box::new(document.clone() as Rc<dyn Document>));
+        dom.rebuild(&mut NoOpMutations);
+        dom.process_events();
+        assert_eq!(document.document_attached.get(), 1);
+        assert_eq!(document.attached.get(), 0);
     }
 
     #[test]

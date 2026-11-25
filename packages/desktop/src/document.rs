@@ -1,8 +1,8 @@
 use crate::{DesktopContext, WeakDesktopContext, query::Query};
 use dioxus_document::{
     Document, Eval, EvalError, Evaluator, GlobalEventCallback, GlobalListenerOptions,
-    GlobalListenerRegistration, GlobalListenerTarget, LinkProps, MetaProps, ScriptProps,
-    StyleProps, create_element_in_head,
+    GlobalListenerRegistration, LinkProps, MetaProps, ScriptProps, StyleProps,
+    create_element_in_head,
 };
 use dioxus_vdom::queue_effect;
 use std::{cell::Cell, cell::RefCell, collections::BTreeMap};
@@ -54,16 +54,9 @@ impl DesktopDocument {
         let desktop_ctx = std::rc::Rc::downgrade(&desktop_ctx);
         Self { desktop_ctx }
     }
-}
-
-impl Document for DesktopDocument {
-    fn supports_global_listeners(&self) -> bool {
-        self.desktop_ctx.strong_count() != 0
-    }
-
     fn add_global_listener(
         &self,
-        target: GlobalListenerTarget,
+        window: bool,
         name: &'static str,
         options: &GlobalListenerOptions,
         callback: GlobalEventCallback,
@@ -78,7 +71,7 @@ impl Document for DesktopDocument {
         let id = listeners.next_id()?;
         let registration = serde_json::json!({
             "id": id,
-            "window": target == GlobalListenerTarget::Window,
+            "window": window,
             "name": name,
             "capture": options.capture,
             "passive": options.passive,
@@ -106,6 +99,30 @@ impl Document for DesktopDocument {
                 }
             }
         }))
+    }
+}
+
+impl Document for DesktopDocument {
+    fn supports_global_listeners(&self) -> bool {
+        self.desktop_ctx.strong_count() != 0
+    }
+
+    fn add_window_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        self.add_global_listener(true, name, options, callback)
+    }
+
+    fn add_document_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        self.add_global_listener(false, name, options, callback)
     }
 
     fn eval(&self, js: String) -> Eval {

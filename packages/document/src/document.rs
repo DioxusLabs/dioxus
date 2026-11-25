@@ -70,11 +70,21 @@ pub trait Document: 'static {
         false
     }
 
-    /// Attach a scoped listener to the owning window or document.
+    /// Attach a scoped listener to the owning window.
     #[doc(hidden)]
-    fn add_global_listener(
+    fn add_window_listener(
         &self,
-        _target: GlobalListenerTarget,
+        _name: &'static str,
+        _options: &GlobalListenerOptions,
+        _callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        None
+    }
+
+    /// Attach a scoped listener to the owning document.
+    #[doc(hidden)]
+    fn add_document_listener(
+        &self,
         _name: &'static str,
         _options: &GlobalListenerOptions,
         _callback: GlobalEventCallback,

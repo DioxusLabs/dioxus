@@ -10,18 +10,23 @@ pub use document::*;
 pub use elements::*;
 pub use error::*;
 pub use eval::*;
-pub use listener::*;
+pub use listener::{
+    Containment, GlobalEventCallback, GlobalEventInput, GlobalEventPayload, GlobalListenerContext,
+    GlobalListenerOptions, GlobalListenerRegistration, GlobalListenerSupport, ViewportResizeData,
+};
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::listener::use_global_listener;
-    pub use dioxus_html::events::global_events;
+    pub use crate::listener::{use_document_listener, use_window_listener};
+    pub use dioxus_html::events::__private::global_events;
     pub mod window_events {
         pub mod plain {
-            pub use dioxus_html::events::{global_events::plain::*, viewport_resize::plain::*};
+            pub use dioxus_html::events::__private::{
+                global_events::plain::*, viewport_resize::plain::*,
+            };
         }
         pub mod contextual {
-            pub use dioxus_html::events::{
+            pub use dioxus_html::events::__private::{
                 global_events::contextual::*, viewport_resize::contextual::*,
             };
         }

@@ -1,7 +1,7 @@
 use dioxus_document::{
     Containment, Document, Eval, EvalError, Evaluator, GlobalEventCallback, GlobalEventInput,
-    GlobalEventPayload, GlobalListenerOptions, GlobalListenerRegistration, GlobalListenerTarget,
-    LinkProps, MetaProps, ScriptProps, StyleProps, ViewportResizeData,
+    GlobalEventPayload, GlobalListenerOptions, GlobalListenerRegistration, LinkProps, MetaProps,
+    ScriptProps, StyleProps, ViewportResizeData,
 };
 use dioxus_history::History;
 use dioxus_vdom::ScopeId;
@@ -116,26 +116,17 @@ pub fn init_fullstack_document() {
 /// The web-target's document provider.
 #[derive(Clone)]
 pub struct WebDocument;
-impl Document for WebDocument {
-    fn supports_global_listeners(&self) -> bool {
-        true
-    }
-
+impl WebDocument {
     fn add_global_listener(
-        &self,
-        target: GlobalListenerTarget,
+        window: web_sys::Window,
+        document: web_sys::Document,
+        target: web_sys::EventTarget,
         name: &'static str,
         options: &GlobalListenerOptions,
         callback: GlobalEventCallback,
     ) -> Option<GlobalListenerRegistration> {
         use crate::events::{event_type_matches, virtual_event_from_websys_event};
 
-        let window = web_sys::window()?;
-        let document = window.document()?;
-        let target: web_sys::EventTarget = match target {
-            GlobalListenerTarget::Window => window.clone().into(),
-            GlobalListenerTarget::Document => document.clone().into(),
-        };
         let capture = options.capture;
         let passive = options.passive;
         let root_id = options.containment_root.clone();
@@ -209,6 +200,48 @@ impl Document for WebDocument {
                 capture,
             );
         }))
+    }
+}
+
+impl Document for WebDocument {
+    fn supports_global_listeners(&self) -> bool {
+        true
+    }
+
+    fn add_window_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        let window = web_sys::window()?;
+        let document = window.document()?;
+        Self::add_global_listener(
+            window.clone(),
+            document,
+            window.into(),
+            name,
+            options,
+            callback,
+        )
+    }
+
+    fn add_document_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        let window = web_sys::window()?;
+        let document = window.document()?;
+        Self::add_global_listener(
+            window,
+            document.clone(),
+            document.into(),
+            name,
+            options,
+            callback,
+        )
     }
 
     fn eval(&self, js: String) -> Eval {
