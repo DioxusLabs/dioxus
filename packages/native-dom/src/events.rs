@@ -447,8 +447,9 @@ impl HasPointerData for NativePointerData {
     fn pointer_id(&self) -> i32 {
         match self.0.id {
             BlitzPointerId::Mouse => 0,
-            BlitzPointerId::Pen => 0,
-            BlitzPointerId::Finger(id) => id as i32,
+            BlitzPointerId::Pen => 1,
+            // Fingers map into 2..=i32::MAX so they never collide with mouse or pen
+            BlitzPointerId::Finger(id) => (id % (i32::MAX as u64 - 1)) as i32 + 2,
         }
     }
 
