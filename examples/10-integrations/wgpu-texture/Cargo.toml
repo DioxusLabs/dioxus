@@ -12,7 +12,8 @@ native = ["dioxus/native"]
 tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
 
 [dependencies]
-dioxus-native = { workspace = true }
+# Custom wgpu paints need a wgpu renderer; the default renderer is Skia.
+dioxus-native = { workspace = true, features = ["vello-hybrid"] }
 dioxus = { workspace = true }
 anyrender = { workspace = true }
 blitz-dom = { workspace = true }
