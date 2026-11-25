@@ -2,6 +2,8 @@
 //! `EventsExtension` trait that adds typed event handler methods to HTML
 //! builders.
 
+use std::collections::HashSet;
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use syn::ext::IdentExt;
@@ -96,6 +98,31 @@ impl ToTokens for EventExtensions {
             }
         });
 
+        let mut seen = HashSet::new();
+        let global_events: Vec<_> = self
+            .events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event.data.to_string().as_str(),
+                    "KeyboardData"
+                        | "MouseData"
+                        | "PointerData"
+                        | "FocusData"
+                        | "DragData"
+                        | "WheelData"
+                        | "TouchData"
+                ) && seen.insert(event.raw.to_string())
+            })
+            .map(|event| (event.raw.clone(), event.data.clone(), event.raw.to_string()))
+            .collect();
+        let global_events = global_bindings(&global_events);
+        let viewport_resize = global_bindings(&[(
+            format_ident!("viewportresize"),
+            format_ident!("ViewportResizeData"),
+            "resize".into(),
+        )]);
+
         tokens.append_all(quote! {
             /// Event handler extension methods for typed HTML builders.
             pub trait EventsExtension: ::dioxus_vdom::view::AttributeBuilderTarget + Sized {
@@ -107,6 +134,60 @@ impl ToTokens for EventExtensions {
                 Target: ::dioxus_vdom::view::AttributeBuilderTarget,
             {
             }
+
+            #[doc(hidden)]
+            pub mod global_events {
+                #global_events
+            }
+
+            #[doc(hidden)]
+            pub mod viewport_resize {
+                #viewport_resize
+            }
         });
+    }
+}
+
+fn global_bindings(events: &[(Ident, Ident, String)]) -> TokenStream2 {
+    let plain = events.iter().map(|(name, data, raw)| {
+        quote! {
+            pub fn #name<R, Marker>(
+                mut handler: impl FnMut(Event<#data>) -> R + 'static,
+            ) -> GlobalEventBinding
+            where
+                R: SpawnIfAsync<Marker>,
+            {
+                bind(#raw, move |event, _| handler(event))
+            }
+        }
+    });
+    let contextual = events.iter().map(|(name, data, raw)| {
+        quote! {
+            pub fn #name<R, Marker>(
+                handler: impl FnMut(Event<#data>, GlobalListenerContext) -> R + 'static,
+            ) -> GlobalEventBinding
+            where
+                R: SpawnIfAsync<Marker>,
+            {
+                bind(#raw, handler)
+            }
+        }
+    });
+    quote! {
+        pub mod plain {
+            use crate::events::*;
+            use crate::events::global::bind;
+            use dioxus_vdom::{Event, SpawnIfAsync};
+
+            #(#plain)*
+        }
+
+        pub mod contextual {
+            use crate::events::*;
+            use crate::events::global::bind;
+            use dioxus_vdom::{Event, SpawnIfAsync};
+
+            #(#contextual)*
+        }
     }
 }

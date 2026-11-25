@@ -4,11 +4,29 @@ mod document;
 mod elements;
 mod error;
 mod eval;
+mod listener;
 
 pub use document::*;
 pub use elements::*;
 pub use error::*;
 pub use eval::*;
+pub use listener::*;
+
+#[doc(hidden)]
+pub mod __private {
+    pub use crate::listener::use_global_listener;
+    pub use dioxus_html::events::global_events;
+    pub mod window_events {
+        pub mod plain {
+            pub use dioxus_html::events::{global_events::plain::*, viewport_resize::plain::*};
+        }
+        pub mod contextual {
+            pub use dioxus_html::events::{
+                global_events::contextual::*, viewport_resize::contextual::*,
+            };
+        }
+    }
+}
 
 /// Get the document provider for the current platform or a no-op provider if the platform doesn't document functionality.
 pub fn document() -> Rc<dyn Document> {

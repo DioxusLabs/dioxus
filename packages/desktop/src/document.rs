@@ -1,14 +1,47 @@
 use crate::{DesktopContext, WeakDesktopContext, query::Query};
 use dioxus_document::{
-    Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
-    create_element_in_head,
+    Document, Eval, EvalError, Evaluator, GlobalEventCallback, GlobalListenerOptions,
+    GlobalListenerRegistration, GlobalListenerTarget, LinkProps, MetaProps, ScriptProps,
+    StyleProps, create_element_in_head,
 };
 use dioxus_vdom::queue_effect;
+use std::{cell::Cell, cell::RefCell, collections::BTreeMap};
 
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 /// Code for the Dioxus channel used to communicate between the dioxus and javascript code
 pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
+
+#[derive(Default)]
+pub(crate) struct GlobalListeners {
+    next_id: Cell<u32>,
+    initialized: Cell<bool>,
+    registrations: RefCell<BTreeMap<u32, (GlobalEventCallback, String)>>,
+}
+
+impl GlobalListeners {
+    fn next_id(&self) -> Option<u32> {
+        let id = self.next_id.get();
+        self.next_id.set(id.checked_add(1)?);
+        Some(id)
+    }
+
+    pub(crate) fn initialize(&self, webview: &wry::WebView) {
+        self.initialized.set(true);
+        for (_, script) in self.registrations.borrow().values() {
+            if let Err(error) = webview.evaluate_script(script) {
+                tracing::warn!(%error, "Could not register Desktop global event listener");
+            }
+        }
+    }
+
+    pub(crate) fn get(&self, id: u32) -> Option<GlobalEventCallback> {
+        self.registrations
+            .borrow()
+            .get(&id)
+            .map(|(callback, _)| callback.clone())
+    }
+}
 
 /// Represents the desktop-target's provider of evaluators.
 #[derive(Clone)]
@@ -24,6 +57,57 @@ impl DesktopDocument {
 }
 
 impl Document for DesktopDocument {
+    fn supports_global_listeners(&self) -> bool {
+        self.desktop_ctx.strong_count() != 0
+    }
+
+    fn add_global_listener(
+        &self,
+        target: GlobalListenerTarget,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        let ctx = self.desktop_ctx.upgrade()?;
+        let passive = options.passive;
+        let callback = std::rc::Rc::new(move |mut input: dioxus_document::GlobalEventInput| {
+            input.cancelable &= !passive && name != "resize";
+            callback(input)
+        });
+        let listeners = &ctx.global_listeners;
+        let id = listeners.next_id()?;
+        let registration = serde_json::json!({
+            "id": id,
+            "window": target == GlobalListenerTarget::Window,
+            "name": name,
+            "capture": options.capture,
+            "passive": options.passive,
+            "containmentRoot": options.containment_root,
+        });
+        let script = format!("window.interpreter.addGlobalEventListener({registration});");
+        if listeners.initialized.get()
+            && let Err(error) = ctx.webview.evaluate_script(&script)
+        {
+            tracing::debug!(%error, "Could not register Desktop global event listener");
+            return None;
+        }
+        listeners
+            .registrations
+            .borrow_mut()
+            .insert(id, (callback, script));
+        let ctx = self.desktop_ctx.clone();
+        Some(GlobalListenerRegistration::new(move || {
+            if let Some(ctx) = ctx.upgrade() {
+                ctx.global_listeners.registrations.borrow_mut().remove(&id);
+                if ctx.global_listeners.initialized.get() {
+                    let _ = ctx.webview.evaluate_script(&format!(
+                        "window.interpreter.removeGlobalEventListener({id});"
+                    ));
+                }
+            }
+        }))
+    }
+
     fn eval(&self, js: String) -> Eval {
         Eval::new(DesktopEvaluator::create(
             self.desktop_ctx

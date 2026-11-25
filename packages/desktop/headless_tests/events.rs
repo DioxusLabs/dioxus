@@ -42,6 +42,7 @@ fn app() -> Element {
             test_key_down_div {}
             test_key_up_div {}
             test_key_press_div {}
+            test_global_keydown {}
             test_focus_in_div {}
             test_focus_out_div {}
             test_form_input {}
@@ -53,6 +54,50 @@ fn app() -> Element {
             test_before_input_contenteditable {}
             test_paste {}
         }
+    }
+}
+
+fn test_global_keydown() -> Element {
+    use_hook(|| utils::EXPECTED_EVENTS.with_mut(|x| *x += 1));
+    let mut mounted = use_signal(|| false);
+    document::use_window_listener!(
+        keydown,
+        move |event, context| {
+            if event.key() == Key::Named(dioxus::html::NamedKey::Escape) {
+                assert_eq!(context.containment(), document::Containment::Inside);
+                event.prevent_default();
+            }
+        },
+        capture: true,
+        containment_root: "global-keydown",
+    );
+    use_effect(move || {
+        if mounted() {
+            spawn(async move {
+                let dispatched: bool = document::eval(
+                    r#"
+                        return document.getElementById("global-keydown").dispatchEvent(
+                            new KeyboardEvent("keydown", {
+                                key: "Escape",
+                                bubbles: true,
+                                cancelable: true,
+                            })
+                        );
+                    "#,
+                )
+                .join()
+                .await
+                .unwrap();
+                assert!(
+                    !dispatched,
+                    "window listener did not cancel the keyboard event"
+                );
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            });
+        }
+    });
+    rsx! {
+        div { id: "global-keydown", onmounted: move |_| mounted.set(true) }
     }
 }
 

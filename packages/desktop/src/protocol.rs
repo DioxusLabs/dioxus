@@ -59,8 +59,9 @@ pub(super) fn desktop_handler(
     let trimmed_uri = request.uri().path().trim_matches('/');
 
     // If the request is asking for an event response, do that
-    if trimmed_uri == "__events" {
-        return edit_state.handle_event(request, responder);
+    if matches!(trimmed_uri, "__events" | "__global_events") {
+        let global = trimmed_uri == "__global_events";
+        return edit_state.handle_event(request, responder, global);
     }
 
     // If the request is asking for a file dialog, handle that, returning the list of files selected

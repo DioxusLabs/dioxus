@@ -1,5 +1,7 @@
 use dioxus_document::{
-    Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
+    Containment, Document, Eval, EvalError, Evaluator, GlobalEventCallback, GlobalEventInput,
+    GlobalEventPayload, GlobalListenerOptions, GlobalListenerRegistration, GlobalListenerTarget,
+    LinkProps, MetaProps, ScriptProps, StyleProps, ViewportResizeData,
 };
 use dioxus_history::History;
 use dioxus_vdom::ScopeId;
@@ -115,6 +117,100 @@ pub fn init_fullstack_document() {
 #[derive(Clone)]
 pub struct WebDocument;
 impl Document for WebDocument {
+    fn supports_global_listeners(&self) -> bool {
+        true
+    }
+
+    fn add_global_listener(
+        &self,
+        target: GlobalListenerTarget,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        use crate::events::{event_type_matches, virtual_event_from_websys_event};
+
+        let window = web_sys::window()?;
+        let document = window.document()?;
+        let target: web_sys::EventTarget = match target {
+            GlobalListenerTarget::Window => window.clone().into(),
+            GlobalListenerTarget::Document => document.clone().into(),
+        };
+        let capture = options.capture;
+        let passive = options.passive;
+        let root_id = options.containment_root.clone();
+        let handler = Closure::<dyn Fn(web_sys::Event)>::new(move |event: web_sys::Event| {
+            let payload = if name == "resize" {
+                let (Ok(width), Ok(height)) = (window.inner_width(), window.inner_height()) else {
+                    return;
+                };
+                let (Some(width), Some(height)) = (width.as_f64(), height.as_f64()) else {
+                    return;
+                };
+                dioxus_html::PlatformEventData::new(Box::new(ViewportResizeData::new(
+                    width, height,
+                )))
+            } else {
+                if !event_type_matches(name, &event) {
+                    return;
+                }
+                let Some(element) = event
+                    .target()
+                    .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+                    .or_else(|| document.document_element())
+                else {
+                    return;
+                };
+                virtual_event_from_websys_event(event.clone(), element)
+            };
+            let containment = match root_id
+                .as_deref()
+                .and_then(|id| document.get_element_by_id(id))
+            {
+                Some(root)
+                    if event
+                        .composed_path()
+                        .iter()
+                        .any(|target| js_sys::Object::is(&target, root.as_ref())) =>
+                {
+                    Containment::Inside
+                }
+                Some(_) => Containment::Outside,
+                None => Containment::RootMissing,
+            };
+            let result = callback(GlobalEventInput {
+                payload: GlobalEventPayload::Platform(payload),
+                containment,
+                bubbles: event.bubbles(),
+                cancelable: name != "resize" && event.cancelable() && !passive,
+                default_prevented: event.default_prevented(),
+            });
+            if result.prevent_default {
+                event.prevent_default();
+            }
+            if result.stop_propagation {
+                event.stop_propagation();
+            }
+        });
+        let event_options = web_sys::AddEventListenerOptions::new();
+        event_options.set_capture(capture);
+        event_options.set_passive(passive);
+        target
+            .add_event_listener_with_callback_and_add_event_listener_options(
+                name,
+                handler.as_ref().unchecked_ref(),
+                &event_options,
+            )
+            .ok()?;
+        Some(GlobalListenerRegistration::new(move || {
+            let _ = target.remove_event_listener_with_callback_and_bool(
+                name,
+                handler.as_ref().unchecked_ref(),
+                capture,
+            );
+        }))
+    }
+
     fn eval(&self, js: String) -> Eval {
         Eval::new(WebEvaluator::create(js))
     }

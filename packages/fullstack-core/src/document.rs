@@ -26,6 +26,21 @@ impl<D: Document> Document for FullstackWebDocument<D> {
         self.document.eval(js)
     }
 
+    fn supports_global_listeners(&self) -> bool {
+        self.document.supports_global_listeners()
+    }
+
+    fn add_global_listener(
+        &self,
+        target: GlobalListenerTarget,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        self.document
+            .add_global_listener(target, name, options, callback)
+    }
+
     /// Set the title of the document
     fn set_title(&self, title: String) {
         self.document.set_title(title);

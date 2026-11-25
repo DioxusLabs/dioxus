@@ -9,6 +9,7 @@ use crate::{
 };
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
+use dioxus_document::{Containment, GlobalEventInput, GlobalEventPayload};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
 use dioxus_vdom::{RenderTargetId, Runtime, VirtualDom};
@@ -61,6 +62,17 @@ pub(crate) struct WebviewEdits {
     desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GlobalEventMessage {
+    id: u32,
+    data: serde_json::Value,
+    bubbles: bool,
+    cancelable: bool,
+    default_prevented: bool,
+    containment: Containment,
+}
+
 impl WebviewEdits {
     fn new(runtime: Rc<Runtime>, target_id: RenderTargetId, wry_queue: WryQueue) -> Self {
         Self {
@@ -75,9 +87,10 @@ impl WebviewEdits {
         &self,
         request: wry::http::Request<Vec<u8>>,
         responder: wry::RequestAsyncResponder,
+        global: bool,
     ) {
         let body = self
-            .try_handle_event(request)
+            .try_handle_event(request, global)
             .expect("Writing bodies to succeed");
         responder.respond(wry::http::Response::new(body))
     }
@@ -85,6 +98,7 @@ impl WebviewEdits {
     pub fn try_handle_event(
         &self,
         request: wry::http::Request<Vec<u8>>,
+        global: bool,
     ) -> Result<Vec<u8>, serde_json::Error> {
         use serde::de::Error;
 
@@ -105,6 +119,19 @@ impl WebviewEdits {
 
         let data_from_header = base64::Engine::decode(&BASE64_STANDARD, as_utf)
             .map_err(|_| Error::custom("dioxus-data header is not a base64 string"))?;
+
+        if global {
+            #[cfg(target_os = "android")]
+            let _lock = crate::android_sync_lock::android_runtime_lock();
+            let response = match serde_json::from_slice::<GlobalEventMessage>(&data_from_header) {
+                Ok(event) => self.handle_global_event(event),
+                Err(error) => {
+                    tracing::debug!(%error, "Ignoring malformed Desktop global event message");
+                    SynchronousEventResponse::default()
+                }
+            };
+            return serde_json::to_vec(&response);
+        }
 
         let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
@@ -127,6 +154,30 @@ impl WebviewEdits {
         serde_json::to_vec(&response).inspect_err(|err| {
             tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
         })
+    }
+
+    fn handle_global_event(&self, event: GlobalEventMessage) -> SynchronousEventResponse {
+        let Some(context) = self
+            .desktop_context
+            .get()
+            .and_then(|context| context.upgrade())
+        else {
+            return SynchronousEventResponse::default();
+        };
+        let Some(callback) = context.global_listeners.get(event.id) else {
+            return SynchronousEventResponse::default();
+        };
+        let result = callback(GlobalEventInput {
+            payload: GlobalEventPayload::Serialized(event.data),
+            containment: event.containment,
+            bubbles: event.bubbles,
+            cancelable: event.cancelable,
+            default_prevented: event.default_prevented,
+        });
+        SynchronousEventResponse {
+            prevent_default: result.prevent_default,
+            stop_propagation: result.stop_propagation,
+        }
     }
 
     pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
@@ -678,13 +729,18 @@ impl WebviewInstance {
 pub struct SynchronousEventResponse {
     #[serde(rename = "preventDefault")]
     prevent_default: bool,
+    #[serde(rename = "stopPropagation")]
+    stop_propagation: bool,
 }
 
 impl SynchronousEventResponse {
     /// Create a new SynchronousEventResponse
     #[allow(unused)]
     pub fn new(prevent_default: bool) -> Self {
-        Self { prevent_default }
+        Self {
+            prevent_default,
+            ..Default::default()
+        }
     }
 }
 

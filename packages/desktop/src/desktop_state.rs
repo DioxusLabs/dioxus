@@ -94,6 +94,7 @@ pub struct DesktopWindowContext {
     pub(crate) asset_handlers: AssetHandlerRegistry,
     pub(crate) file_hover: NativeFileHover,
     pub(crate) query: QueryEngine,
+    pub(crate) global_listeners: crate::document::GlobalListeners,
     pub(crate) close_behaviour: Cell<crate::WindowCloseBehaviour>,
     component_window_callbacks: RefCell<Option<ComponentWindowCallbacks>>,
 
@@ -117,6 +118,7 @@ impl DesktopWindowContext {
             asset_handlers,
             file_hover,
             query: QueryEngine::default(),
+            global_listeners: crate::document::GlobalListeners::default(),
             close_behaviour: Cell::new(close_behaviour),
             component_window_callbacks: RefCell::new(None),
             #[cfg(target_os = "ios")]

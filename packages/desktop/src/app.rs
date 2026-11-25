@@ -282,9 +282,11 @@ impl App {
     /// The webview is finally loaded. Rebuild once, then start polling the
     /// shared VDOM.
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        if !self.webviews.contains_key(&id) {
+        let Some(webview) = self.webviews.get(&id) else {
             return;
-        }
+        };
+        let context = &webview.desktop_context;
+        context.global_listeners.initialize(&context.webview);
 
         if !self.initial_dom_rebuild_done {
             self.rebuild_dom();
