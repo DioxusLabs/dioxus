@@ -46,6 +46,16 @@ export class NativeInterpreter extends JSChannel_ {
     // attach an event listener on the body that prevents file drops from navigating
     // this is because the browser will try to navigate to the file if it's dropped on the window
     window.addEventListener(
+      "dragenter",
+      function (e) {
+        if (e.target instanceof Element && e.target.tagName != "INPUT") {
+          e.preventDefault();
+        }
+      },
+      false
+    );
+
+    window.addEventListener(
       "dragover",
       function (e) {
         // // check which element is our target
