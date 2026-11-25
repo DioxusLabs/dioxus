@@ -53,7 +53,7 @@ impl VisibleData {
 
     /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -202,10 +202,6 @@ impl HasVisibleData for SerializedVisibleData {
     fn get_time(&self) -> VisibleResult<SystemTime> {
         Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(self.time_ms as u64))
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(feature = "serialize")]
@@ -255,9 +251,6 @@ pub trait HasVisibleData: std::any::Any {
     fn get_time(&self) -> VisibleResult<SystemTime> {
         Err(VisibleError::NotSupported)
     }
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 use dioxus_vdom::Event;

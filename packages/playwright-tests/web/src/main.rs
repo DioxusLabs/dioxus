@@ -1,6 +1,7 @@
 // This test is used by playwright configured in the root of the repo
 
 use dioxus::prelude::*;
+use dioxus::web::WebEventExt;
 use wasm_bindgen::prelude::*;
 
 fn app() -> Element {
@@ -91,7 +92,8 @@ fn OnMounted() -> Element {
     rsx! {
         div {
             class: "onmounted-div",
-            onmounted: move |_| {
+            onmounted: move |event| {
+                assert_eq!(event.as_web_event().class_name(), "onmounted-div");
                 mounted_triggered_count += 1;
             },
             "onmounted was called {mounted_triggered_count} times"

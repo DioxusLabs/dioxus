@@ -85,7 +85,7 @@ impl KeyboardData {
     /// Downcast this KeyboardData to a concrete type.
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -182,10 +182,6 @@ impl HasKeyboardData for SerializedKeyboardData {
     fn is_composing(&self) -> bool {
         self.is_composing
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(feature = "serialize")]
@@ -242,9 +238,6 @@ pub trait HasKeyboardData: ModifiersInteraction + std::any::Any {
 
     /// Indicates whether the key is fired within a composition session.
     fn is_composing(&self) -> bool;
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 #[cfg(feature = "serialize")]

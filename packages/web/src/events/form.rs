@@ -2,7 +2,6 @@ use super::WebEventExt;
 use crate::WebFileData;
 use dioxus_html::{FileData, FormValue, HasFileData, HasFormData};
 use js_sys::Array;
-use std::any::Any;
 use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
 use web_sys::{Element, Event, FileReader};
 
@@ -16,7 +15,8 @@ impl WebEventExt for dioxus_html::FormData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<Event>().cloned()
+        self.downcast::<WebFormData>()
+            .map(|backing| backing.event.clone())
     }
 }
 
@@ -67,10 +67,6 @@ impl HasFormData for WebFormData {
         }
 
         values
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        &self.event as &dyn Any
     }
 
     fn valid(&self) -> bool {

@@ -203,10 +203,6 @@ impl Display for NodeNotExistErr {
 impl std::error::Error for NodeNotExistErr {}
 
 impl RenderedElementBacking for NodeHandle {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector2D>>>> {
         let Some(scroll_offset) = self
             .doc()
@@ -323,10 +319,6 @@ pub struct NativeFormData {
 }
 
 impl HasFormData for NativeFormData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-
     fn value(&self) -> String {
         self.value.clone()
     }
@@ -374,10 +366,6 @@ impl HasKeyboardData for BlitzKeyboardData {
 
     fn is_composing(&self) -> bool {
         self.0.is_composing
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
     }
 }
 
@@ -429,17 +417,9 @@ impl PointerInteraction for NativePointerData {
         dioxus_html::input_data::decode_mouse_button_set(self.0.buttons.bits() as u16)
     }
 }
-impl HasMouseData for NativePointerData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-}
+impl HasMouseData for NativePointerData {}
 
 impl HasPointerData for NativePointerData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-
     fn is_primary(&self) -> bool {
         self.0.is_primary
     }
@@ -527,10 +507,6 @@ impl HasTouchData for NativeTouchData {
         // (touches that started on the event target) with all active touches.
         self.touches()
     }
-
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
 }
 
 #[derive(Clone)]
@@ -571,19 +547,11 @@ impl HasTouchPointData for NativeTouchPointData {
         // TODO: expose real touch rotation once blitz tracks it
         0.0
     }
-
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
 }
 
 #[derive(Clone)]
 pub struct NativeFocusData;
-impl HasFocusData for NativeFocusData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-}
+impl HasFocusData for NativeFocusData {}
 
 #[derive(Clone)]
 pub struct NativeScrollData(pub(crate) BlitzScrollEvent);
@@ -594,10 +562,6 @@ impl NativeScrollData {
     }
 }
 impl HasScrollData for NativeScrollData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-
     fn scroll_top(&self) -> f64 {
         self.0.scroll_top
     }
@@ -648,10 +612,6 @@ impl NativeWheelData {
 }
 
 impl HasWheelData for NativeWheelData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-
     fn delta(&self) -> WheelDelta {
         match self.0.delta {
             BlitzWheelDelta::Lines(x, y) => {
@@ -664,11 +624,7 @@ impl HasWheelData for NativeWheelData {
     }
 }
 
-impl HasMouseData for NativeWheelData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-}
+impl HasMouseData for NativeWheelData {}
 
 impl PointerInteraction for NativeWheelData {
     fn trigger_button(&self) -> Option<MouseButton> {
@@ -842,11 +798,7 @@ impl HasDataTransferData for NativeDragData {
     }
 }
 
-impl HasDragData for NativeDragData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-}
+impl HasDragData for NativeDragData {}
 
 impl ModifiersInteraction for NativeDragData {
     fn modifiers(&self) -> Modifiers {
@@ -884,11 +836,7 @@ impl PointerInteraction for NativeDragData {
     }
 }
 
-impl HasMouseData for NativeDragData {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-}
+impl HasMouseData for NativeDragData {}
 
 pub fn synthetic_form_event(
     value: impl Into<String>,

@@ -21,10 +21,6 @@ impl From<&Event> for Synthetic<ResizeObserverEntry> {
 }
 
 impl HasResizeData for Synthetic<ResizeObserverEntry> {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
-
     fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
         extract_first_size(self.event.border_box_size())
     }
@@ -39,7 +35,8 @@ impl WebEventExt for dioxus_html::ResizeData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::ResizeObserverEntry> {
-        self.downcast::<web_sys::ResizeObserverEntry>().cloned()
+        self.downcast::<Synthetic<web_sys::ResizeObserverEntry>>()
+            .map(|backing| backing.event.clone())
     }
 }
 

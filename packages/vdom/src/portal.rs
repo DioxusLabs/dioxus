@@ -1,4 +1,4 @@
-use std::{any::Any, marker::PhantomData, rc::Rc};
+use std::{marker::PhantomData, rc::Rc};
 
 use crate::{
     RenderTargetId,
@@ -278,10 +278,6 @@ fn place_children_inner(
 }
 
 impl RenderDriver for PortalDriver {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn create(
         &self,
         dom: &mut VirtualDom,

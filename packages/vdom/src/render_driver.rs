@@ -18,16 +18,13 @@ use crate::{
 ///
 /// [`VComponent`]: crate::nodes::VComponent
 /// [`ScopeState`]: crate::scopes::ScopeState
-pub(crate) trait RenderDriver: 'static {
-    /// The driver as `Any`, for specialized driver downcasts.
-    fn as_any(&self) -> &dyn Any;
-
+pub(crate) trait RenderDriver: Any {
     /// Whether `other` renders the same special lifecycle as this driver.
     ///
     /// Plain body components are additionally identified by `VComponent::render_fn` before this
     /// hook is consulted.
     fn same_component(&self, other: &dyn RenderDriver) -> bool {
-        self.as_any().type_id() == other.as_any().type_id()
+        Any::type_id(self) == Any::type_id(other)
     }
 
     /// The suspense location assigned to a new scope owned by this driver.
@@ -90,10 +87,6 @@ pub(crate) fn remove_rendered_output(
 pub(crate) struct BodyDriver;
 
 impl RenderDriver for BodyDriver {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn create(
         &self,
         dom: &mut VirtualDom,

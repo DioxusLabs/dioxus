@@ -34,7 +34,7 @@ impl MediaData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -51,11 +51,7 @@ impl From<&MediaData> for SerializedMediaData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasMediaData for SerializedMediaData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl HasMediaData for SerializedMediaData {}
 
 #[cfg(feature = "serialize")]
 impl serde::Serialize for MediaData {
@@ -74,7 +70,4 @@ impl<'de> serde::Deserialize<'de> for MediaData {
     }
 }
 
-pub trait HasMediaData: std::any::Any {
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-}
+pub trait HasMediaData: std::any::Any {}

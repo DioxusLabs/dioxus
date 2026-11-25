@@ -1,4 +1,4 @@
-use std::{any::Any, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     DynamicNode,
@@ -366,10 +366,6 @@ struct SuspenseDriver {
 }
 
 impl RenderDriver for SuspenseDriver {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn suspense_location(&self, _: SuspenseLocation) -> SuspenseLocation {
         SuspenseLocation::SuspenseBoundary(self.context.clone())
     }

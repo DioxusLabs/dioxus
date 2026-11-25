@@ -41,7 +41,7 @@ impl TransitionData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -78,10 +78,6 @@ impl HasTransitionData for SerializedTransitionData {
     fn elapsed_time(&self) -> f32 {
         self.elapsed_time
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(feature = "serialize")]
@@ -105,6 +101,4 @@ pub trait HasTransitionData: std::any::Any {
     fn property_name(&self) -> String;
     fn pseudo_element(&self) -> String;
     fn elapsed_time(&self) -> f32;
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }

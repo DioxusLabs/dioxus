@@ -5,7 +5,7 @@ use crate::{
 use blitz_dom::{BaseDocument, Document, DocumentMutator, Widget};
 use blitz_traits::events::DomEventKind;
 use dioxus_vdom::{BorrowedAttributeValue, ElementId, WriteMutations};
-use std::str::FromStr as _;
+use std::{any::Any, str::FromStr as _};
 
 pub(crate) trait RealDom {
     type NodeId: Copy;
@@ -423,8 +423,7 @@ impl BlitzBackend<'_> {
         if local_name == "__webview_document" {
             match value {
                 BorrowedAttributeValue::Any(value) => {
-                    if let Some(value) = value
-                        .as_any()
+                    if let Some(value) = (value.as_ref() as &dyn Any)
                         .downcast_ref::<WriteOnceAttr<Box<dyn Document>>>()
                         && let Some(mut sub_document) = value.take()
                     {
@@ -444,8 +443,7 @@ impl BlitzBackend<'_> {
             if element_name.local.as_str() == "object" {
                 match value {
                     BorrowedAttributeValue::Any(value) => {
-                        if let Some(value) = value
-                            .as_any()
+                        if let Some(value) = (value.as_ref() as &dyn Any)
                             .downcast_ref::<WriteOnceAttr<Box<dyn Widget>>>()
                             && let Some(widget) = value.take()
                         {

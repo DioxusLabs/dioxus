@@ -75,7 +75,7 @@ impl SelectionData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -159,10 +159,6 @@ impl HasSelectionData for SerializedSelectionData {
             self.selection_direction.unwrap_or_default(),
         ))
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(feature = "serialize")]
@@ -191,9 +187,6 @@ pub trait HasSelectionData: std::any::Any {
     fn selection(&self) -> Option<TextSelection> {
         None
     }
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 #[cfg(all(test, feature = "serialize"))]

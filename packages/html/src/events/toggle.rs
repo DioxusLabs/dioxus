@@ -35,7 +35,7 @@ impl ToggleData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -52,11 +52,7 @@ impl From<&ToggleData> for SerializedToggleData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasToggleData for SerializedToggleData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl HasToggleData for SerializedToggleData {}
 
 #[cfg(feature = "serialize")]
 impl serde::Serialize for ToggleData {
@@ -75,7 +71,4 @@ impl<'de> serde::Deserialize<'de> for ToggleData {
     }
 }
 
-pub trait HasToggleData: std::any::Any {
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-}
+pub trait HasToggleData: std::any::Any {}

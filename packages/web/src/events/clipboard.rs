@@ -15,11 +15,7 @@ impl WebClipboardData {
     }
 }
 
-impl HasClipboardData for WebClipboardData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event as &dyn std::any::Any
-    }
-}
+impl HasClipboardData for WebClipboardData {}
 
 impl HasDataTransferData for WebClipboardData {
     fn data_transfer(&self) -> DataTransfer {
@@ -43,6 +39,7 @@ impl WebEventExt for dioxus_html::ClipboardData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::ClipboardEvent>().cloned()
+        self.downcast::<WebClipboardData>()
+            .map(|backing| backing.event.clone())
     }
 }

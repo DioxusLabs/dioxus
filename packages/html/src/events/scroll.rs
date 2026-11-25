@@ -23,7 +23,7 @@ impl ScrollData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 
     pub fn scroll_top(&self) -> f64 {
@@ -103,10 +103,6 @@ impl From<&ScrollData> for SerializedScrollData {
 
 #[cfg(feature = "serialize")]
 impl HasScrollData for SerializedScrollData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn scroll_top(&self) -> f64 {
         self.scroll_top
     }
@@ -150,9 +146,6 @@ impl<'de> serde::Deserialize<'de> for ScrollData {
 }
 
 pub trait HasScrollData: std::any::Any {
-    /// Return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-
     /// Get the vertical scroll position
     fn scroll_top(&self) -> f64;
 

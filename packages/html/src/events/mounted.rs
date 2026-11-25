@@ -11,9 +11,6 @@ use std::{
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 // we can not use async_trait here because it does not create a trait that is object safe
 pub trait RenderedElementBacking: std::any::Any {
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-
     /// Get the number of pixels that an element's content is scrolled
     fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector2D>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
@@ -70,11 +67,7 @@ pub trait RenderedElementBacking: std::any::Any {
     }
 }
 
-impl RenderedElementBacking for () {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl RenderedElementBacking for () {}
 
 /// The way that scrolling should be performed
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -238,10 +231,10 @@ impl MountedData {
         self.inner.release_pointer_capture(pointer_id)
     }
 
-    /// Downcast this event to a concrete event type
+    /// Downcast to the concrete type implementing [`RenderedElementBacking`].
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -278,3 +271,19 @@ impl Display for MountedError {
 }
 
 impl std::error::Error for MountedError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn downcast_to_concrete_backing() {
+        struct Backing(u32);
+
+        impl RenderedElementBacking for Backing {}
+
+        let data = MountedData::new(Backing(42));
+        assert_eq!(data.downcast::<Backing>().unwrap().0, 42);
+        assert!(data.downcast::<()>().is_none());
+    }
+}

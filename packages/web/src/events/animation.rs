@@ -15,10 +15,6 @@ impl HasAnimationData for Synthetic<AnimationEvent> {
     fn elapsed_time(&self) -> f32 {
         self.event.elapsed_time()
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
 }
 
 impl WebEventExt for dioxus_html::AnimationData {
@@ -26,6 +22,7 @@ impl WebEventExt for dioxus_html::AnimationData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::AnimationEvent> {
-        self.downcast::<web_sys::AnimationEvent>().cloned()
+        self.downcast::<Synthetic<web_sys::AnimationEvent>>()
+            .map(|backing| backing.event.clone())
     }
 }

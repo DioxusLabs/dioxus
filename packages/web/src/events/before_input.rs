@@ -30,10 +30,6 @@ impl HasBeforeInputData for WebBeforeInputData {
     fn value(&self) -> String {
         super::editable_element_value(&self.element).unwrap_or_default()
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event as &dyn std::any::Any
-    }
 }
 
 impl WebEventExt for dioxus_html::BeforeInputData {
@@ -41,6 +37,7 @@ impl WebEventExt for dioxus_html::BeforeInputData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::InputEvent>().cloned()
+        self.downcast::<WebBeforeInputData>()
+            .map(|backing| backing.event.clone())
     }
 }

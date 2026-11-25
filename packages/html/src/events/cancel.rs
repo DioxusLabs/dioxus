@@ -35,7 +35,7 @@ impl CancelData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -52,11 +52,7 @@ impl From<&CancelData> for SerializedCancelData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasCancelData for SerializedCancelData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl HasCancelData for SerializedCancelData {}
 
 #[cfg(feature = "serialize")]
 impl serde::Serialize for CancelData {
@@ -75,7 +71,4 @@ impl<'de> serde::Deserialize<'de> for CancelData {
     }
 }
 
-pub trait HasCancelData: std::any::Any {
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-}
+pub trait HasCancelData: std::any::Any {}

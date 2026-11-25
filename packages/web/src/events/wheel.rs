@@ -17,17 +17,9 @@ impl HasWheelData for Synthetic<WheelEvent> {
             self.event.delta_z(),
         )
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
 }
 
-impl HasMouseData for Synthetic<WheelEvent> {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
-}
+impl HasMouseData for Synthetic<WheelEvent> {}
 
 impl InteractionLocation for Synthetic<WheelEvent> {
     fn client_coordinates(&self) -> ClientPoint {
@@ -85,6 +77,7 @@ impl WebEventExt for dioxus_html::WheelData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::WheelEvent>().cloned()
+        self.downcast::<Synthetic<web_sys::WheelEvent>>()
+            .map(|backing| backing.event.clone())
     }
 }

@@ -285,10 +285,6 @@ impl HasFileData for DesktopFormData {
 }
 
 impl HasFormData for DesktopFormData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn value(&self) -> String {
         self.value.clone()
     }
@@ -349,17 +345,9 @@ impl HasDataTransferData for DesktopFileDragEvent {
     }
 }
 
-impl HasDragData for DesktopFileDragEvent {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl HasDragData for DesktopFileDragEvent {}
 
-impl HasMouseData for DesktopFileDragEvent {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl HasMouseData for DesktopFileDragEvent {}
 
 impl InteractionLocation for DesktopFileDragEvent {
     fn client_coordinates(&self) -> ClientPoint {

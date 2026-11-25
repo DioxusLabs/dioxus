@@ -40,10 +40,7 @@ impl<E: HasMouseData> PartialEq<E> for MouseData {
 }
 
 /// A trait for any object that has the data for a mouse event
-pub trait HasMouseData: PointerInteraction {
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-}
+pub trait HasMouseData: PointerInteraction + std::any::Any {}
 
 impl MouseData {
     /// Create a new instance of MouseData
@@ -56,7 +53,7 @@ impl MouseData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -154,11 +151,7 @@ impl From<&MouseData> for SerializedMouseData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasMouseData for SerializedMouseData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl HasMouseData for SerializedMouseData {}
 
 #[cfg(feature = "serialize")]
 impl InteractionLocation for SerializedMouseData {

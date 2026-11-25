@@ -20,7 +20,7 @@ impl PointerData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -71,7 +71,7 @@ impl PartialEq for PointerData {
 }
 
 /// A trait for any object that has the data for a pointer event
-pub trait HasPointerData: PointerInteraction {
+pub trait HasPointerData: PointerInteraction + std::any::Any {
     /// Gets the unique identifier of the pointer causing the event.
     fn pointer_id(&self) -> i32;
 
@@ -101,9 +101,6 @@ pub trait HasPointerData: PointerInteraction {
 
     /// Gets if the pointer represents the primary pointer of this pointer type.
     fn is_primary(&self) -> bool;
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 impl PointerData {
@@ -273,10 +270,6 @@ impl HasPointerData for SerializedPointerData {
 
     fn is_primary(&self) -> bool {
         self.is_primary
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 

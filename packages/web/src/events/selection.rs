@@ -20,10 +20,6 @@ impl HasSelectionData for Synthetic<Event> {
         })
         .flatten()
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
 }
 
 fn selection_direction_from_web(direction: &str) -> SelectionDirection {
@@ -39,7 +35,8 @@ impl WebEventExt for dioxus_html::SelectionData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::Event>().cloned()
+        self.downcast::<Synthetic<web_sys::Event>>()
+            .map(|backing| backing.event.clone())
     }
 }
 
