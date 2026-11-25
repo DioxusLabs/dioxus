@@ -62,6 +62,7 @@ fn app() -> Element {
         PreventDefault {}
         GlobalListeners {}
         OnMounted {}
+        PointerCapture {}
         WebSysClosure {}
         DocumentElements {}
         MergeStyles {}
@@ -140,6 +141,40 @@ fn OnMounted() -> Element {
                 mounted_triggered_count += 1;
             },
             "onmounted was called {mounted_triggered_count} times"
+        }
+    }
+}
+
+#[component]
+fn PointerCapture() -> Element {
+    let mut mounted = use_signal(|| None::<std::rc::Rc<MountedData>>);
+    let mut status = use_signal(|| "ready");
+    rsx! {
+        div {
+            id: "pointer-capture",
+            onmounted: move |event| mounted.set(Some(event.data())),
+            onpointerdown: move |event| async move {
+                let element = mounted().unwrap();
+                element.set_pointer_capture(event.pointer_id()).await.unwrap();
+                status.set("captured");
+            },
+            onpointermove: move |event| async move {
+                if status() == "captured" {
+                    let element = mounted().unwrap();
+                    element.release_pointer_capture(event.pointer_id()).await.unwrap();
+                    status.set("released");
+                }
+            },
+            "{status}"
+        }
+        div {
+            id: "pointer-capture-outside",
+            onpointermove: move |_| {
+                if status() == "released" {
+                    status.set("outside");
+                }
+            },
+            "Outside the capture target"
         }
     }
 }

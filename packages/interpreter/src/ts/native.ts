@@ -253,6 +253,32 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  setPointerCapture(id: NodeId, pointerId: number): boolean {
+    const node = this.nodes[id];
+    if (!(node instanceof Element)) {
+      return false;
+    }
+    try {
+      node.setPointerCapture(pointerId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  releasePointerCapture(id: NodeId, pointerId: number): boolean {
+    const node = this.nodes[id];
+    if (!(node instanceof Element)) {
+      return false;
+    }
+    try {
+      node.releasePointerCapture(pointerId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // Windows drag-n-drop fix code. Called by wry drag-n-drop handler over the event loop.
   handleWindowsDragDrop() {
     // @ts-ignore

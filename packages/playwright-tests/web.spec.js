@@ -137,6 +137,23 @@ test("onmounted", async ({ page }) => {
   await expect(mountedDiv).toHaveText("onmounted was called 1 times");
 });
 
+test("mounted pointer capture retargets movement until released", async ({ page }) => {
+  await page.goto("http://localhost:9990");
+
+  const target = page.locator("#pointer-capture");
+  const outside = await page.locator("#pointer-capture-outside").boundingBox();
+  await target.hover();
+  await page.mouse.down();
+  await expect(target).toHaveText("captured");
+
+  await page.mouse.move(outside.x + 5, outside.y + 5);
+  await expect(target).toHaveText("released");
+
+  await page.mouse.move(outside.x + 10, outside.y + 5);
+  await expect(target).toHaveText("outside");
+  await page.mouse.up();
+});
+
 test("web-sys closure", async ({ page }) => {
   await page.goto("http://localhost:9990");
   // wait until the div is mounted

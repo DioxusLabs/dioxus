@@ -1,5 +1,7 @@
+use std::{future::Future, pin::Pin};
+
 use dioxus_html::{
-    MountedData,
+    MountedData, MountedError, MountedResult,
     geometry::euclid::{Point2D, Size2D},
 };
 use wasm_bindgen::JsCast;
@@ -140,6 +142,28 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
                     dioxus_html::MountedError::OperationFailed(Box::new(FocusError(err)))
                 })
             });
+        Box::pin(async { result })
+    }
+
+    fn set_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        let result = self
+            .event
+            .set_pointer_capture(pointer_id)
+            .map_err(|err| MountedError::OperationFailed(format!("{err:?}").into()));
+        Box::pin(async { result })
+    }
+
+    fn release_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        let result = self
+            .event
+            .release_pointer_capture(pointer_id)
+            .map_err(|err| MountedError::OperationFailed(format!("{err:?}").into()));
         Box::pin(async { result })
     }
 }
