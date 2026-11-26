@@ -907,7 +907,7 @@ impl BuildRequest {
         // Check if we already have a cached object file
         let out_ar_path = exe.with_file_name(format!("libdeps-{hash_id}.a",));
         let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
-        let mut archive_has_contents = out_ar_path.exists();
+        let mut archive_has_contents = cached_archive_has_contents(&out_ar_path);
 
         // Use the rlibs list if it exists
         let mut compiler_rlibs = std::fs::read_to_string(&out_rlibs_list)
@@ -929,12 +929,11 @@ impl BuildRequest {
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
             for rlib in &rlibs {
-                // Skip compiler rlibs since they're missing bitcode
+                // Skip compiler rlibs (std, core, ...) since they're missing bitcode. Anything
+                // cargo built for this workspace lives in its build dir, wherever that is.
                 //
                 // https://github.com/rust-lang/rust/issues/94232#issuecomment-1048342201
-                //
-                // if the rlib is not in the target directory, we skip it.
-                if !rlib.starts_with(self.workspace_dir()) {
+                if !is_cargo_built_rlib(rlib, &self.workspace.build_dir) {
                     compiler_rlibs.push(rlib.clone());
                     tracing::trace!("Skipping rlib: {:?}", rlib);
                     continue;
@@ -1560,6 +1559,25 @@ fn linker_flavor_for_triple(triple: &target_lexicon::Triple) -> LinkerFlavor {
     }
 }
 
+/// Whether an rlib was built by cargo for this workspace (and so carries bitcode), as opposed to
+/// a toolchain rlib from the sysroot. Cargo puts everything it builds under its build dir, which
+/// can be outside the workspace (`CARGO_TARGET_DIR`, `build.build-dir`).
+fn is_cargo_built_rlib(rlib: &Path, build_dir: &Path) -> bool {
+    if rlib.starts_with(build_dir) {
+        return true;
+    }
+    match (dunce::canonicalize(rlib), dunce::canonicalize(build_dir)) {
+        (Ok(rlib), Ok(build_dir)) => rlib.starts_with(build_dir),
+        _ => false,
+    }
+}
+
+/// A cached fat archive is only usable if it has entries: linkers reject an empty file passed to
+/// `-force_load` / `--whole-archive` ("file is empty").
+fn cached_archive_has_contents(path: &Path) -> bool {
+    path.metadata().is_ok_and(|m| m.len() > 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1603,5 +1621,34 @@ mod tests {
                 "expected Gnu linker flavor for {triple}"
             );
         }
+    }
+
+    #[test]
+    fn rlibs_in_external_build_dir_are_archived() {
+        let tmp = tempfile::tempdir().unwrap();
+        let build_dir = tmp.path().join("outside-workspace/target");
+        let sysroot = tmp.path().join("toolchain");
+        let dep = build_dir.join("aarch64-apple-darwin/debug/deps/libserde-1234.rlib");
+        let std = sysroot.join("lib/rustlib/aarch64-apple-darwin/lib/libstd-5678.rlib");
+        for rlib in [&dep, &std] {
+            std::fs::create_dir_all(rlib.parent().unwrap()).unwrap();
+            std::fs::write(rlib, b"").unwrap();
+        }
+
+        assert!(is_cargo_built_rlib(&dep, &build_dir));
+        assert!(!is_cargo_built_rlib(&std, &build_dir));
+    }
+
+    #[test]
+    fn empty_cached_archive_is_regenerated() {
+        let tmp = tempfile::tempdir().unwrap();
+        let archive = tmp.path().join("libdeps-1234.a");
+        assert!(!cached_archive_has_contents(&archive));
+
+        std::fs::write(&archive, b"").unwrap();
+        assert!(!cached_archive_has_contents(&archive));
+
+        std::fs::write(&archive, b"!<arch>\n").unwrap();
+        assert!(cached_archive_has_contents(&archive));
     }
 }
