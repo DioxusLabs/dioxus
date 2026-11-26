@@ -1130,3 +1130,12 @@ doc-scrape-examples = true
 [[example]]
 name = "__scrape_example_list"
 path = "examples/scripts/scrape_examples.rs"
+
+# Throwaway: test pointer capture against https://github.com/DioxusLabs/blitz/pull/1766
+[patch.crates-io]
+blitz-dom = { git = "https://github.com/DioxusLabs/blitz", rev = "5b547422fffc612ec4fdcb28aecd7663a3d91a5e" }
+blitz-html = { git = "https://github.com/DioxusLabs/blitz", rev = "5b547422fffc612ec4fdcb28aecd7663a3d91a5e" }
+blitz-net = { git = "https://github.com/DioxusLabs/blitz", rev = "5b547422fffc612ec4fdcb28aecd7663a3d91a5e" }
+blitz-paint = { git = "https://github.com/DioxusLabs/blitz", rev = "5b547422fffc612ec4fdcb28aecd7663a3d91a5e" }
+blitz-shell = { git = "https://github.com/DioxusLabs/blitz", rev = "5b547422fffc612ec4fdcb28aecd7663a3d91a5e" }
+blitz-traits = { git = "https://github.com/DioxusLabs/blitz", rev = "5b547422fffc612ec4fdcb28aecd7663a3d91a5e" }

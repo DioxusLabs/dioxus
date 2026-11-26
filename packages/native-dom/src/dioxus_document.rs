@@ -313,6 +313,8 @@ impl EventHandler for DioxusEventHandler<'_> {
             | DomEventData::PointerDown(mevent)
             | DomEventData::PointerUp(mevent)
             | DomEventData::PointerCancel(mevent)
+            | DomEventData::GotPointerCapture(mevent)
+            | DomEventData::LostPointerCapture(mevent)
             | DomEventData::PointerLeave(mevent)
             | DomEventData::PointerEnter(mevent)
             | DomEventData::PointerOver(mevent)
