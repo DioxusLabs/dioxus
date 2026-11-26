@@ -21,7 +21,6 @@ rust-version = "1.85.0"
 bench = false
 
 [dependencies]
-dioxus-const-vec = { workspace = true }
 dioxus-vdom-macro = { workspace = true }
 dioxus-vdom-template = { workspace = true }
 const_format = { workspace = true }

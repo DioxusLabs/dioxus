@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react"]
 rust-version = "1.85.0"
 
 [dependencies]
-dioxus-const-vec = { workspace = true }
+const-array-vec = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 xxhash-rust = { workspace = true, features = ["const_xxh64"] }
 
