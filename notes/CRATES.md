@@ -107,11 +107,14 @@ Renderers, fullstack, and the `dioxus` umbrella that ties them together with `la
 | `rsx-rosetta` | `dioxus-rsx-rosetta` | Converts HTML to RSX (`dx translate`). |
 | `extension` | `dioxus-ext` | The VS Code extension (TypeScript) plus its WASM helper crate for formatting and HTML-to-RSX. Not published. |
 
-## Not grouped yet
+## Test-only
+
+Not part of any layer and not published.
 
 | Directory | Crate | What it is |
 | --- | --- | --- |
-| `oracle` | `dioxus-renderer-oracle` | In-memory mock renderer that validates VirtualDOM mutation streams, for tests and fuzzing. Not published. |
-
-Test-only, not part of any layer: `fuzz` (`dioxus-vdom-fuzz` and the `cargo-fuzz` target `dioxus-fuzz`),
-`subsecond/subsecond-tests`, `cli-harnesses`, `playwright-tests`.
+| `oracle` | `dioxus-renderer-oracle` | In-memory mock renderer that validates VirtualDOM mutation streams, for tests and fuzzing. |
+| `fuzz` | `dioxus-vdom-fuzz`, `dioxus-fuzz` | Structured VirtualDOM fuzzer and its `cargo-fuzz` target. |
+| `subsecond/subsecond-tests` | | Subsecond hot-patching test crates. |
+| `cli-harnesses` | | Test projects for `dx` builds across feature and platform setups. |
+| `playwright-tests` | | End-to-end browser tests. |
