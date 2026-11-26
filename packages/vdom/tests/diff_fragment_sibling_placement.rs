@@ -5,7 +5,7 @@
 //! child's siblings. The siblings already diffed hold the new view in their mounts (and in
 //! their nested fragment child mounts), so scanning them through the parent's old child
 //! vnodes paired an old template with a new mount and indexed slots that do not exist.
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::RendererOracle;
 use dioxus_vdom::{ScopeId, generation};
 

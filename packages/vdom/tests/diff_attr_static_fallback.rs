@@ -2,7 +2,7 @@
 //! static template attribute at the same `(name, namespace)` key. After the
 //! dynamic attribute disappears, the diff must restore the static value.
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use dioxus_vdom::{Attribute, ScopeId, generation};
 

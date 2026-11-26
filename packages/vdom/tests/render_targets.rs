@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_vdom::{
     ElementId, MultiWriter, Mutation, Mutations, Portal, RenderTargetId, Runtime, VirtualDom,
 };
@@ -419,7 +419,7 @@ fn removable_target_app(props: AppProps) -> Element {
 fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
     ROOT_CLICKS.store(0, Ordering::SeqCst);
     PORTAL_CLICKS.store(0, Ordering::SeqCst);
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
 
     let target_slot = TargetSlot::new();
     let mut dom = VirtualDom::new_with_props(app, AppProps { target: target_slot.clone() });
@@ -478,7 +478,7 @@ fn portal_children_keep_scope_context() {
 #[test]
 fn retargeting_portal_drops_and_recreates_target_subtree() {
     RETARGET_CLICKS.store(0, Ordering::SeqCst);
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
 
     let first_slot = TargetSlot::new();
     let second_slot = TargetSlot::new();
@@ -539,7 +539,7 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
 #[test]
 fn detached_targets_drop_writes_but_mount_effects() {
     EFFECTS.store(0, Ordering::SeqCst);
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
 
     let target_slot = TargetSlot::new();
     let mut dom =
@@ -571,7 +571,7 @@ fn detached_targets_drop_writes_but_mount_effects() {
 
 #[test]
 fn can_open_new_portal_after_closing_previous_keyed_portal() {
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
 
     let first_slot = TargetSlot::new();
     let second_slot = TargetSlot::new();
@@ -618,7 +618,7 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
 
 #[test]
 fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
 
     let mut dom = VirtualDom::new(dynamic_reopen_after_close_app);
 
@@ -668,7 +668,7 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
 
 #[test]
 fn removing_render_target_frees_and_recycles_the_slot() {
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
 
     let target_slot = TargetSlot::new();
     let mut dom = VirtualDom::new_with_props(
@@ -741,7 +741,7 @@ fn teardown_windows_app() -> Element {
 /// cleanups; `remove_render_target` leaves the still-live targets alone.
 #[test]
 fn dropping_vdom_with_open_target_windows_does_not_panic() {
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
 
     let mut dom = VirtualDom::new(teardown_windows_app);
     let _ = rebuild_to_targeted_vec(&mut dom);
@@ -775,7 +775,7 @@ fn removable_listener_target_app(props: AppProps) -> Element {
 
 #[test]
 fn removing_render_target_with_live_content_is_skipped() {
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
 
     let target_slot = TargetSlot::new();
     let mut dom = VirtualDom::new_with_props(

@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::RendererOracle;
 use dioxus_vdom::{ScopeId, consume_context_from_scope, current_scope_id, generation};
 use std::cell::Cell;

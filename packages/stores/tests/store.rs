@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_stores::GlobalStore;
 use dioxus_vdom::*;
 use std::{cell::RefCell, rc::Rc};

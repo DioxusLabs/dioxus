@@ -4,7 +4,7 @@
 //!
 //! It does not validate that component lifecycles work properly. This is done in another test file.
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::{
     EditSummary, OracleNodeId, RendererOracle, SnapshotAttr, SnapshotNode,
 };

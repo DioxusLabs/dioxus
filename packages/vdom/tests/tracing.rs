@@ -1,5 +1,5 @@
-use dioxus::html::SerializedHtmlEventConverter;
-use dioxus::prelude::*;
+use dioxus_core::html::SerializedHtmlEventConverter;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::RendererOracle;
 use dioxus_vdom::Event;
 use std::{any::Any, rc::Rc};

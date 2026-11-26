@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::{OracleNodeId, RendererOracle};
 use dioxus_vdom::{NoOpMutations, ScopeId, current_scope_id, generation};
 use std::cell::{Cell, RefCell};

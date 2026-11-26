@@ -10,7 +10,7 @@ fn rsx() {
 /// See https://github.com/DioxusLabs/dioxus/issues/2373
 #[cfg(test)]
 mod test_default_into {
-    use dioxus::prelude::*;
+    use dioxus_core::prelude::*;
 
     #[derive(Props, Clone, PartialEq)]
     struct MyCoolProps {
@@ -103,7 +103,7 @@ mod test_default_into {
 #[cfg(test)]
 #[allow(unused)]
 mod test_optional_signals {
-    use dioxus::prelude::*;
+    use dioxus_core::prelude::*;
 
     // Test if test components fail to compile.
     #[component]

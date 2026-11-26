@@ -1,5 +1,5 @@
-use dioxus::dioxus_vdom::AttributeValue;
-use dioxus::prelude::*;
+use dioxus_core::dioxus_vdom::AttributeValue;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::{EditSummary, RendererOracle};
 use dioxus_vdom::{ScopeId, generation};
 

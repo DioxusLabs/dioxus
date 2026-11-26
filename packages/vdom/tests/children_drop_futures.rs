@@ -2,7 +2,7 @@
 
 use std::{sync::atomic::AtomicUsize, time::Duration};
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_vdom::generation;
 
 #[tokio::test]

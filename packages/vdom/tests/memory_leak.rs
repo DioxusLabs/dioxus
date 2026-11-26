@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/3421

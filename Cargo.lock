@@ -3589,6 +3589,7 @@ name = "dioxus-hooks"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
+ "dioxus-core",
  "dioxus-signals",
  "dioxus-vdom",
  "futures-channel",
@@ -3614,7 +3615,6 @@ dependencies = [
  "dioxus-rsx-hotreload",
  "dioxus-vdom",
  "dioxus-vdom-macro",
- "dioxus-web",
  "enumset",
  "euclid",
  "futures-channel",
@@ -4036,6 +4036,7 @@ name = "dioxus-signals"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
+ "dioxus-core",
  "dioxus-vdom",
  "futures-channel",
  "futures-util",
@@ -4057,6 +4058,7 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "askama_escape",
  "dioxus",
+ "dioxus-core",
  "dioxus-vdom",
  "rustc-hash 2.1.2",
 ]
@@ -4066,6 +4068,7 @@ name = "dioxus-stores"
 version = "0.8.0-alpha.3"
 dependencies = [
  "dioxus",
+ "dioxus-core",
  "dioxus-signals",
  "dioxus-stores-macro",
  "dioxus-stores-visibility-helper",
@@ -4110,6 +4113,7 @@ dependencies = [
  "const_format",
  "criterion",
  "dioxus",
+ "dioxus-core",
  "dioxus-html",
  "dioxus-renderer-oracle",
  "dioxus-ssr",
@@ -4158,6 +4162,7 @@ version = "0.8.0-alpha.3"
 dependencies = [
  "convert_case 0.12.0",
  "dioxus",
+ "dioxus-core",
  "dioxus-html",
  "dioxus-rsx",
  "proc-macro-crate 3.5.0",

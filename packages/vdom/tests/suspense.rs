@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use dioxus_vdom::{ScopeId, SuspenseBoundaryProps, WriteMutations, current_scope_id, generation};
 use pretty_assertions::assert_eq;

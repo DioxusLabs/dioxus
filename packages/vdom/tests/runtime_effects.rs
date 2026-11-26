@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_vdom::{
     BorrowedAttributeValue, ElementId, Runtime, WriteMutations, generation, needs_update,
     queue_effect,

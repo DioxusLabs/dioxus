@@ -1,7 +1,7 @@
 // Given an `rsx!` invocation with a missing trailing comma,
 // ensure the stderr output has an informative span.
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 
 fn main() {
     rsx! {

@@ -24,7 +24,8 @@ futures-util = { workspace = true }
 warnings = { workspace = true }
 
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }
+dioxus-core = { workspace = true, features = ["default"] }
 tokio = { workspace = true, features = ["full"] }
 tracing-subscriber = { workspace = true, default-features = true }
 reqwest = { workspace = true }

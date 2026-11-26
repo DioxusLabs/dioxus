@@ -1,7 +1,12 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 
 fn main() {
-    dioxus::launch(app);
+    let mut dom = VirtualDom::new(app);
+
+    loop {
+        dom.render_immediate(&mut dioxus_core::dioxus_vdom::NoOpMutations);
+        std::thread::sleep(std::time::Duration::from_millis(16));
+    }
 }
 
 fn app() -> Element {

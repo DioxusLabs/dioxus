@@ -237,7 +237,7 @@ impl Renderer {
 
 #[test]
 fn to_string_works() {
-    use dioxus::prelude::*;
+    use dioxus_core::prelude::*;
 
     fn app() -> Element {
         let dynamic = 123;
@@ -273,7 +273,7 @@ fn to_string_works() {
 
 #[test]
 fn empty_for_loop_works() {
-    use dioxus::prelude::*;
+    use dioxus_core::prelude::*;
 
     fn app() -> Element {
         rsx! {
@@ -296,7 +296,7 @@ fn empty_for_loop_works() {
 
 #[test]
 fn empty_render_works() {
-    use dioxus::prelude::*;
+    use dioxus_core::prelude::*;
 
     fn app() -> Element {
         rsx! {}
