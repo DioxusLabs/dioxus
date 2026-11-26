@@ -123,6 +123,10 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .into()
     }
 
+    fn convert_window_resize_data(&self, event: &PlatformEventData) -> WindowResizeData {
+        *event.downcast::<WindowResizeData>().unwrap()
+    }
+
     fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData {
         event
             .downcast::<SerializedScrollData>()

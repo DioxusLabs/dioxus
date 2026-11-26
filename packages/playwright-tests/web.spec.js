@@ -108,7 +108,7 @@ test("prevent default", async ({ page }) => {
   await expect(a).toHaveText("Psych!");
 });
 
-test("global listeners respect capture, passive, containment, and disable", async ({ page }) => {
+test("global listeners respect capture, passive, and disable", async ({ page }) => {
   await page.goto("http://localhost:9990");
   const order = page.locator("#listener-order");
   const dispatch = (id) => page.locator(id).evaluate((node) => node.dispatchEvent(
@@ -116,14 +116,12 @@ test("global listeners respect capture, passive, containment, and disable", asyn
   ));
 
   await expect.poll(() => dispatch("#listener-toggle")).toBe(false);
-  await expect(order).toHaveText("window:outside:");
-  expect(await dispatch("#listener-inside")).toBe(true);
-  await expect(order).toHaveText("window:outside:window:inside:");
+  await expect(order).toHaveText("window:document:");
 
   await page.locator("#listener-toggle").click();
   await expect(page.locator("#listener-enabled")).toHaveText("false");
   expect(await dispatch("#listener-toggle")).toBe(true);
-  await expect(order).toHaveText("window:outside:window:inside:window:");
+  await expect(order).toHaveText("window:document:window:");
 
   await page.setViewportSize({ width: 800, height: 600 });
   await expect(page.locator("#listener-viewport")).toHaveText("800x600");

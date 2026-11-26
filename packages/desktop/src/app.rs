@@ -282,11 +282,9 @@ impl App {
     /// The webview is finally loaded. Rebuild once, then start polling the
     /// shared VDOM.
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        let Some(webview) = self.webviews.get(&id) else {
+        if !self.webviews.contains_key(&id) {
             return;
-        };
-        let context = &webview.desktop_context;
-        context.global_listeners.initialize(&context.webview);
+        }
 
         if !self.initial_dom_rebuild_done {
             self.rebuild_dom();
@@ -445,17 +443,19 @@ impl App {
                 return;
             }
 
-            {
+            let has_work = {
                 // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
                 #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
-
-                match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => return,
-                }
+                fut.poll_unpin(&mut cx).is_ready()
+            };
+            if !has_work {
+                // Effects that ran without a render pass may have queued edits of their own,
+                // such as window and document listeners.
+                self.send_touched_edits();
+                return;
             }
 
             // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
@@ -468,15 +468,12 @@ impl App {
     }
 
     /// Build the writer for one render pass: every webview's `WryQueue` keyed
-    /// by its target id, with each queue's `touched` flag cleared so we can
-    /// detect which targets receive writes during the pass.
+    /// by its target id. A queue's `touched` flag stays set until its edits are
+    /// sent, so edits queued outside a render pass go out with the next one.
     fn dom_writer(&self) -> BTreeMap<RenderTargetId, crate::edits::WryQueue> {
         self.webviews
             .values()
-            .map(|app_webview| {
-                app_webview.edits.wry_queue.clear_touched();
-                (app_webview.target_id(), app_webview.edits.wry_queue.clone())
-            })
+            .map(|app_webview| (app_webview.target_id(), app_webview.edits.wry_queue.clone()))
             .collect()
     }
 
@@ -496,9 +493,9 @@ impl App {
 
     /// Flush queued edits for every webview whose `WryQueue` was touched during
     /// the preceding render pass. The diff writes directly into each registered
-    /// queue (the `WriteMutations` impl on `WryQueue`), and `dom_writer` cleared
-    /// every `touched` flag at the start of the pass, so a touched queue means
-    /// "this webview received new edits to send".
+    /// queue (the `WriteMutations` impl on `WryQueue`), and sending clears the
+    /// `touched` flag, so a touched queue means "this webview received new
+    /// edits to send".
     fn send_touched_edits(&self) {
         for app_webview in self.webviews.values() {
             if app_webview.edits.wry_queue.is_touched() {

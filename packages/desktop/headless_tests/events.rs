@@ -62,20 +62,23 @@ fn test_global_keydown() -> Element {
     let mut mounted = use_signal(|| false);
     document::use_window_listener!(
         keydown,
-        move |event, context| {
+        move |event| {
             if event.key() == Key::Named(dioxus::html::NamedKey::Escape) {
-                assert_eq!(context.containment(), document::Containment::Inside);
                 event.prevent_default();
             }
         },
         capture: true,
-        containment_root: "global-keydown",
     );
     use_effect(move || {
         if mounted() {
             spawn(async move {
                 let dispatched: bool = document::eval(
                     r#"
+                        // Listeners are attached through the edit stream, which is not
+                        // ordered relative to eval.
+                        while (window.interpreter.globalEventListeners.size === 0) {
+                            await new Promise((resolve) => setTimeout(resolve, 10));
+                        }
                         return document.getElementById("global-keydown").dispatchEvent(
                             new KeyboardEvent("keydown", {
                                 key: "Escape",

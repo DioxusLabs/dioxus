@@ -103,4 +103,10 @@ mod js {
     fn remove_top_event_listener(event_name: &str<u8, evt>, bubbles: u8) {
         "{this.removeTopEventListener($event_name$, $bubbles$ === 1);}"
     }
+    fn add_global_event_listener(id: u32, event_name: &str<u8, evt>, flags: u8) {
+        "{this.addGlobalEventListener($id$, $event_name$, $flags$);}"
+    }
+    fn remove_global_event_listener(id: u32) {
+        "{this.removeGlobalEventListener($id$);}"
+    }
 }

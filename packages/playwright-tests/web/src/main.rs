@@ -75,7 +75,7 @@ fn GlobalListeners() -> Element {
     let mut enabled = use_signal(|| true);
     let mut order = use_signal(String::new);
     let mut viewport = use_signal(String::new);
-    document::use_window_listener!(viewportresize, move |event| {
+    document::use_window_listener!(resize, move |event| {
         viewport.set(format!("{}x{}", event.width(), event.height()));
     });
     document::use_window_listener!(
@@ -91,23 +91,16 @@ fn GlobalListeners() -> Element {
     );
     document::use_document_listener!(
         keydown,
-        move |event, context| {
+        move |event| {
             if event.key() == Key::Named(dioxus::html::NamedKey::Escape) {
-                use document::Containment;
-                if context.containment() == Containment::Outside {
-                    order.write().push_str("outside:");
-                    event.prevent_default();
-                } else {
-                    order.write().push_str("inside:");
-                }
+                order.write().push_str("document:");
+                event.prevent_default();
             }
         },
         enabled: enabled(),
-        containment_root: "listener-root",
     );
 
     rsx! {
-        div { id: "listener-root", span { id: "listener-inside", "Inside" } }
         button { id: "listener-toggle", onclick: move |_| enabled.toggle(), "Toggle document listener" }
         div { id: "listener-order", "{order}" }
         div { id: "listener-enabled", "{enabled}" }

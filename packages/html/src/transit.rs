@@ -53,7 +53,17 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 
 #[cfg(feature = "serialize")]
 fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, serde_json::Error> {
-    match deserialize_raw_event(name, data)? {
+    deserialize_event_data(name, EventTargetKind::Element, data)
+}
+
+/// Deserialize the payload of the event `name` fired on `target`.
+#[cfg(feature = "serialize")]
+pub fn deserialize_event_data(
+    name: &str,
+    target: EventTargetKind,
+    data: &serde_json::Value,
+) -> Result<EventData, serde_json::Error> {
+    match deserialize_raw_event(name, data, target)? {
         Some(result) => Ok(result),
         None => Err(serde::de::Error::custom(format!(
             "Unknown event type: {name}"
@@ -85,6 +95,7 @@ pub enum EventData {
     Selection(SerializedSelectionData),
     Touch(SerializedTouchData),
     Resize(SerializedResizeData),
+    WindowResize(WindowResizeData),
     Scroll(SerializedScrollData),
     Visible(SerializedVisibleData),
     Wheel(SerializedWheelData),
@@ -129,6 +140,9 @@ impl EventData {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
             EventData::Touch(data) => {
+                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
+            }
+            EventData::WindowResize(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
             EventData::Resize(data) => {
@@ -352,6 +366,10 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .cloned()
             .unwrap()
             .into()
+    }
+
+    fn convert_window_resize_data(&self, event: &PlatformEventData) -> WindowResizeData {
+        *event.downcast::<WindowResizeData>().unwrap()
     }
 
     fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData {

@@ -1,17 +1,8 @@
-use crate::Document;
-use dioxus_html::events::__private::GlobalEventBinding;
+use dioxus_html::events::{
+    EventTargetKind, GlobalEventBinding, GlobalEventCallback, GlobalEventTarget,
+};
 use dioxus_vdom::{Runtime, current_scope_id, queue_effect, try_consume_context, use_hook};
 use std::{cell::RefCell, rc::Rc};
-
-pub use dioxus_html::events::{Containment, GlobalListenerContext, ViewportResizeData};
-#[doc(hidden)]
-pub use dioxus_html::events::{GlobalEventCallback, GlobalEventInput, GlobalEventPayload};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum GlobalListenerTarget {
-    Window,
-    Document,
-}
 
 /// Options accepted by the global listener macros.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,8 +13,6 @@ pub struct GlobalListenerOptions {
     pub passive: bool,
     /// Install the listener only while this is true.
     pub enabled: bool,
-    /// An element ID used to compute containment against the original target.
-    pub containment_root: Option<String>,
 }
 
 impl Default for GlobalListenerOptions {
@@ -32,26 +21,41 @@ impl Default for GlobalListenerOptions {
             capture: false,
             passive: false,
             enabled: true,
-            containment_root: None,
         }
     }
 }
 
-/// Whether the current document supports synchronous global listeners.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GlobalListenerSupport {
-    /// The renderer supports global listeners. Registration happens after rendering.
-    Supported,
-    /// The renderer does not support global listeners. No listener will be installed.
-    Unsupported,
+/// A renderer's support for listeners on the window and the document.
+///
+/// Renderers provide an `Rc<dyn GlobalListeners>` as a root context. Where none is
+/// provided, [`use_window_listener!`](crate::use_window_listener) and
+/// [`use_document_listener!`](crate::use_document_listener) install nothing.
+///
+/// The callback must be called synchronously while the event is being dispatched, and
+/// the default action and propagation updated from its result before dispatch continues.
+pub trait GlobalListeners: 'static {
+    /// Attach a listener to the window that owns the current component.
+    fn add_window_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration>;
+
+    /// Attach a listener to the document that owns the current component.
+    fn add_document_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration>;
 }
 
 /// A renderer registration that detaches when dropped.
-#[doc(hidden)]
 pub struct GlobalListenerRegistration(Option<Box<dyn FnOnce()>>);
 
 impl GlobalListenerRegistration {
-    #[doc(hidden)]
+    /// Create a registration that runs `detach` when it is dropped.
     pub fn new(detach: impl FnOnce() + 'static) -> Self {
         Self(Some(Box::new(detach)))
     }
@@ -69,50 +73,30 @@ impl Drop for GlobalListenerRegistration {
 struct ListenerState {
     callback: Option<GlobalEventCallback>,
     registration: Option<(
-        GlobalListenerTarget,
+        EventTargetKind,
         &'static str,
         GlobalListenerOptions,
         GlobalListenerRegistration,
     )>,
 }
 
-pub fn use_window_listener(
-    binding: GlobalEventBinding,
+pub fn use_global_listener<Target: GlobalEventTarget>(
+    binding: GlobalEventBinding<Target>,
     options: GlobalListenerOptions,
-) -> GlobalListenerSupport {
-    use_global_listener(GlobalListenerTarget::Window, binding, options)
-}
-
-pub fn use_document_listener(
-    binding: GlobalEventBinding,
-    options: GlobalListenerOptions,
-) -> GlobalListenerSupport {
-    use_global_listener(GlobalListenerTarget::Document, binding, options)
-}
-
-fn use_global_listener(
-    target: GlobalListenerTarget,
-    binding: GlobalEventBinding,
-    options: GlobalListenerOptions,
-) -> GlobalListenerSupport {
+) {
     let state = use_hook(|| Rc::new(RefCell::new(ListenerState::default())));
-    let document = try_consume_context::<Rc<dyn Document>>();
-    let document = document.filter(|document| document.supports_global_listeners());
-    let support = if document.is_some() {
-        GlobalListenerSupport::Supported
-    } else {
-        GlobalListenerSupport::Unsupported
-    };
+    let listeners = try_consume_context::<Rc<dyn GlobalListeners>>();
 
+    let target = Target::KIND;
     let state = Rc::downgrade(&state);
     let runtime = Rc::downgrade(&Runtime::current());
     let scope = current_scope_id();
     queue_effect(move || {
         let Some(state) = state.upgrade() else { return };
         let mut current = state.borrow_mut();
-        let document = document.filter(|_| options.enabled);
-        current.callback = document.as_ref().map(|_| binding.callback);
-        if document.is_some()
+        let listeners = listeners.filter(|_| options.enabled);
+        current.callback = listeners.as_ref().map(|_| binding.callback);
+        if listeners.is_some()
             && current
                 .registration
                 .as_ref()
@@ -126,7 +110,7 @@ fn use_global_listener(
         drop(current);
         drop(previous);
 
-        if let Some(document) = document {
+        if let Some(listeners) = listeners {
             let weak_state = Rc::downgrade(&state);
             let callback: GlobalEventCallback = Rc::new(move |input| {
                 let callback = weak_state
@@ -138,12 +122,10 @@ fn use_global_listener(
                 }
             });
             let registration = match target {
-                GlobalListenerTarget::Window => {
-                    document.add_window_listener(binding.name, &options, callback)
+                EventTargetKind::Window => {
+                    listeners.add_window_listener(binding.name, &options, callback)
                 }
-                GlobalListenerTarget::Document => {
-                    document.add_document_listener(binding.name, &options, callback)
-                }
+                _ => listeners.add_document_listener(binding.name, &options, callback),
             };
             if let Some(registration) = registration {
                 state.borrow_mut().registration =
@@ -156,20 +138,28 @@ fn use_global_listener(
             }
         }
     });
-    support
 }
 
 /// Subscribe to an event on the owning window while this component is mounted.
 ///
-/// Use bare identifiers for keyboard, mouse, pointer, focus, drag, wheel, and
-/// touch events, such as `keydown` or `pointermove`. The callback receives a typed
-/// event. Use `viewportresize` to observe changes in the layout viewport size;
-/// it does not emit an initial size. Options are `capture` (default false), `passive` (default false),
-/// `enabled` (default true), and `containment_root` (an element ID, enabling a
-/// second [`GlobalListenerContext`] argument). Cancellation must happen synchronously.
+/// The event is named as in `addEventListener`, such as `keydown` or `pointermove`,
+/// and the callback receives the same typed event as the matching element handler.
+/// `resize` reports the layout viewport size as
+/// [`WindowResizeData`](dioxus_html::events::WindowResizeData); it does not emit an
+/// initial size.
 ///
-/// Web and Desktop support these listeners. Other renderers return
-/// [`GlobalListenerSupport::Unsupported`]; no listener is installed during SSR.
+/// Options are `capture` (default false), `passive` (default false) and `enabled`
+/// (default true).
+/// Events that do not bubble only reach the window with `capture: true`.
+/// Cancellation must happen synchronously.
+///
+/// Event names are methods of
+/// [`GlobalEventsExtension`](dioxus_html::events::GlobalEventsExtension) and
+/// [`WindowEventsExtension`](dioxus_html::events::WindowEventsExtension), which must
+/// be in scope; the prelude exports them.
+///
+/// Web and Desktop support these listeners. On other renderers, and during SSR, no
+/// listener is installed.
 ///
 /// ```no_run
 /// use dioxus::prelude::*;
@@ -190,44 +180,55 @@ fn use_global_listener(
 #[macro_export]
 macro_rules! use_window_listener {
     ($name:ident, $handler:expr $(, $option:ident : $value:expr)* $(,)?) => {
-        $crate::use_window_listener!(@register use_window_listener, window_events, $name, $handler; $($option : $value),*)
+        $crate::use_window_listener!(@register WindowTarget, $name, $handler; $($option : $value),*)
     };
-    (@register $hook:ident, $module:ident, $name:ident, $handler:expr; $($option:ident : $value:expr),*) => {{
+    // Expand while only the event name has been typed so that editors can complete it.
+    ($name:ident $(,)?) => {{
+        let _ = $crate::__private::WindowTarget.$name();
+    }};
+    (@register $target:ident, $name:ident, $handler:expr; $($option:ident : $value:expr),*) => {{
         let options = $crate::GlobalListenerOptions {
-            $($option: $crate::use_window_listener!(@value $option, $value),)*
+            $($option: $value,)*
             ..Default::default()
         };
-        let binding = $crate::use_window_listener!(@bind $module, $name, $handler; $($option),*);
-        $crate::__private::$hook(binding, options)
+        let event = $crate::__private::$target.$name();
+        $crate::__private::use_global_listener(event.bind($handler), options)
     }};
-    (@value containment_root, $value:expr) => { Some(::std::convert::Into::<String>::into($value)) };
-    (@value $option:ident, $value:expr) => { $value };
-    (@bind $module:ident, $name:ident, $handler:expr; containment_root $(, $tail:ident)*) => {
-        $crate::__private::$module::contextual::$name($handler)
-    };
-    (@bind $module:ident, $name:ident, $handler:expr; $option:ident $(, $tail:ident)*) => {
-        $crate::use_window_listener!(@bind $module, $name, $handler; $($tail),*)
-    };
-    (@bind $module:ident, $name:ident, $handler:expr;) => {
-        $crate::__private::$module::plain::$name($handler)
-    };
 }
 
 /// Subscribe to an event on the owning document while this component is mounted.
 ///
 /// Accepts the same options as [`use_window_listener!`](crate::use_window_listener).
-/// The `viewportresize` event is only available on the window.
+/// Event names are methods of
+/// [`GlobalEventsExtension`](dioxus_html::events::GlobalEventsExtension) and
+/// [`DocumentEventsExtension`](dioxus_html::events::DocumentEventsExtension); window-only
+/// events such as `resize` are a compile error here.
+///
+/// ```compile_fail
+/// use dioxus::prelude::*;
+///
+/// fn App() -> Element {
+///     document::use_document_listener!(resize, move |_| {});
+///     rsx! {}
+/// }
+/// ```
 #[macro_export]
 macro_rules! use_document_listener {
     ($name:ident, $handler:expr $(, $option:ident : $value:expr)* $(,)?) => {
-        $crate::use_window_listener!(@register use_document_listener, global_events, $name, $handler; $($option : $value),*)
+        $crate::use_window_listener!(@register DocumentTarget, $name, $handler; $($option : $value),*)
     };
+    ($name:ident $(,)?) => {{
+        let _ = $crate::__private::DocumentTarget.$name();
+    }};
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dioxus_html::events::GlobalEventResult;
+    use dioxus_html::events::{
+        GlobalEventInput, GlobalEventResult, GlobalEventsExtension, WindowEventsExtension,
+        WindowTarget,
+    };
     use dioxus_vdom::{Element, NoOpMutations, ScopeId, VNode, VirtualDom, consume_context};
     use std::cell::Cell;
 
@@ -239,15 +240,7 @@ mod tests {
         callback: RefCell<Option<GlobalEventCallback>>,
     }
 
-    impl Document for TestDocument {
-        fn eval(&self, js: String) -> crate::Eval {
-            crate::NoOpDocument.eval(js)
-        }
-
-        fn supports_global_listeners(&self) -> bool {
-            true
-        }
-
+    impl GlobalListeners for TestDocument {
         fn add_window_listener(
             &self,
             _: &'static str,
@@ -276,14 +269,14 @@ mod tests {
 
     fn app() -> Element {
         let version = consume_context::<Rc<Cell<u32>>>().get();
-        let binding = GlobalEventBinding {
-            name: "keydown",
-            callback: Rc::new(move |_| GlobalEventResult {
+        let binding = GlobalEventBinding::<WindowTarget>::new(
+            "keydown",
+            Rc::new(move |_| GlobalEventResult {
                 prevent_default: version == 1,
                 ..Default::default()
             }),
-        };
-        use_window_listener(
+        );
+        use_global_listener(
             binding,
             GlobalListenerOptions {
                 enabled: version != 2,
@@ -298,14 +291,11 @@ mod tests {
         let mut dom = VirtualDom::new(app);
         let document = Rc::new(TestDocument::default());
         let version = Rc::new(Cell::new(0u32));
-        dom.insert_any_root_context(Box::new(document.clone() as Rc<dyn Document>));
+        dom.insert_any_root_context(Box::new(document.clone() as Rc<dyn GlobalListeners>));
         dom.insert_any_root_context(Box::new(version.clone()));
         let emit = || {
             document.callback.borrow().as_ref().unwrap()(GlobalEventInput {
-                payload: GlobalEventPayload::Platform(dioxus_html::PlatformEventData::new(
-                    Box::new(()),
-                )),
-                containment: Containment::RootMissing,
+                payload: Rc::new(dioxus_html::PlatformEventData::new(Box::new(()))),
                 bubbles: true,
                 cancelable: true,
                 default_prevented: false,
@@ -344,12 +334,11 @@ mod tests {
     #[test]
     fn document_macro_registers_on_document() {
         let mut dom = VirtualDom::new(|| {
-            let support = crate::use_document_listener!(keydown, move |_| {});
-            assert_eq!(support, GlobalListenerSupport::Supported);
+            crate::use_document_listener!(keydown, move |_| {});
             VNode::empty()
         });
         let document = Rc::new(TestDocument::default());
-        dom.insert_any_root_context(Box::new(document.clone() as Rc<dyn Document>));
+        dom.insert_any_root_context(Box::new(document.clone() as Rc<dyn GlobalListeners>));
         dom.rebuild(&mut NoOpMutations);
         dom.process_events();
         assert_eq!(document.document_attached.get(), 1);
@@ -357,12 +346,16 @@ mod tests {
     }
 
     #[test]
-    fn reports_unsupported_without_a_document() {
+    fn installs_nothing_without_a_provider() {
         let mut dom = VirtualDom::new(|| {
-            let support = crate::use_document_listener!(keydown, move |event| {
-                let _ = event.key();
+            crate::use_window_listener!(resize, move |event| {
+                let _ = event.width();
             });
-            assert_eq!(support, GlobalListenerSupport::Unsupported);
+            crate::use_document_listener!(
+                scroll,
+                move |_| {},
+                capture: true,
+            );
             VNode::empty()
         });
         dom.rebuild(&mut NoOpMutations);

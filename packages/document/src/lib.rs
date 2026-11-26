@@ -10,27 +10,12 @@ pub use document::*;
 pub use elements::*;
 pub use error::*;
 pub use eval::*;
-pub use listener::{
-    Containment, GlobalEventCallback, GlobalEventInput, GlobalEventPayload, GlobalListenerContext,
-    GlobalListenerOptions, GlobalListenerRegistration, GlobalListenerSupport, ViewportResizeData,
-};
+pub use listener::{GlobalListenerOptions, GlobalListenerRegistration, GlobalListeners};
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::listener::{use_document_listener, use_window_listener};
-    pub use dioxus_html::events::__private::global_events;
-    pub mod window_events {
-        pub mod plain {
-            pub use dioxus_html::events::__private::{
-                global_events::plain::*, viewport_resize::plain::*,
-            };
-        }
-        pub mod contextual {
-            pub use dioxus_html::events::__private::{
-                global_events::contextual::*, viewport_resize::contextual::*,
-            };
-        }
-    }
+    pub use crate::listener::use_global_listener;
+    pub use dioxus_html::events::{DocumentTarget, WindowTarget};
 }
 
 /// Get the document provider for the current platform or a no-op provider if the platform doesn't document functionality.

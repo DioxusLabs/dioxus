@@ -80,7 +80,11 @@ impl WebsysDom {
                 // a plain Event with a typed name like "keydown" that isn't
                 // actually a KeyboardEvent. Drop events whose JS type doesn't
                 // match what the converters will unchecked-cast to.
-                if !event_type_matches(name.as_str(), web_sys_event) {
+                if !event_type_matches(
+                    name.as_str(),
+                    web_sys_event,
+                    dioxus_html::EventTargetKind::Element,
+                ) {
                     return;
                 }
 

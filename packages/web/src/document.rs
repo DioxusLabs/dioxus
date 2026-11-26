@@ -1,9 +1,9 @@
 use dioxus_document::{
-    Containment, Document, Eval, EvalError, Evaluator, GlobalEventCallback, GlobalEventInput,
-    GlobalEventPayload, GlobalListenerOptions, GlobalListenerRegistration, LinkProps, MetaProps,
-    ScriptProps, StyleProps, ViewportResizeData,
+    Document, Eval, EvalError, Evaluator, GlobalListenerOptions, GlobalListenerRegistration,
+    GlobalListeners, LinkProps, MetaProps, ScriptProps, StyleProps,
 };
 use dioxus_history::History;
+use dioxus_html::{EventTargetKind, GlobalEventCallback, GlobalEventInput};
 use dioxus_vdom::ScopeId;
 use dioxus_vdom::queue_effect;
 use dioxus_vdom::{Runtime, provide_context};
@@ -75,6 +75,9 @@ fn init_document_with(document: impl FnOnce(), history: impl FnOnce()) {
         if has_context::<Rc<dyn Document>>().is_none() {
             document();
         }
+        if has_context::<Rc<dyn GlobalListeners>>().is_none() {
+            provide_context(Rc::new(WebDocument) as Rc<dyn GlobalListeners>);
+        }
         if has_context::<Rc<dyn History>>().is_none() {
             history();
         }
@@ -118,62 +121,37 @@ pub fn init_fullstack_document() {
 pub struct WebDocument;
 impl WebDocument {
     fn add_global_listener(
-        window: web_sys::Window,
-        document: web_sys::Document,
-        target: web_sys::EventTarget,
+        kind: EventTargetKind,
         name: &'static str,
         options: &GlobalListenerOptions,
         callback: GlobalEventCallback,
     ) -> Option<GlobalListenerRegistration> {
         use crate::events::{event_type_matches, virtual_event_from_websys_event};
 
+        let window = web_sys::window()?;
+        let document = window.document()?;
+        let target: web_sys::EventTarget = match kind {
+            EventTargetKind::Window => window.into(),
+            _ => document.clone().into(),
+        };
         let capture = options.capture;
         let passive = options.passive;
-        let root_id = options.containment_root.clone();
         let handler = Closure::<dyn Fn(web_sys::Event)>::new(move |event: web_sys::Event| {
-            let payload = if name == "resize" {
-                let (Ok(width), Ok(height)) = (window.inner_width(), window.inner_height()) else {
-                    return;
-                };
-                let (Some(width), Some(height)) = (width.as_f64(), height.as_f64()) else {
-                    return;
-                };
-                dioxus_html::PlatformEventData::new(Box::new(ViewportResizeData::new(
-                    width, height,
-                )))
-            } else {
-                if !event_type_matches(name, &event) {
-                    return;
-                }
-                let Some(element) = event
-                    .target()
-                    .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
-                    .or_else(|| document.document_element())
-                else {
-                    return;
-                };
-                virtual_event_from_websys_event(event.clone(), element)
+            if !event_type_matches(name, &event, kind) {
+                return;
+            }
+            let Some(element) = event
+                .target()
+                .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+                .or_else(|| document.document_element())
+            else {
+                return;
             };
-            let containment = match root_id
-                .as_deref()
-                .and_then(|id| document.get_element_by_id(id))
-            {
-                Some(root)
-                    if event
-                        .composed_path()
-                        .iter()
-                        .any(|target| js_sys::Object::is(&target, root.as_ref())) =>
-                {
-                    Containment::Inside
-                }
-                Some(_) => Containment::Outside,
-                None => Containment::RootMissing,
-            };
+            let payload = Rc::new(virtual_event_from_websys_event(event.clone(), element));
             let result = callback(GlobalEventInput {
-                payload: GlobalEventPayload::Platform(payload),
-                containment,
+                payload,
                 bubbles: event.bubbles(),
-                cancelable: name != "resize" && event.cancelable() && !passive,
+                cancelable: event.cancelable() && !passive,
                 default_prevented: event.default_prevented(),
             });
             if result.prevent_default {
@@ -203,27 +181,14 @@ impl WebDocument {
     }
 }
 
-impl Document for WebDocument {
-    fn supports_global_listeners(&self) -> bool {
-        true
-    }
-
+impl GlobalListeners for WebDocument {
     fn add_window_listener(
         &self,
         name: &'static str,
         options: &GlobalListenerOptions,
         callback: GlobalEventCallback,
     ) -> Option<GlobalListenerRegistration> {
-        let window = web_sys::window()?;
-        let document = window.document()?;
-        Self::add_global_listener(
-            window.clone(),
-            document,
-            window.into(),
-            name,
-            options,
-            callback,
-        )
+        Self::add_global_listener(EventTargetKind::Window, name, options, callback)
     }
 
     fn add_document_listener(
@@ -232,18 +197,11 @@ impl Document for WebDocument {
         options: &GlobalListenerOptions,
         callback: GlobalEventCallback,
     ) -> Option<GlobalListenerRegistration> {
-        let window = web_sys::window()?;
-        let document = window.document()?;
-        Self::add_global_listener(
-            window,
-            document.clone(),
-            document.into(),
-            name,
-            options,
-            callback,
-        )
+        Self::add_global_listener(EventTargetKind::Document, name, options, callback)
     }
+}
 
+impl Document for WebDocument {
     fn eval(&self, js: String) -> Eval {
         Eval::new(WebEvaluator::create(js))
     }

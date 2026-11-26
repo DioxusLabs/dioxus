@@ -352,26 +352,19 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  addGlobalEventListener(options: {
-    id: number;
-    window: boolean;
-    name: string;
-    capture: boolean;
-    passive: boolean;
-    containmentRoot: string | null;
-  }) {
-    const { id, name, capture, passive, containmentRoot } = options;
-    const target: EventTarget = options.window ? window : document;
+  // Flags are a bitset: 1 = window (else document), 2 = capture, 4 = passive.
+  addGlobalEventListener(id: number, name: string, flags: number) {
+    const onWindow = (flags & 1) !== 0;
+    const capture = (flags & 2) !== 0;
+    const passive = (flags & 4) !== 0;
+    const target: EventTarget = onWindow ? window : document;
     const callback = (event: Event) => {
-      const root = containmentRoot === null ? null : document.getElementById(containmentRoot);
-      const containment = root === null ? "RootMissing" :
-        event.composedPath().includes(root) ? "Inside" : "Outside";
-      const data = name === "resize" ? { width: window.innerWidth, height: window.innerHeight } :
+      const data = onWindow && name === "resize" ?
+        { width: window.innerWidth, height: window.innerHeight } :
         serializeEvent(event, event.target ?? target);
       const result = handleVirtualdomEventSync(`${this.baseUri}/__global_events`, JSON.stringify({
         id,
         data,
-        containment,
         bubbles: event.bubbles,
         cancelable: event.cancelable,
         defaultPrevented: event.defaultPrevented,

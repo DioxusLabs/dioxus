@@ -1,45 +1,60 @@
+//! Typed events for listeners attached to the window or the document.
+
 use super::PlatformEventData;
 use dioxus_vdom::{Event, SpawnIfAsync};
-use std::{cell::RefCell, rc::Rc};
+use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
-/// Relationship of the original event target to the requested containment root.
+/// The kinds of object an event can be listened for on.
+///
+/// The event table lists these in `#[targets(...)]`.
+#[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize))]
-pub enum Containment {
-    /// The target is the root or inside it.
-    Inside,
-    /// The root exists, but the target is outside it.
-    Outside,
-    /// No element with the requested ID exists.
-    RootMissing,
+pub enum EventTargetKind {
+    Element,
+    Document,
+    Window,
 }
 
-/// Information computed by the renderer before a global listener runs.
-#[derive(Clone, Copy, Debug)]
-pub struct GlobalListenerContext(Containment);
-
-impl GlobalListenerContext {
+#[allow(non_upper_case_globals)]
+impl EventTargetKind {
     #[doc(hidden)]
-    pub fn new(containment: Containment) -> Self {
-        Self(containment)
-    }
-
-    /// Return the relationship to the element named by `containment_root`.
-    pub fn containment(&self) -> Containment {
-        self.0
-    }
+    pub const element: Self = Self::Element;
+    #[doc(hidden)]
+    pub const document: Self = Self::Document;
+    #[doc(hidden)]
+    pub const window: Self = Self::Window;
 }
 
-/// The layout viewport dimensions in CSS pixels for a window resize event.
+/// A target that `use_window_listener!` and `use_document_listener!` can listen on.
+pub trait GlobalEventTarget: Sized + 'static {
+    #[doc(hidden)]
+    const KIND: EventTargetKind;
+}
+
+/// The window that owns the current component.
+pub struct WindowTarget;
+
+impl GlobalEventTarget for WindowTarget {
+    const KIND: EventTargetKind = EventTargetKind::Window;
+}
+
+/// The document that owns the current component.
+pub struct DocumentTarget;
+
+impl GlobalEventTarget for DocumentTarget {
+    const KIND: EventTargetKind = EventTargetKind::Document;
+}
+
+/// The layout viewport dimensions in CSS pixels for a window `resize` event.
 #[derive(Clone, Copy, Debug, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Deserialize))]
-pub struct ViewportResizeData {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct WindowResizeData {
     width: f64,
     height: f64,
 }
 
-impl ViewportResizeData {
-    #[doc(hidden)]
+impl WindowResizeData {
+    /// Create resize data from the viewport dimensions in CSS pixels.
     pub fn new(width: f64, height: f64) -> Self {
         Self { width, height }
     }
@@ -55,30 +70,17 @@ impl ViewportResizeData {
     }
 }
 
-impl From<&PlatformEventData> for ViewportResizeData {
-    fn from(data: &PlatformEventData) -> Self {
-        *data
-            .downcast::<Self>()
-            .expect("expected viewport dimensions")
-    }
-}
-
+/// An event delivered by a renderer to a window or document listener.
 #[doc(hidden)]
 pub struct GlobalEventInput {
-    pub payload: GlobalEventPayload,
-    pub containment: Containment,
+    /// The renderer's event data: a [`PlatformEventData`], as for element events.
+    pub payload: Rc<dyn Any>,
     pub bubbles: bool,
     pub cancelable: bool,
     pub default_prevented: bool,
 }
 
-#[doc(hidden)]
-pub enum GlobalEventPayload {
-    Platform(PlatformEventData),
-    #[cfg(feature = "serialize")]
-    Serialized(serde_json::Value),
-}
-
+/// What a window or document listener asked the renderer to do with an event.
 #[doc(hidden)]
 #[derive(Default)]
 pub struct GlobalEventResult {
@@ -89,65 +91,80 @@ pub struct GlobalEventResult {
 #[doc(hidden)]
 pub type GlobalEventCallback = Rc<dyn Fn(GlobalEventInput) -> GlobalEventResult>;
 
+/// An event name paired with its payload type and the target it is listened for on.
+///
+/// Values come from the methods of [`GlobalEventsExtension`](super::GlobalEventsExtension)
+/// and its per-target subtraits; the listener macros attach a handler to them.
+pub struct GlobalEvent<Target, Data> {
+    name: &'static str,
+    marker: PhantomData<fn() -> (Target, Data)>,
+}
+
+impl<Target, Data> GlobalEvent<Target, Data>
+where
+    Target: GlobalEventTarget,
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    #[doc(hidden)]
+    pub fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            marker: PhantomData,
+        }
+    }
+
+    /// Attach a handler that receives the event.
+    #[doc(hidden)]
+    pub fn bind<R, Marker>(
+        self,
+        handler: impl FnMut(Event<Data>) -> R + 'static,
+    ) -> GlobalEventBinding<Target>
+    where
+        R: SpawnIfAsync<Marker>,
+    {
+        let handler = RefCell::new(handler);
+        let callback = Rc::new(move |input: GlobalEventInput| {
+            let Ok(mut handler) = handler.try_borrow_mut() else {
+                return GlobalEventResult::default();
+            };
+            let Some(payload) = input.payload.downcast_ref::<PlatformEventData>() else {
+                return GlobalEventResult::default();
+            };
+            let event = Event::new_with_flags(
+                Rc::new(Data::from(payload)),
+                input.bubbles,
+                input.cancelable,
+                input.default_prevented,
+            );
+            handler(event.clone()).spawn();
+            GlobalEventResult {
+                prevent_default: !input.default_prevented && !event.default_action_enabled(),
+                stop_propagation: event.propagation_stopped(),
+            }
+        });
+        GlobalEventBinding {
+            name: self.name,
+            callback,
+            marker: PhantomData,
+        }
+    }
+}
+
+/// A handler bound to an event on one target, ready to be registered by a listener hook.
 #[doc(hidden)]
-pub struct GlobalEventBinding {
+pub struct GlobalEventBinding<Target> {
     pub name: &'static str,
     pub callback: GlobalEventCallback,
+    marker: PhantomData<fn() -> Target>,
 }
 
-pub(super) trait GlobalPayload: for<'a> From<&'a PlatformEventData> + 'static {
-    fn decode(payload: GlobalEventPayload) -> Option<Self>;
-}
-
-#[cfg(feature = "serialize")]
-impl<T: for<'a> From<&'a PlatformEventData> + serde::de::DeserializeOwned + 'static> GlobalPayload
-    for T
-{
-    fn decode(payload: GlobalEventPayload) -> Option<Self> {
-        match payload {
-            GlobalEventPayload::Platform(data) => Some(Self::from(&data)),
-            GlobalEventPayload::Serialized(data) => serde_json::from_value(data)
-                .inspect_err(|error| tracing::debug!(%error, "Ignoring malformed global event"))
-                .ok(),
+impl<Target> GlobalEventBinding<Target> {
+    #[doc(hidden)]
+    pub fn new(name: &'static str, callback: GlobalEventCallback) -> Self {
+        Self {
+            name,
+            callback,
+            marker: PhantomData,
         }
     }
-}
-
-#[cfg(not(feature = "serialize"))]
-impl<T: for<'a> From<&'a PlatformEventData> + 'static> GlobalPayload for T {
-    fn decode(payload: GlobalEventPayload) -> Option<Self> {
-        let GlobalEventPayload::Platform(data) = payload;
-        Some(Self::from(&data))
-    }
-}
-
-pub(super) fn bind<Data, R, Marker>(
-    name: &'static str,
-    handler: impl FnMut(Event<Data>, GlobalListenerContext) -> R + 'static,
-) -> GlobalEventBinding
-where
-    Data: GlobalPayload,
-    R: SpawnIfAsync<Marker>,
-{
-    let handler = RefCell::new(handler);
-    let callback = Rc::new(move |input: GlobalEventInput| {
-        let Ok(mut handler) = handler.try_borrow_mut() else {
-            return GlobalEventResult::default();
-        };
-        let Some(data) = Data::decode(input.payload) else {
-            return GlobalEventResult::default();
-        };
-        let event = Event::new_with_flags(
-            Rc::new(data),
-            input.bubbles,
-            input.cancelable,
-            input.default_prevented,
-        );
-        handler(event.clone(), GlobalListenerContext::new(input.containment)).spawn();
-        GlobalEventResult {
-            prevent_default: !input.default_prevented && !event.default_action_enabled(),
-            stop_propagation: event.propagation_stopped(),
-        }
-    });
-    GlobalEventBinding { name, callback }
 }

@@ -148,16 +148,7 @@ where
 
 mod generated;
 mod global;
-pub use global::{
-    Containment, GlobalEventCallback, GlobalEventInput, GlobalEventPayload, GlobalEventResult,
-    GlobalListenerContext, ViewportResizeData,
-};
-
-#[doc(hidden)]
-pub mod __private {
-    pub use super::generated::{global_events, viewport_resize};
-    pub use super::global::GlobalEventBinding;
-}
+pub use global::*;
 
 mod animation;
 mod before_input;
@@ -190,9 +181,7 @@ pub use composition::*;
 pub use drag::*;
 pub use focus::*;
 pub use form::*;
-#[cfg(feature = "serialize")]
-pub(crate) use generated::deserialize_raw_event;
-pub use generated::{EventsExtension, HtmlEventConverter};
+pub use generated::*;
 pub use image::*;
 pub use keyboard::*;
 pub use media::*;

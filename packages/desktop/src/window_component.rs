@@ -151,6 +151,8 @@ pub fn Window(props: WindowProps) -> Element {
             target_id,
             providers,
         } => {
+            provide_context(Rc::new(DesktopDocument::new(providers.context.clone()))
+                as Rc<dyn dioxus_document::GlobalListeners>);
             provide_context(providers.context);
             provide_context(providers.document);
             provide_context(providers.history);

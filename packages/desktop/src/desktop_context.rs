@@ -114,6 +114,7 @@ impl std::ops::Deref for DesktopService {
 }
 
 impl DesktopService {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         webview: WebView,
         window: Arc<Window>,
@@ -122,6 +123,7 @@ impl DesktopService {
         asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,
         close_behaviour: WindowCloseBehaviour,
+        edit_queue: crate::edits::WryQueue,
     ) -> Self {
         Self {
             app,
@@ -132,6 +134,7 @@ impl DesktopService {
                 asset_handlers,
                 file_hover,
                 close_behaviour,
+                edit_queue,
             ),
         }
     }

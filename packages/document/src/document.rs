@@ -65,33 +65,6 @@ pub trait Document: 'static {
     /// Run `eval` against this document, returning an [`Eval`] that can be used to await the result.
     fn eval(&self, js: String) -> Eval;
 
-    /// Whether this provider supports synchronous global event listeners.
-    fn supports_global_listeners(&self) -> bool {
-        false
-    }
-
-    /// Attach a scoped listener to the owning window.
-    #[doc(hidden)]
-    fn add_window_listener(
-        &self,
-        _name: &'static str,
-        _options: &GlobalListenerOptions,
-        _callback: GlobalEventCallback,
-    ) -> Option<GlobalListenerRegistration> {
-        None
-    }
-
-    /// Attach a scoped listener to the owning document.
-    #[doc(hidden)]
-    fn add_document_listener(
-        &self,
-        _name: &'static str,
-        _options: &GlobalListenerOptions,
-        _callback: GlobalEventCallback,
-    ) -> Option<GlobalListenerRegistration> {
-        None
-    }
-
     /// Set the title of the document
     fn set_title(&self, title: String) {
         self.eval(format!("document.title = {title:?};"));
