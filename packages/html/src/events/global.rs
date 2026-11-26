@@ -6,12 +6,16 @@ use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
 /// The kinds of object an event can be listened for on.
 ///
-/// The event table lists these in `#[targets(...)]`.
-#[doc(hidden)]
+/// The event table lists these in `#[targets(...)]`. Renderers pass the kind an event was
+/// listened for on when looking an event up by name, since a name such as `resize` can
+/// have a different payload per target.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EventTargetKind {
+    /// An element, as for `rsx!` event handlers.
     Element,
+    /// The document.
     Document,
+    /// The window.
     Window,
 }
 
@@ -71,21 +75,23 @@ impl WindowResizeData {
 }
 
 /// An event delivered by a renderer to a window or document listener.
-#[doc(hidden)]
 pub struct GlobalEventInput {
     /// The renderer's event data: a [`PlatformEventData`], as for element events.
     pub payload: Rc<dyn Any>,
+    /// Whether the event bubbles.
     pub bubbles: bool,
 }
 
 /// What a window or document listener asked the renderer to do with an event.
-#[doc(hidden)]
 #[derive(Default)]
 pub struct GlobalEventResult {
+    /// The listener called `prevent_default`. The renderer should cancel the event's
+    /// default action if the event is cancelable and the listener is not passive.
     pub prevent_default: bool,
 }
 
-#[doc(hidden)]
+/// The callback a renderer invokes, synchronously, each time a registered window or
+/// document event fires.
 pub type GlobalEventCallback = Rc<dyn Fn(GlobalEventInput) -> GlobalEventResult>;
 
 /// An event name paired with its payload type and the target it is listened for on.
