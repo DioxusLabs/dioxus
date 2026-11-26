@@ -30,8 +30,6 @@ pub struct Event<T: 'static + ?Sized> {
 pub(crate) struct EventMetadata {
     pub(crate) propagates: bool,
     pub(crate) prevent_default: bool,
-    propagation_stopped: bool,
-    can_prevent_default: bool,
 }
 
 impl<T: ?Sized + 'static> Event<T> {
@@ -42,26 +40,6 @@ impl<T: ?Sized + 'static> Event<T> {
             metadata: Rc::new(RefCell::new(EventMetadata {
                 propagates,
                 prevent_default: false,
-                propagation_stopped: false,
-                can_prevent_default: true,
-            })),
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn new_with_flags(
-        data: Rc<T>,
-        bubbles: bool,
-        can_prevent_default: bool,
-        default_prevented: bool,
-    ) -> Self {
-        Self {
-            data,
-            metadata: Rc::new(RefCell::new(EventMetadata {
-                propagates: bubbles,
-                prevent_default: default_prevented,
-                propagation_stopped: false,
-                can_prevent_default,
             })),
         }
     }
@@ -118,7 +96,7 @@ impl<T: ?Sized> Event<T> {
     /// ```
     #[deprecated = "use stop_propagation instead"]
     pub fn cancel_bubble(&self) {
-        self.stop_propagation();
+        self.metadata.borrow_mut().propagates = false;
     }
 
     /// Check if the event propagates up the tree to parent elements
@@ -141,14 +119,7 @@ impl<T: ?Sized> Event<T> {
     /// };
     /// ```
     pub fn stop_propagation(&self) {
-        let mut metadata = self.metadata.borrow_mut();
-        metadata.propagates = false;
-        metadata.propagation_stopped = true;
-    }
-
-    #[doc(hidden)]
-    pub fn propagation_stopped(&self) -> bool {
-        self.metadata.borrow().propagation_stopped
+        self.metadata.borrow_mut().propagates = false;
     }
 
     /// Get a reference to the inner data from this event
@@ -199,10 +170,7 @@ impl<T: ?Sized> Event<T> {
     /// </div>
     #[track_caller]
     pub fn prevent_default(&self) {
-        let mut metadata = self.metadata.borrow_mut();
-        if metadata.can_prevent_default {
-            metadata.prevent_default = true;
-        }
+        self.metadata.borrow_mut().prevent_default = true;
     }
 
     /// Check if the default action of the event is enabled.

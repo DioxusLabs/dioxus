@@ -70,8 +70,6 @@ struct GlobalEventMessage {
     id: u32,
     data: serde_json::Value,
     bubbles: bool,
-    cancelable: bool,
-    default_prevented: bool,
 }
 
 impl WebviewEdits {
@@ -178,8 +176,6 @@ impl WebviewEdits {
         let result = callback(GlobalEventInput {
             payload: platform_event_data(&context, data),
             bubbles: event.bubbles,
-            cancelable: event.cancelable,
-            default_prevented: event.default_prevented,
         });
         SynchronousEventResponse {
             prevent_default: result.prevent_default,

@@ -76,8 +76,6 @@ pub struct GlobalEventInput {
     /// The renderer's event data: a [`PlatformEventData`], as for element events.
     pub payload: Rc<dyn Any>,
     pub bubbles: bool,
-    pub cancelable: bool,
-    pub default_prevented: bool,
 }
 
 /// What a window or document listener asked the renderer to do with an event.
@@ -130,16 +128,11 @@ where
             let Some(payload) = input.payload.downcast_ref::<PlatformEventData>() else {
                 return GlobalEventResult::default();
             };
-            let event = Event::new_with_flags(
-                Rc::new(Data::from(payload)),
-                input.bubbles,
-                input.cancelable,
-                input.default_prevented,
-            );
+            let event = Event::new(Rc::new(Data::from(payload)), input.bubbles);
             handler(event.clone()).spawn();
             GlobalEventResult {
-                prevent_default: !input.default_prevented && !event.default_action_enabled(),
-                stop_propagation: event.propagation_stopped(),
+                prevent_default: !event.default_action_enabled(),
+                stop_propagation: input.bubbles && !event.propagates(),
             }
         });
         GlobalEventBinding {

@@ -366,10 +366,8 @@ export class NativeInterpreter extends JSChannel_ {
         id,
         data,
         bubbles: event.bubbles,
-        cancelable: event.cancelable,
-        defaultPrevented: event.defaultPrevented,
       }));
-      if (result.preventDefault) event.preventDefault();
+      if (result.preventDefault && event.cancelable && !passive) event.preventDefault();
       if (result.stopPropagation) event.stopPropagation();
     };
     this.removeGlobalEventListener(id);

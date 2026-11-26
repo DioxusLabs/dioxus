@@ -258,8 +258,6 @@ mod tests {
             document.callback.borrow().as_ref().unwrap()(GlobalEventInput {
                 payload: Rc::new(dioxus_html::PlatformEventData::new(Box::new(()))),
                 bubbles: true,
-                cancelable: true,
-                default_prevented: false,
             })
             .prevent_default
         };

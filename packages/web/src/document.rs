@@ -151,10 +151,8 @@ impl WebDocument {
             let result = callback(GlobalEventInput {
                 payload,
                 bubbles: event.bubbles(),
-                cancelable: event.cancelable() && !passive,
-                default_prevented: event.default_prevented(),
             });
-            if result.prevent_default {
+            if result.prevent_default && event.cancelable() && !passive {
                 event.prevent_default();
             }
             if result.stop_propagation {

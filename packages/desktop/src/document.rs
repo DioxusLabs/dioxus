@@ -3,11 +3,11 @@ use dioxus_document::{
     Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
     create_element_in_head,
 };
-use dioxus_html::{EventTargetKind, GlobalEventCallback, GlobalEventInput};
+use dioxus_html::{EventTargetKind, GlobalEventCallback};
 use dioxus_html::{GlobalListenerOptions, GlobalListenerRegistration, GlobalListeners};
 use dioxus_interpreter_js::GlobalListenerFlags;
 use dioxus_vdom::queue_effect;
-use std::{cell::Cell, cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{cell::Cell, cell::RefCell, collections::BTreeMap};
 
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
@@ -61,11 +61,6 @@ impl DesktopDocument {
         callback: GlobalEventCallback,
     ) -> Option<GlobalListenerRegistration> {
         let ctx = self.desktop_ctx.upgrade()?;
-        let passive = options.passive;
-        let callback: GlobalEventCallback = Rc::new(move |mut input: GlobalEventInput| {
-            input.cancelable &= !passive;
-            callback(input)
-        });
         let listeners = &ctx.global_listeners;
         let id = listeners.next_id.get();
         listeners.next_id.set(id.checked_add(1)?);
@@ -76,7 +71,7 @@ impl DesktopDocument {
         let flags = GlobalListenerFlags {
             window: target == EventTargetKind::Window,
             capture: options.capture,
-            passive,
+            passive: options.passive,
         };
         listeners
             .edit_queue
