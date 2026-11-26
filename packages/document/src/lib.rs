@@ -14,7 +14,7 @@ pub use listener::{GlobalListenerOptions, GlobalListenerRegistration, GlobalList
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::listener::use_global_listener;
+    pub use crate::listener::{HookOptions, use_global_listener};
     pub use dioxus_html::events::{DocumentTarget, WindowTarget};
 }
 

@@ -4,18 +4,26 @@ use dioxus_html::events::{
 use dioxus_vdom::{Runtime, current_scope_id, queue_effect, try_consume_context, use_hook};
 use std::{cell::RefCell, rc::Rc};
 
-/// Options accepted by the global listener macros.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// How a renderer should attach a window or document listener.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct GlobalListenerOptions {
     /// Run during capture rather than bubble.
     pub capture: bool,
     /// Disallow cancelling the browser's default action.
     pub passive: bool,
-    /// Install the listener only while this is true.
+}
+
+/// The options accepted by the global listener macros.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HookOptions {
+    pub capture: bool,
+    pub passive: bool,
+    /// Install the listener only while this is true. Handled by the hook, not the renderer.
     pub enabled: bool,
 }
 
-impl Default for GlobalListenerOptions {
+impl Default for HookOptions {
     fn default() -> Self {
         Self {
             capture: false,
@@ -82,8 +90,13 @@ struct ListenerState {
 
 pub fn use_global_listener<Target: GlobalEventTarget>(
     binding: GlobalEventBinding<Target>,
-    options: GlobalListenerOptions,
+    options: HookOptions,
 ) {
+    let enabled = options.enabled;
+    let options = GlobalListenerOptions {
+        capture: options.capture,
+        passive: options.passive,
+    };
     let state = use_hook(|| Rc::new(RefCell::new(ListenerState::default())));
     let listeners = try_consume_context::<Rc<dyn GlobalListeners>>();
 
@@ -94,7 +107,7 @@ pub fn use_global_listener<Target: GlobalEventTarget>(
     queue_effect(move || {
         let Some(state) = state.upgrade() else { return };
         let mut current = state.borrow_mut();
-        let listeners = listeners.filter(|_| options.enabled);
+        let listeners = listeners.filter(|_| enabled);
         current.callback = listeners.as_ref().map(|_| binding.callback);
         if listeners.is_some()
             && current
@@ -187,7 +200,7 @@ macro_rules! use_window_listener {
         let _ = $crate::__private::WindowTarget.$name();
     }};
     (@register $target:ident, $name:ident, $handler:expr; $($option:ident : $value:expr),*) => {{
-        let options = $crate::GlobalListenerOptions {
+        let options = $crate::__private::HookOptions {
             $($option: $value,)*
             ..Default::default()
         };
@@ -278,7 +291,7 @@ mod tests {
         );
         use_global_listener(
             binding,
-            GlobalListenerOptions {
+            HookOptions {
                 enabled: version != 2,
                 ..Default::default()
             },
