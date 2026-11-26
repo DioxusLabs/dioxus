@@ -14,6 +14,8 @@ use tokio::process::Command;
 
 pub struct Workspace {
     pub(crate) krates: Krates,
+    /// Cargo's target dir, as reported by `cargo metadata`.
+    pub(crate) target_dir: PathBuf,
     /// Where cargo keeps intermediate artifacts (fingerprints, deps). This is the target dir
     /// unless `build.build-dir` is configured.
     pub(crate) build_dir: PathBuf,
@@ -65,6 +67,7 @@ impl Workspace {
             cmd.lock_opts(lock_options);
 
             let metadata = krates::cm::MetadataCommand::from(cmd).exec()?;
+            let target_dir = metadata.target_directory.as_std_path().to_path_buf();
             let build_dir = cargo_build_dir(&metadata);
 
             let mut builder = krates::Builder::new();
@@ -77,7 +80,7 @@ impl Workspace {
                 }
             }
 
-            Ok((res, build_dir)) as Result<(Krates, PathBuf), krates::Error>
+            Ok((res, target_dir, build_dir)) as Result<(Krates, PathBuf, PathBuf), krates::Error>
         });
 
         let spin_future = async move {
@@ -96,7 +99,7 @@ impl Workspace {
             }
         };
 
-        let (krates, build_dir) = tokio::select! {
+        let (krates, target_dir, build_dir) = tokio::select! {
             f = krates_future => {
                 let res = f?;
                 if let Err(krates::Error::Metadata(e)) = res {
@@ -128,6 +131,7 @@ impl Workspace {
 
         let workspace = Arc::new(Self {
             krates,
+            target_dir,
             build_dir,
             settings,
             wasm_opt,
@@ -143,11 +147,13 @@ impl Workspace {
                • sysroot: {sysroot}
                • rustc version: {rustc_version}
                • workspace root: {workspace_root}
+               • target dir: {target_dir}
                • build dir: {build_dir}
                • dioxus versions: [{dioxus_versions:?}]"#,
             sysroot = workspace.sysroot.display(),
             rustc_version = workspace.rustc_version,
             workspace_root = workspace.workspace_root().display(),
+            target_dir = workspace.target_dir.display(),
             build_dir = workspace.build_dir.display(),
             dioxus_versions = workspace
                 .dioxus_versions()
