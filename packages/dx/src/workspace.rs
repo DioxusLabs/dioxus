@@ -14,6 +14,11 @@ use tokio::process::Command;
 
 pub struct Workspace {
     pub(crate) krates: Krates,
+    /// Cargo's target dir, as reported by `cargo metadata`.
+    pub(crate) target_dir: PathBuf,
+    /// Where cargo keeps intermediate artifacts (fingerprints, deps). This is the target dir
+    /// unless `build.build-dir` is configured.
+    pub(crate) build_dir: PathBuf,
     pub(crate) settings: CliSettings,
     pub(crate) wasm_opt: Option<PathBuf>,
     pub(crate) sysroot: PathBuf,
@@ -21,6 +26,17 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
+}
+
+/// Cargo's build dir from `cargo metadata`, falling back to the target dir for cargo versions
+/// that don't report one.
+fn cargo_build_dir(metadata: &krates::cm::Metadata) -> PathBuf {
+    metadata
+        .build_directory
+        .as_ref()
+        .unwrap_or(&metadata.target_directory)
+        .as_std_path()
+        .to_path_buf()
 }
 
 /// Process-wide cache of the loaded workspace. `Workspace::current()` populates this on first
@@ -50,9 +66,13 @@ impl Workspace {
             let mut cmd = Cmd::new();
             cmd.lock_opts(lock_options);
 
+            let metadata = krates::cm::MetadataCommand::from(cmd).exec()?;
+            let target_dir = metadata.target_directory.as_std_path().to_path_buf();
+            let build_dir = cargo_build_dir(&metadata);
+
             let mut builder = krates::Builder::new();
             builder.workspace(true);
-            let res = builder.build(cmd, |_| {})?;
+            let res = builder.build_with_metadata(metadata, |_| {})?;
 
             if !lock_options.offline {
                 if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
@@ -60,7 +80,7 @@ impl Workspace {
                 }
             }
 
-            Ok(res) as Result<Krates, krates::Error>
+            Ok((res, target_dir, build_dir)) as Result<(Krates, PathBuf, PathBuf), krates::Error>
         });
 
         let spin_future = async move {
@@ -79,7 +99,7 @@ impl Workspace {
             }
         };
 
-        let krates = tokio::select! {
+        let (krates, target_dir, build_dir) = tokio::select! {
             f = krates_future => {
                 let res = f?;
                 if let Err(krates::Error::Metadata(e)) = res {
@@ -111,6 +131,8 @@ impl Workspace {
 
         let workspace = Arc::new(Self {
             krates,
+            target_dir,
+            build_dir,
             settings,
             wasm_opt,
             sysroot: sysroot.trim().into(),
@@ -125,10 +147,14 @@ impl Workspace {
                • sysroot: {sysroot}
                • rustc version: {rustc_version}
                • workspace root: {workspace_root}
+               • target dir: {target_dir}
+               • build dir: {build_dir}
                • dioxus versions: [{dioxus_versions:?}]"#,
             sysroot = workspace.sysroot.display(),
             rustc_version = workspace.rustc_version,
             workspace_root = workspace.workspace_root().display(),
+            target_dir = workspace.target_dir.display(),
+            build_dir = workspace.build_dir.display(),
             dioxus_versions = workspace
                 .dioxus_versions()
                 .iter()
@@ -674,5 +700,46 @@ impl std::fmt::Debug for Workspace {
             .field("sysroot", &self.sysroot)
             .field("wasm_opt", &self.wasm_opt)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cargo_build_dir;
+    use std::path::PathBuf;
+
+    fn metadata(build_directory: Option<&str>) -> krates::cm::Metadata {
+        let build_directory = match build_directory {
+            Some(dir) => format!(r#""build_directory": "{dir}","#),
+            None => String::new(),
+        };
+        serde_json::from_str(&format!(
+            r#"{{
+                "packages": [],
+                "workspace_members": [],
+                "resolve": null,
+                "workspace_root": "/workspace",
+                "target_directory": "/workspace/target",
+                {build_directory}
+                "version": 1
+            }}"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn build_dir_uses_separate_build_directory() {
+        assert_eq!(
+            cargo_build_dir(&metadata(Some("/cache/build"))),
+            PathBuf::from("/cache/build")
+        );
+    }
+
+    #[test]
+    fn build_dir_falls_back_to_target_directory() {
+        assert_eq!(
+            cargo_build_dir(&metadata(None)),
+            PathBuf::from("/workspace/target")
+        );
     }
 }
