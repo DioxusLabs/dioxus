@@ -118,3 +118,83 @@ Not part of any layer and not published.
 | `subsecond/subsecond-tests` | | Subsecond hot-patching test crates. |
 | `cli-harnesses` | | Test projects for `dx` builds across feature and platform setups. |
 | `playwright-tests` | | End-to-end browser tests. |
+
+# External repositories
+
+Crates maintained by DioxusLabs outside this workspace. They build on the layers above but are
+versioned and released separately.
+
+## Blitz (16 crates)
+
+[DioxusLabs/blitz](https://github.com/DioxusLabs/blitz): the modular HTML/CSS engine (Stylo for
+style, Taffy for layout, Parley for text, AnyRender for paint) behind `dioxus-native`. The Blitz
+workspace also builds its own copies of `dioxus-native` and `dioxus-native-dom` (0.7 line); the
+ones listed under Framework are the current ones.
+
+| Directory | Crate | What it is |
+| --- | --- | --- |
+| `packages/blitz` | `blitz` | High-level APIs for rendering HTML with Blitz. |
+| `packages/blitz-dom` | `blitz-dom` | The DOM: tree, styling (Stylo), layout (Taffy), text (Parley), events and incremental updates. |
+| `packages/blitz-html` | `blitz-html` | HTML parser (html5ever) that builds a `blitz-dom` document. |
+| `packages/blitz-net` | `blitz-net` | Networking (HTTP, filesystem, data URIs), implementing `blitz-traits`' `NetProvider`. |
+| `packages/blitz-paint` | `blitz-paint` | Paints a Blitz document through AnyRender. |
+| `packages/blitz-shell` | `blitz-shell` | Event loop, windowing and system integration. |
+| `packages/blitz-traits` | `blitz-traits` | Shared traits and types so the other Blitz crates avoid depending on each other. |
+| `packages/blitz-vibey-cdp-server` | `blitz-vibey-cdp-server` | Chrome DevTools Protocol server so DevTools' Elements panel can inspect Blitz documents. |
+| `packages/blitz-vibey-script` | `blitz-vibey-script` | JavaScript execution for Blitz on the Boa engine. Not published. |
+| `packages/stylo_taffy` | `stylo_taffy` | Converts Stylo computed styles into Taffy layout styles. |
+| `packages/accesskit_xplat` | `accesskit_xplat` | Cross-platform AccessKit adapter. |
+| `packages/debug_timer` | `debug_timer` | Simple timing utilities. |
+| `packages/parley_code_editor` | `parley_code_editor` | Code-editing control on floem-editor-core, Parley and AnyRender. Not published. |
+| `apps/browser` | `browser` | The Blitz browser app. Not published. |
+| `apps/browser/persistence` | `browser-persistence` | Saved state for the browser app. Not published. |
+| `apps/readme` | `rdme` | Markdown renderer app. |
+
+## Components (3 crates)
+
+[DioxusLabs/dioxus-components](https://github.com/DioxusLabs/dioxus-components): accessible,
+unstyled primitives plus a registry of 45 styled components (`component.json`) that
+`dx components` installs into an app.
+
+| Directory | Crate | What it is |
+| --- | --- | --- |
+| `primitives` | `dioxus-primitives` | Unstyled, accessible components: accordion, dialog, menus, select, calendar, toast, etc. |
+| `dioxus-attributes` | `dioxus-attributes` | Proc macro for building dynamic attribute lists for Dioxus elements. |
+| `preview` | `preview` | The styled components (under `preview/src/components`) and the gallery site that shows them. Not published. |
+
+## SDK (8 crates)
+
+[DioxusLabs/sdk](https://github.com/DioxusLabs/sdk): platform-agnostic hooks and utilities for
+common app needs.
+
+| Directory | Crate | What it is |
+| --- | --- | --- |
+| `packages/sdk` | `dioxus-sdk` | Entry point that re-exports the SDK crates behind features. |
+| `packages/geolocation` | `dioxus-sdk-geolocation` | Geolocation hooks. |
+| `packages/notification` | `dioxus-sdk-notification` | Send notifications from the app. |
+| `packages/storage` | `dioxus-sdk-storage` | Local and persistent storage hooks. |
+| `packages/sync` | `dioxus-sdk-sync` | Synchronization primitives such as channels. |
+| `packages/time` | `dioxus-sdk-time` | Timers, intervals, debounce and timeouts. |
+| `packages/util` | `dioxus-sdk-util` | General utilities such as scroll position. |
+| `packages/window` | `dioxus-sdk-window` | Window size and theme hooks. |
+
+## Code (3 crates)
+
+[DioxusLabs/dioxus-code](https://github.com/DioxusLabs/dioxus-code): bundle-size-friendly syntax
+highlighting.
+
+| Directory | Crate | What it is |
+| --- | --- | --- |
+| `.` | `dioxus-code` | Syntax-highlighted code block component. |
+| `dioxus-code-macro` | `dioxus-code-macro` | Compile-time highlighting macro, so no highlighter ships in the app. |
+| `code-editor` | `dioxus-code-editor` | Syntax-highlighted code editor component. |
+
+## Icons (2 crates)
+
+[DioxusLabs/dioxus-icons](https://github.com/DioxusLabs/dioxus-icons): Lucide icons, one component
+per icon.
+
+| Directory | Crate | What it is |
+| --- | --- | --- |
+| `crates/dioxus-icons` | `dioxus-icons` | The icon components (`dioxus_icons::lucide::Trash`, etc.), generated from Lucide. |
+| `crates/dioxus-icons-codegen` | `dioxus-icons-codegen` | Hand-run generator that regenerates the components from a pinned Lucide version. Not published. |
