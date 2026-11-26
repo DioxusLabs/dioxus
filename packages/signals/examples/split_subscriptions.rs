@@ -1,15 +1,10 @@
 #![allow(non_snake_case)]
 
-use dioxus_core::prelude::*;
+use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
 fn main() {
-    let mut dom = VirtualDom::new(app);
-
-    loop {
-        dom.render_immediate(&mut dioxus_core::dioxus_vdom::NoOpMutations);
-        std::thread::sleep(std::time::Duration::from_millis(16));
-    }
+    dioxus::launch(app);
 }
 
 #[derive(Clone, Copy, Default)]

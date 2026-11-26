@@ -1,14 +1,9 @@
 #![allow(non_snake_case)]
 
-use dioxus_core::prelude::*;
+use dioxus::prelude::*;
 
 fn main() {
-    let mut dom = VirtualDom::new(app);
-
-    loop {
-        dom.render_immediate(&mut dioxus_core::dioxus_vdom::NoOpMutations);
-        std::thread::sleep(std::time::Duration::from_millis(16));
-    }
+    dioxus::launch(app)
 }
 
 // Because signal is never read in this component, this component will not rerun when the signal changes
