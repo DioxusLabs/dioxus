@@ -139,6 +139,7 @@ pub(crate) fn custom_event_bubbles(name: &str) -> Option<bool> {
 }
 
 /// Whether a custom event is registered by this name.
+#[cfg(feature = "serialize")]
 pub(crate) fn is_custom_event(name: &str) -> bool {
     custom_event_bubbles(name).is_some()
 }
@@ -150,7 +151,6 @@ mod tests {
     #[test]
     fn an_unregistered_event_bubbles_as_before() {
         assert!(event_bubbles("an-event-nobody-registered"));
-        assert!(!is_custom_event("an-event-nobody-registered"));
         assert_eq!(custom_event_bubbles("an-event-nobody-registered"), None);
     }
 
@@ -160,8 +160,16 @@ mod tests {
         register_custom_event("custom-test-loud", true);
         assert!(!event_bubbles("custom-test-quiet"));
         assert!(event_bubbles("custom-test-loud"));
-        assert!(is_custom_event("custom-test-quiet"));
+        assert_eq!(custom_event_bubbles("custom-test-quiet"), Some(false));
         assert_eq!(custom_event_bubbles("custom-test-loud"), Some(true));
+    }
+
+    #[test]
+    #[cfg(feature = "serialize")]
+    fn only_a_registered_name_is_a_custom_event() {
+        assert!(!is_custom_event("an-event-nobody-registered"));
+        register_custom_event("custom-test-known", false);
+        assert!(is_custom_event("custom-test-known"));
     }
 
     #[test]
