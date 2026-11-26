@@ -113,6 +113,7 @@ pub fn use_global_listener<Target: GlobalEventTarget>(
 /// (default true).
 /// Events that do not bubble only reach the window with `capture: true`.
 /// Cancellation must happen synchronously.
+/// `stop_propagation` has no effect on these events.
 ///
 /// Event names are methods of
 /// [`GlobalEventsExtension`](dioxus_html::events::GlobalEventsExtension) and
@@ -234,7 +235,6 @@ mod tests {
             "keydown",
             Rc::new(move |_| GlobalEventResult {
                 prevent_default: version == 1,
-                ..Default::default()
             }),
         );
         use_global_listener(

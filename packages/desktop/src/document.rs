@@ -76,9 +76,6 @@ impl DesktopDocument {
         listeners
             .edit_queue
             .with_mutation_state(|state| state.add_global_event_listener(id, name, flags));
-        // Listeners are registered from effects, after the render's edits were written. Send
-        // them now rather than with the next render so the listener is attached promptly.
-        listeners.edit_queue.send_edits();
         let ctx = self.desktop_ctx.clone();
         Some(GlobalListenerRegistration::new(move || {
             if let Some(ctx) = ctx.upgrade() {

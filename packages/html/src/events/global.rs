@@ -83,7 +83,6 @@ pub struct GlobalEventInput {
 #[derive(Default)]
 pub struct GlobalEventResult {
     pub prevent_default: bool,
-    pub stop_propagation: bool,
 }
 
 #[doc(hidden)]
@@ -132,7 +131,6 @@ where
             handler(event.clone()).spawn();
             GlobalEventResult {
                 prevent_default: !event.default_action_enabled(),
-                stop_propagation: input.bubbles && !event.propagates(),
             }
         });
         GlobalEventBinding {
@@ -177,7 +175,7 @@ pub struct GlobalListenerOptions {
 /// provided, `use_window_listener!` and `use_document_listener!` in `dioxus-document` install nothing.
 ///
 /// The callback must be called synchronously while the event is being dispatched, and
-/// the default action and propagation updated from its result before dispatch continues.
+/// the default action updated from its result before dispatch continues.
 pub trait GlobalListeners: 'static {
     /// Attach a listener to the window that owns the current component.
     fn add_window_listener(

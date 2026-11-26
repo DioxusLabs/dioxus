@@ -368,7 +368,6 @@ export class NativeInterpreter extends JSChannel_ {
         bubbles: event.bubbles,
       }));
       if (result.preventDefault && event.cancelable && !passive) event.preventDefault();
-      if (result.stopPropagation) event.stopPropagation();
     };
     this.removeGlobalEventListener(id);
     target.addEventListener(name, callback, { capture, passive });

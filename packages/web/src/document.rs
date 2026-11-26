@@ -155,9 +155,6 @@ impl WebDocument {
             if result.prevent_default && event.cancelable() && !passive {
                 event.prevent_default();
             }
-            if result.stop_propagation {
-                event.stop_propagation();
-            }
         });
         let event_options = web_sys::AddEventListenerOptions::new();
         event_options.set_capture(capture);

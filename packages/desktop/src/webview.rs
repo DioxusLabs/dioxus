@@ -179,7 +179,6 @@ impl WebviewEdits {
         });
         SynchronousEventResponse {
             prevent_default: result.prevent_default,
-            stop_propagation: result.stop_propagation,
         }
     }
 
@@ -739,18 +738,13 @@ impl WebviewInstance {
 pub struct SynchronousEventResponse {
     #[serde(rename = "preventDefault")]
     prevent_default: bool,
-    #[serde(rename = "stopPropagation")]
-    stop_propagation: bool,
 }
 
 impl SynchronousEventResponse {
     /// Create a new SynchronousEventResponse
     #[allow(unused)]
     pub fn new(prevent_default: bool) -> Self {
-        Self {
-            prevent_default,
-            ..Default::default()
-        }
+        Self { prevent_default }
     }
 }
 
