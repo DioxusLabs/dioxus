@@ -29,3 +29,5 @@ test("fallback", async ({ page }) => {
   const main = page.locator("#not-found");
   await expect(main).toContainText("NotFound");
 });
+
+require("./scroll-on-replace").scrollOnReplaceTests("http://localhost:2021/#");

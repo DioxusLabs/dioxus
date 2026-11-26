@@ -30,3 +30,5 @@ test("fallback", async ({ page }) => {
   await expect(main).toContainText("NotFound");
 
 });
+
+require("./scroll-on-replace").scrollOnReplaceTests("http://localhost:2020");
