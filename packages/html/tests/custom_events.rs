@@ -1,3 +1,5 @@
+#![cfg(feature = "serialize")]
+
 use dioxus_core::html::{CustomData, CustomEvent, HtmlEvent, SerializedCustomData};
 use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::RendererOracle;
