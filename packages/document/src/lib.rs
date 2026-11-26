@@ -10,7 +10,6 @@ pub use document::*;
 pub use elements::*;
 pub use error::*;
 pub use eval::*;
-pub use listener::{GlobalListenerOptions, GlobalListenerRegistration, GlobalListeners};
 
 #[doc(hidden)]
 pub mod __private {

@@ -152,7 +152,7 @@ pub fn Window(props: WindowProps) -> Element {
             providers,
         } => {
             provide_context(Rc::new(DesktopDocument::new(providers.context.clone()))
-                as Rc<dyn dioxus_document::GlobalListeners>);
+                as Rc<dyn dioxus_html::GlobalListeners>);
             provide_context(providers.context);
             provide_context(providers.document);
             provide_context(providers.history);

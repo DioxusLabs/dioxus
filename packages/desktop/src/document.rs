@@ -1,9 +1,10 @@
 use crate::{DesktopContext, WeakDesktopContext, edits::WryQueue, query::Query};
 use dioxus_document::{
-    Document, Eval, EvalError, Evaluator, GlobalListenerOptions, GlobalListenerRegistration,
-    GlobalListeners, LinkProps, MetaProps, ScriptProps, StyleProps, create_element_in_head,
+    Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
+    create_element_in_head,
 };
 use dioxus_html::{EventTargetKind, GlobalEventCallback, GlobalEventInput};
+use dioxus_html::{GlobalListenerOptions, GlobalListenerRegistration, GlobalListeners};
 use dioxus_interpreter_js::GlobalListenerFlags;
 use dioxus_vdom::queue_effect;
 use std::{cell::Cell, cell::RefCell, collections::BTreeMap, rc::Rc};

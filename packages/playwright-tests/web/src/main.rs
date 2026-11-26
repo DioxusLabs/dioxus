@@ -75,10 +75,10 @@ fn GlobalListeners() -> Element {
     let mut enabled = use_signal(|| true);
     let mut order = use_signal(String::new);
     let mut viewport = use_signal(String::new);
-    document::use_window_listener!(resize, move |event| {
+    use_window_listener!(resize, move |event| {
         viewport.set(format!("{}x{}", event.width(), event.height()));
     });
-    document::use_window_listener!(
+    use_window_listener!(
         keydown,
         move |event| {
             if event.key() == Key::Named(dioxus::html::NamedKey::Escape) {
@@ -89,7 +89,7 @@ fn GlobalListeners() -> Element {
         capture: true,
         passive: true,
     );
-    document::use_document_listener!(
+    use_document_listener!(
         keydown,
         move |event| {
             if event.key() == Key::Named(dioxus::html::NamedKey::Escape) {

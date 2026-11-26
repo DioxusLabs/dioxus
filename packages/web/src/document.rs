@@ -1,9 +1,9 @@
 use dioxus_document::{
-    Document, Eval, EvalError, Evaluator, GlobalListenerOptions, GlobalListenerRegistration,
-    GlobalListeners, LinkProps, MetaProps, ScriptProps, StyleProps,
+    Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
 };
 use dioxus_history::History;
 use dioxus_html::{EventTargetKind, GlobalEventCallback, GlobalEventInput};
+use dioxus_html::{GlobalListenerOptions, GlobalListenerRegistration, GlobalListeners};
 use dioxus_vdom::ScopeId;
 use dioxus_vdom::queue_effect;
 use dioxus_vdom::{Runtime, provide_context};

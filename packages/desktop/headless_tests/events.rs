@@ -60,7 +60,7 @@ fn app() -> Element {
 fn test_global_keydown() -> Element {
     use_hook(|| utils::EXPECTED_EVENTS.with_mut(|x| *x += 1));
     let mut mounted = use_signal(|| false);
-    document::use_window_listener!(
+    use_window_listener!(
         keydown,
         move |event| {
             if event.key() == Key::Named(dioxus::html::NamedKey::Escape) {

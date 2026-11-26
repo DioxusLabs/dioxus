@@ -1,17 +1,9 @@
 use dioxus_html::events::{
     EventTargetKind, GlobalEventBinding, GlobalEventCallback, GlobalEventTarget,
+    GlobalListenerOptions, GlobalListenerRegistration, GlobalListeners,
 };
 use dioxus_vdom::{Runtime, current_scope_id, queue_effect, try_consume_context, use_hook};
 use std::{cell::RefCell, rc::Rc};
-
-/// How a renderer should attach a window or document listener.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct GlobalListenerOptions {
-    /// Run during capture rather than bubble.
-    pub capture: bool,
-    /// Disallow cancelling the browser's default action.
-    pub passive: bool,
-}
 
 /// The options accepted by the global listener macros.
 #[doc(hidden)]
@@ -29,50 +21,6 @@ impl Default for HookOptions {
             capture: false,
             passive: false,
             enabled: true,
-        }
-    }
-}
-
-/// A renderer's support for listeners on the window and the document.
-///
-/// Renderers provide an `Rc<dyn GlobalListeners>` as a root context. Where none is
-/// provided, [`use_window_listener!`](crate::use_window_listener) and
-/// [`use_document_listener!`](crate::use_document_listener) install nothing.
-///
-/// The callback must be called synchronously while the event is being dispatched, and
-/// the default action and propagation updated from its result before dispatch continues.
-pub trait GlobalListeners: 'static {
-    /// Attach a listener to the window that owns the current component.
-    fn add_window_listener(
-        &self,
-        name: &'static str,
-        options: &GlobalListenerOptions,
-        callback: GlobalEventCallback,
-    ) -> Option<GlobalListenerRegistration>;
-
-    /// Attach a listener to the document that owns the current component.
-    fn add_document_listener(
-        &self,
-        name: &'static str,
-        options: &GlobalListenerOptions,
-        callback: GlobalEventCallback,
-    ) -> Option<GlobalListenerRegistration>;
-}
-
-/// A renderer registration that detaches when dropped.
-pub struct GlobalListenerRegistration(Option<Box<dyn FnOnce()>>);
-
-impl GlobalListenerRegistration {
-    /// Create a registration that runs `detach` when it is dropped.
-    pub fn new(detach: impl FnOnce() + 'static) -> Self {
-        Self(Some(Box::new(detach)))
-    }
-}
-
-impl Drop for GlobalListenerRegistration {
-    fn drop(&mut self) {
-        if let Some(detach) = self.0.take() {
-            detach();
         }
     }
 }
