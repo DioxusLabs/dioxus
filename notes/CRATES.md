@@ -14,7 +14,7 @@ Base            subsecond, manganis, const-serialize, generational-box, ...
 
 Each entry is `directory` (`crate name`) when the two differ.
 
-## Base
+## Base (16 crates)
 
 General-purpose building blocks with no dependency on Dioxus Core. Usable outside Dioxus.
 
@@ -37,7 +37,7 @@ General-purpose building blocks with no dependency on Dioxus Core. Usable outsid
 | `logger` | `dioxus-logger` | One `tracing` setup that works on web, desktop, mobile and server. |
 | `generational-box` | `generational-box` | `Copy` handles to runtime-owned values, checked by generation; the storage under signals. |
 
-## Core
+## Core (14 crates)
 
 The renderer-agnostic UI model. `dioxus-core` is the facade that re-exports this layer.
 
@@ -58,7 +58,7 @@ The renderer-agnostic UI model. `dioxus-core` is the facade that re-exports this
 | `html-internal-macro` | `dioxus-html-internal-macro` | Internal macros that generate `dioxus-html`'s element, event and extension-attribute definitions. |
 | `document` | `dioxus-document` | The `Document` trait: `eval`, and head elements (`Title`, `Meta`, `Link`, `Script`, `Style`, `Stylesheet`). |
 
-## Core libraries
+## Core libraries (6 crates)
 
 Libraries built on Core that are not tied to a specific renderer.
 
@@ -71,7 +71,7 @@ Libraries built on Core that are not tied to a specific renderer.
 | `router-macro` | `dioxus-router-macro` | `#[derive(Routable)]`. |
 | `config-macro` | `dioxus-config-macro` | `server_only!`, `client!`, `web!`, `desktop!`, `native!`, `mobile!`, `fullstack!`, `ssr!`, `liveview!`: code that is kept or dropped by enabled platform features. |
 
-## Framework
+## Framework (12 crates)
 
 Renderers, fullstack, and the `dioxus` umbrella that ties them together with `launch`.
 
@@ -90,7 +90,7 @@ Renderers, fullstack, and the `dioxus` umbrella that ties them together with `la
 | `fullstack-macro` | `dioxus-fullstack-macro` | The server-function macros. |
 | `fullstack-server` | `dioxus-server` | Server side of fullstack on Axum: SSR with streaming and hydration, server-function routing, incremental static generation. |
 
-## CLI
+## CLI (10 crates)
 
 `dx` and the crates only it (or its tooling) uses. Nothing in the stack above depends on these.
 
@@ -107,7 +107,7 @@ Renderers, fullstack, and the `dioxus` umbrella that ties them together with `la
 | `rsx-rosetta` | `dioxus-rsx-rosetta` | Converts HTML to RSX (`dx translate`). |
 | `extension` | `dioxus-ext` | The VS Code extension (TypeScript) plus its WASM helper crate for formatting and HTML-to-RSX. Not published. |
 
-## Test-only
+## Test-only (5 entries)
 
 Not part of any layer and not published.
 
