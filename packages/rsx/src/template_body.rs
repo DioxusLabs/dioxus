@@ -132,7 +132,7 @@ impl ToTokens for TemplateBody {
         // First normalize the template body for rendering
         let node = self.normalized();
 
-        let key_warnings = self.check_for_duplicate_keys();
+        let key_warnings = self.check_for_ignored_keys();
 
         // Build the typed view once: the release tree, the capacities, and (in debug) the
         // hot-reload tables all come from this one traversal.
@@ -868,7 +868,7 @@ impl TemplateBody {
         }
     }
 
-    fn check_for_duplicate_keys(&self) -> TokenStream2 {
+    fn check_for_ignored_keys(&self) -> TokenStream2 {
         let mut warnings = TokenStream2::new();
 
         // Make sure there are not multiple keys or keys on nodes other than the first in the block
@@ -881,7 +881,48 @@ impl TemplateBody {
             }
         }
 
+        for root in &self.roots {
+            if let BodyNode::Element(element) = root {
+                Self::check_for_nested_keys(&element.children, &mut warnings);
+            }
+        }
+
         warnings
+    }
+
+    fn check_for_nested_keys(children: &[BodyNode], warnings: &mut TokenStream2) {
+        for child in children {
+            let key = match child {
+                BodyNode::Element(element) => {
+                    Self::check_for_nested_keys(&element.children, warnings);
+                    element.key()
+                }
+                BodyNode::Component(component) => component.get_key(),
+                _ => None,
+            };
+
+            if let Some(key) = key {
+                warnings.extend(new_diagnostics::warning_diagnostic(
+                    key.span(),
+                    Self::nested_key_message(key),
+                ));
+            }
+        }
+    }
+
+    fn nested_key_message(key: &AttributeValue) -> String {
+        let key = match key {
+            AttributeValue::AttrLiteral(HotLiteral::Fmted(key)) => {
+                format!("The key `{}`", key.formatted_input.source.to_token_stream())
+            }
+            _ => "This key".to_string(),
+        };
+
+        format!(
+            "{key} is ignored because it is on a node nested inside an element. Keys are only \
+             read from the first node of an `rsx!` block, a `for` loop body, an `if` branch, or \
+             a component's children."
+        )
     }
 
     /// Get the span of the first root of this template
@@ -913,5 +954,250 @@ mod tests {
         assert!(TemplateBody::path_bits_exceed_limit(&dynamic_siblings(
             TEMPLATE_SLOT_PATH_MAX_PATH_BITS + 1
         )));
+    }
+
+    const NESTED_KEY_WARNING: &str = "is ignored because it is on a node nested inside an element";
+
+    fn expand(tokens: TokenStream2) -> String {
+        syn::parse2::<CallBody>(tokens)
+            .unwrap()
+            .to_token_stream()
+            .to_string()
+    }
+
+    fn nested_key_warnings(tokens: TokenStream2) -> usize {
+        expand(tokens).matches(NESTED_KEY_WARNING).count()
+    }
+
+    #[test]
+    fn warns_on_key_of_element_nested_in_element() {
+        let expanded = expand(quote! {
+            div {
+                span { key: "{id}" }
+            }
+        });
+        assert_eq!(expanded.matches(NESTED_KEY_WARNING).count(), 1);
+        assert!(expanded.contains("The key `\\\"{id}\\\"` is ignored"));
+    }
+
+    #[test]
+    fn warns_on_key_of_component_nested_in_element() {
+        let expanded = expand(quote! {
+            div {
+                Item { key: "{id}" }
+            }
+        });
+        assert_eq!(expanded.matches(NESTED_KEY_WARNING).count(), 1);
+        assert!(expanded.contains("The key `\\\"{id}\\\"` is ignored"));
+    }
+
+    #[test]
+    fn warns_on_key_that_is_not_a_formatted_string() {
+        let expanded = expand(quote! {
+            div {
+                span { key: id }
+            }
+        });
+        assert_eq!(expanded.matches(NESTED_KEY_WARNING).count(), 1);
+        assert!(expanded.contains("This key is ignored"));
+    }
+
+    #[test]
+    fn warns_on_key_nested_deeply() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {
+                    div {
+                        div {
+                            span { key: "{id}" }
+                        }
+                    }
+                }
+            }),
+            1
+        );
+    }
+
+    #[test]
+    fn warns_on_every_nested_key() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {
+                    ul {
+                        key: "{list}",
+                        li { key: "{first}" }
+                        li { key: "{second}" }
+                    }
+                }
+            }),
+            3
+        );
+    }
+
+    #[test]
+    fn warns_on_nested_key_in_later_root() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {}
+                div {
+                    span { key: "{id}" }
+                }
+            }),
+            1
+        );
+    }
+
+    #[test]
+    fn warns_on_nested_key_in_for_loop_body() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                for id in ids {
+                    div {
+                        span { key: "{id}" }
+                    }
+                }
+            }),
+            1
+        );
+    }
+
+    #[test]
+    fn warns_on_nested_key_in_if_branches() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                if condition {
+                    div {
+                        span { key: "{first}" }
+                    }
+                } else if other {
+                    div {
+                        span { key: "{second}" }
+                    }
+                } else {
+                    div {
+                        span { key: "{third}" }
+                    }
+                }
+            }),
+            3
+        );
+    }
+
+    #[test]
+    fn warns_on_nested_key_in_component_children() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                Wrapper {
+                    div {
+                        span { key: "{id}" }
+                    }
+                }
+            }),
+            1
+        );
+    }
+
+    #[test]
+    fn keeps_first_node_in_block_warning() {
+        let expanded = expand(quote! {
+            div { key: "{first}" }
+            div { key: "{second}" }
+        });
+        assert_eq!(
+            expanded
+                .matches("Keys are only allowed on the first node in the block.")
+                .count(),
+            1
+        );
+        assert_eq!(expanded.matches(NESTED_KEY_WARNING).count(), 0);
+    }
+
+    #[test]
+    fn silent_on_key_of_first_root_element() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {
+                    key: "{id}",
+                    span {}
+                }
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn silent_on_key_of_first_root_component() {
+        assert_eq!(nested_key_warnings(quote! { Item { key: "{id}" } }), 0);
+    }
+
+    #[test]
+    fn silent_on_key_of_first_node_in_for_loop_body() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {
+                    for id in ids {
+                        li { key: "{id}" }
+                    }
+                }
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn silent_on_key_of_first_node_in_if_branches() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {
+                    if condition {
+                        li { key: "{first}" }
+                    } else if other {
+                        li { key: "{second}" }
+                    } else {
+                        li { key: "{third}" }
+                    }
+                }
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn silent_on_key_of_first_node_in_component_children() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {
+                    Wrapper {
+                        li { key: "{id}" }
+                    }
+                }
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn silent_on_key_inside_expression() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {
+                    {ids.iter().map(|id| rsx! { li { key: "{id}" } })}
+                }
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn silent_without_keys() {
+        assert_eq!(
+            nested_key_warnings(quote! {
+                div {
+                    span { class: "key" }
+                    Item { value: "{id}" }
+                }
+            }),
+            0
+        );
     }
 }

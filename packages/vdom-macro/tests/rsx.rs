@@ -4,6 +4,14 @@ fn rsx() {
     t.compile_fail("tests/rsx/trailing-comma-0.rs");
 }
 
+#[rustversion::not(nightly)]
+#[test]
+fn ignored_keys() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/rsx/ignored-keys.rs");
+    t.pass("tests/rsx/working-keys.rs");
+}
+
 /// This test ensures that automatic `into` conversion occurs for default values.
 ///
 /// These are compile-time tests.
