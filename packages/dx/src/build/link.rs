@@ -1401,7 +1401,6 @@ impl BuildRequest {
         #[derive(Debug, Serialize)]
         struct RustcWrapperScope {
             version: u8,
-            dx_version: &'static str,
             workspace_root: String,
             capture_mode: &'static str,
             bundle: String,
@@ -1420,7 +1419,6 @@ impl BuildRequest {
 
         let scope = RustcWrapperScope {
             version: 1,
-            dx_version: crate::dx_build_info::PKG_VERSION,
             // Captured args hold absolute paths, so they can't be shared between workspaces
             // (or git worktrees) that use the same target dir.
             workspace_root: self.workspace_dir().to_string_lossy().into_owned(),
