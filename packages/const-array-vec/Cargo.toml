@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-const-vec"
+name = "const-array-vec"
 version = { workspace = true }
 authors = ["Evan Almloff"]
 edition = "2024"

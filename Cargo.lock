@@ -2134,6 +2134,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-array-vec"
+version = "0.8.0-alpha.3"
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2169,8 +2173,8 @@ dependencies = [
 name = "const-serialize"
 version = "0.8.0-alpha.3"
 dependencies = [
+ "const-array-vec",
  "const-serialize-macro",
- "dioxus-const-vec",
  "rand 0.9.4",
  "serde",
 ]
@@ -3287,10 +3291,6 @@ name = "dioxus-config-macros"
 version = "0.8.0-alpha.3"
 
 [[package]]
-name = "dioxus-const-vec"
-version = "0.8.0-alpha.3"
-
-[[package]]
 name = "dioxus-core"
 version = "0.8.0-alpha.3"
 dependencies = [
@@ -4110,7 +4110,6 @@ dependencies = [
  "const_format",
  "criterion",
  "dioxus",
- "dioxus-const-vec",
  "dioxus-html",
  "dioxus-renderer-oracle",
  "dioxus-ssr",
@@ -4174,7 +4173,7 @@ dependencies = [
 name = "dioxus-vdom-template"
 version = "0.8.0-alpha.3"
 dependencies = [
- "dioxus-const-vec",
+ "const-array-vec",
  "serde",
  "xxhash-rust",
 ]

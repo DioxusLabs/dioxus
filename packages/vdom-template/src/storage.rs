@@ -1,4 +1,4 @@
-use dioxus_const_vec::ConstVec;
+use const_array_vec::ConstVec;
 
 use super::anchor::ROOT_PARENT_OP_INDEX;
 use super::{Template, TemplateAnchor, TemplatePath, TemplateRawTree, TemplateSlotPath};
