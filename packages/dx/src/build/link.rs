@@ -228,8 +228,8 @@ impl BuildRequest {
             )
             .expect("failed to resolve patch symbols");
 
-            // Currently we're dropping stub.o in the exe dir, but should probably just move to a tempfile?
-            let patch_file = self.main_exe().with_file_name("stub.o");
+            // Keep stub.o in the per-run session cache so concurrent sessions can't clobber it.
+            let patch_file = self.session_cache_dir().join("stub.o");
             std::fs::write(&patch_file, stub_bytes)?;
             object_files.push(patch_file);
 
@@ -1401,6 +1401,7 @@ impl BuildRequest {
         #[derive(Debug, Serialize)]
         struct RustcWrapperScope {
             version: u8,
+            workspace_root: String,
             capture_mode: &'static str,
             bundle: String,
             triple: String,
@@ -1418,6 +1419,9 @@ impl BuildRequest {
 
         let scope = RustcWrapperScope {
             version: 1,
+            // Captured args hold absolute paths, so they can't be shared between workspaces
+            // (or git worktrees) that use the same target dir.
+            workspace_root: self.workspace_dir().to_string_lossy().into_owned(),
             capture_mode: self.rustc_wrapper_capture_mode(build_mode),
             bundle: self.bundle.to_string(),
             triple: self.triple.to_string(),
@@ -1446,6 +1450,34 @@ impl BuildRequest {
             &scope_hash[..16]
         ))
     }
+}
+
+/// The per-workspace folder name used for dx's files when `target_dir` is outside of
+/// `workspace_root`: `<workspace folder name>-<hash of the workspace path>`.
+pub(crate) fn shared_target_scope(target_dir: &Path, workspace_root: &Path) -> Option<String> {
+    // The target dir may not exist yet, so canonicalize its nearest existing ancestor.
+    let resolve = |path: &Path| {
+        let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+        for ancestor in path.ancestors() {
+            if let Ok(resolved) = dunce::canonicalize(ancestor) {
+                return resolved.join(path.strip_prefix(ancestor).unwrap_or(Path::new("")));
+            }
+        }
+        path
+    };
+    let workspace_root = resolve(workspace_root);
+    if resolve(target_dir).starts_with(&workspace_root) {
+        return None;
+    }
+
+    let mut hasher = Sha256::new();
+    hasher.update(workspace_root.to_string_lossy().as_bytes());
+    let hash = format!("{:x}", hasher.finalize());
+    let name = workspace_root
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    Some(format!("{name}-{}", &hash[..8]))
 }
 
 /// Reconstruct the dep-info `.d` path that rustc will write for an invocation, by parsing the
@@ -1532,6 +1564,28 @@ fn linker_flavor_for_triple(triple: &target_lexicon::Triple) -> LinkerFlavor {
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    #[test]
+    fn shared_target_scope_only_applies_outside_the_workspace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, worktree) = (tmp.path().join("app"), tmp.path().join("wt").join("app"));
+        let shared = tmp.path().join("shared-target");
+        for dir in [&main, &worktree, &shared] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+
+        // The default layout is left alone, whether or not the target dir exists yet.
+        assert_eq!(shared_target_scope(&main.join("target"), &main), None);
+        std::fs::create_dir_all(main.join("target")).unwrap();
+        assert_eq!(shared_target_scope(&main.join("target"), &main), None);
+
+        // Two checkouts with the same folder name get distinct, stable scopes.
+        let a = shared_target_scope(&shared, &main).unwrap();
+        let b = shared_target_scope(&shared, &worktree).unwrap();
+        assert!(a.starts_with("app-") && b.starts_with("app-"));
+        assert_ne!(a, b);
+        assert_eq!(shared_target_scope(&shared, &main).unwrap(), a);
+    }
 
     #[test]
     fn bsd_triples_use_gnu_linker_flavor() {

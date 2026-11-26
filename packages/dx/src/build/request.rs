@@ -2635,6 +2635,21 @@ impl BuildRequest {
         self.session_cache_dir.join(self.bundle.to_string())
     }
 
+    /// A folder name unique to this workspace when the target dir lives outside of it, e.g. a
+    /// target dir shared between projects or git worktrees. `None` for the default layout.
+    pub(crate) fn shared_target_scope(&self) -> Option<String> {
+        super::link::shared_target_scope(&self.target_dir, &self.workspace_dir())
+    }
+
+    /// A directory in the target dir for dx's own intermediate build files. Kept per-workspace
+    /// when the target dir is shared.
+    pub(crate) fn intermediate_dir(&self, name: &str) -> PathBuf {
+        match self.shared_target_scope() {
+            Some(scope) => self.target_dir.join("dx").join(scope).join(name),
+            None => self.target_dir.join(name),
+        }
+    }
+
     pub(crate) fn rustc_wrapper_args_dir(&self) -> PathBuf {
         self.target_dir.join("dx").join(".captured-args")
     }
@@ -2692,7 +2707,10 @@ impl BuildRequest {
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
     fn internal_out_dir(&self) -> PathBuf {
-        let dir = self.target_dir.join("dx");
+        let mut dir = self.target_dir.join("dx");
+        if let Some(scope) = self.shared_target_scope() {
+            dir.push(scope);
+        }
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }

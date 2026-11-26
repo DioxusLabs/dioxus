@@ -843,7 +843,7 @@ We checked the folders:
             return Ok(());
         }
 
-        let build_dir = self.target_dir.join("swift-build");
+        let build_dir = self.intermediate_dir("swift-build");
         std::fs::create_dir_all(&build_dir)?;
 
         // Compile Swift sources and get the framework bundle path
@@ -971,7 +971,7 @@ We checked the folders:
             widget_configs.len()
         );
 
-        let build_dir = self.target_dir.join("widget-build");
+        let build_dir = self.intermediate_dir("widget-build");
         std::fs::create_dir_all(&build_dir)?;
 
         let app_bundle_id = self.bundle_identifier();
