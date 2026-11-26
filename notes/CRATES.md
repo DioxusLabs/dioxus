@@ -207,31 +207,6 @@ per icon.
 | --- | --- | --- |
 | `.` | `dioxus-test` | Renders a Dioxus app headlessly on the native renderer so tests can interact with and query the DOM, with control over render lifecycle and async work. |
 
-## Docsite (21 crates)
-
-[DioxusLabs/docsite](https://github.com/DioxusLabs/docsite): the dioxuslabs.com site, with the
-guide for each release, the blog, the playground and search.
-
-| Directory | Crate | What it is |
-| --- | --- | --- |
-| `packages/docsite` | `dioxus_docs_site` | The website itself. |
-| `packages/docs-03` … `packages/docs-07` | `dioxus-docs-03` … `dioxus-docs-07` | The guide for each release (0.3 to 0.7), compiled from `docs-src/<version>` mdbooks. Not published. |
-| `packages/docs-blog` | `dioxus-docs-blog` | Blog posts, compiled from `docs-src/blog`. Not published. |
-| `packages/docs-router` | `dioxus-docs-examples` | Runnable code examples embedded in the guide. |
-| `packages/include_mdbook/packages/use-mdbook` | `use-mdbook` | `use_mdbook` hook and `include_mdbook!` for loading an mdbook's contents at compile time. |
-| `packages/include_mdbook/packages/mdbook-macro` | `mdbook-macro` | The `include_mdbook!` proc macro. |
-| `packages/include_mdbook/packages/mdbook-gen` | `mdbook-gen` | Build-script codegen that turns an mdbook into Dioxus routes and components. |
-| `packages/include_mdbook/packages/mdbook-shared` | `mdbook-shared` | mdbook types shared by the crates above. |
-| `packages/notion-to-blog` | `notion-to-blog` | Converts Notion exports into blog posts. Not published. |
-| `packages/playground/playground` | `dioxus-playground` | The playground component library: an editor that builds and runs Dioxus code in the browser. |
-| `packages/playground/server` | `server` | Axum server that queues and compiles submitted code to WASM. |
-| `packages/playground/model` | `model` | Types shared by the playground client and server. |
-| `packages/playground/runner` | `runner` | Wraps the playground component to run it. |
-| `packages/playground/example-projects` | `example-projects` | The snippets the playground offers, with their index. |
-| `packages/search/search` | `dioxus-search` | Prebuilt search index over a site's static router routes. |
-| `packages/search/search-macro` | `dioxus-search-macro` | Macro that loads the search index. |
-| `packages/search/search-shared` | `dioxus-search-shared` | Types shared by the search crates. |
-
 ## Template (4 templates)
 
 [DioxusLabs/dioxus-template](https://github.com/DioxusLabs/dioxus-template): the cargo-generate
