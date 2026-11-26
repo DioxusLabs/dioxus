@@ -20,7 +20,7 @@ General-purpose building blocks with no dependency on Dioxus Core. Usable outsid
 
 | Directory | Crate | What it is |
 | --- | --- | --- |
-| `dioxus-const-vec` | `dioxus-const-vec` | A fixed-capacity `Vec` usable in `const` contexts. |
+| `const-array-vec` | `const-array-vec` | A fixed-capacity `Vec` usable in `const` contexts. |
 | `subsecond/subsecond` | `subsecond` | Runtime hot-patching engine: calls go through a jump table that `dx` patches with newly compiled code. |
 | `subsecond/subsecond-types` | `subsecond-types` | Shared types for subsecond (`JumpTable`, `AddressHasher`). |
 | `dx-env` | `dx-env` | The generic env-var contract between `dx` and the app it launches (`DX_*`, falling back to `DIOXUS_*`). |
