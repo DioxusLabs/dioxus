@@ -55,7 +55,7 @@ fn native_event_data_can_be_constructed_outside_the_crate() {
         .get_node(node(&doc, "#target"))
         .unwrap()
         .synthetic_click_event_data(Default::default());
-    pointer.id = BlitzPointerId::Finger(7);
+    pointer.id = BlitzPointerId::finger(7);
 
     let wheel = WheelData::new(NativeWheelData::new(BlitzWheelEvent {
         delta: BlitzWheelDelta::Pixels(0.0, -10.0),

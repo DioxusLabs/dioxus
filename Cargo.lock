@@ -1099,9 +1099,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-dom"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40ce1064a044fdc69404f214798b8d2dd0285c467c0308cd908552e44147297c"
+checksum = "ddb8cfa4fe78baf7b3da6376a8b55586181df9ace375e0ca55e49c139bb65c62"
 dependencies = [
  "accesskit",
  "anyrender",
@@ -1152,9 +1152,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-html"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd644c32a7a8ca1086178d4f71c62f22e8dd18c44f20f02fc6b0fc3986401a4"
+checksum = "735cdd0e8c65ba99e3be8c26709145f2ae12f18dcd35a79c96efd8c6fd5ab7f8"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -1165,9 +1165,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-net"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a67a1f238ce7b3e90be4607fa4b93daf208a30f5829e10cb77e7cc9ef0e5aca"
+checksum = "ae230441ea6900cd773ca6e18882a3b8336a61c537c68574fdab6f0bcd800730"
 dependencies = [
  "blitz-traits",
  "data-url",
@@ -1179,9 +1179,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-paint"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdcf757ca9b72ebcec2ef488c42a40b1cf54bebd66e440789cc799f9c7dfc7cf"
+checksum = "e23aec63c288da0e1b0335fc482b0e8d6c81a6c31467d1cae340c365b5e8160b"
 dependencies = [
  "anyrender",
  "anyrender_svg",
@@ -1200,9 +1200,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-shell"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "685e3e1865af56dda3623d6c00cca1978dec18f908360427a6a935a8d5366f4d"
+checksum = "f052bb81c10a0fe2fae9b9c12823a24fcf8abdf5dc12a35b9b02a946de49e93b"
 dependencies = [
  "accesskit",
  "accesskit_xplat",
@@ -1228,9 +1228,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-traits"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42a95f0871911e7c5fc69b7b11d3bf4ed2e02336dfc9292c5bd03fbafa086a40"
+checksum = "e15fa1bafd39e7710e35f83375a8d1966e65ab4d5496e58083c47bb4c70d8bbd"
 dependencies = [
  "atomic_refcell",
  "bitflags 2.13.2",
@@ -1245,9 +1245,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-vibey-cdp-server"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e686e49a76cb2d93223101f06d3e328c45bbb1067003c9d587b5a007ffa3bd4b"
+checksum = "424f5f7d6dd7298864d75f8343044884d8d058545d8f922a1faa1557fc99044d"
 dependencies = [
  "blitz-chrome-devtools-frontend",
  "blitz-dom",
@@ -13461,9 +13461,9 @@ dependencies = [
 
 [[package]]
 name = "stylo_taffy"
-version = "0.3.0-beta.5"
+version = "0.3.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ad348de489201b4faeb6dd8c865103e70ba8684fee81658bd95eb093db34fb0"
+checksum = "7612e90a64f9521cb2ff39aed9178165f1b1d2b53ff02cbcbe80bb9a8b6e8bf0"
 dependencies = [
  "bitflags 2.13.2",
  "stylo",

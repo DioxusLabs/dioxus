@@ -147,7 +147,7 @@ fn main() {
     // =============
 
     let event = UiEvent::PointerDown(BlitzPointerEvent {
-        id: BlitzPointerId::Mouse,
+        id: BlitzPointerId::mouse(),
         is_primary: true,
         coords: PointerCoords {
             page_x: 30.0,
