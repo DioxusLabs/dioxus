@@ -81,6 +81,8 @@ impl RouteSegment {
                     {
                         let mut segments = segments.clone();
                         let segment = segments.next();
+                        // `map_err` is unreachable when the segment's error is `Infallible` (a `String`)
+                        #[allow(unreachable_code)]
                         let parsed = if let Some(segment) = segment.as_deref() {
                             <#ty as dioxus_router::routable::FromRouteSegment>::from_route_segment(segment).map_err(|err| #error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(err)))
                         } else {
@@ -100,6 +102,8 @@ impl RouteSegment {
             Self::CatchAll(name, ty) => {
                 quote! {
                     {
+                        // `map_err` is unreachable when the segments' error is `Infallible` (strings)
+                        #[allow(unreachable_code)]
                         let parsed = {
                             let remaining_segments: Vec<_> = segments.collect();
                             let mut new_segments: Vec<&str> = Vec::new();
