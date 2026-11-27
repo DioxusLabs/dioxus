@@ -67,7 +67,7 @@ impl FromResponse for NoContent {
                 Err(ServerFnError::ServerError {
                     message: body,
                     code: status.as_u16(),
-                    details: details,
+                    details,
                 })
             }
         }
