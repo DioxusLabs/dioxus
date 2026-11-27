@@ -151,12 +151,14 @@ impl dioxus_history::History for WebHistory {
     }
 
     fn replace(&self, state: String) {
+        let same_path = same_path(&self.current_route(), &state);
         if replace_state_with_url(
             &self.history,
             &self.create_state(),
             Some(&self.full_path(&state)),
         )
         .is_ok()
+            && !same_path
         {
             self.handle_nav();
         }
@@ -305,12 +307,14 @@ impl dioxus_history::History for HashHistory {
     }
 
     fn replace(&self, state: String) {
+        let same_path = same_path(&self.current_route(), &state);
         if replace_state_with_url(
             &self.history,
             &self.create_state(),
             Some(&self.full_path(&state)),
         )
         .is_ok()
+            && !same_path
         {
             self.handle_nav();
         }
@@ -401,4 +405,83 @@ pub(crate) fn get_current(history: &History) -> Option<[f64; 2]> {
 fn update_scroll(window: &Window, history: &History) {
     let scroll = ScrollPosition::of_window(window);
     let _ = replace_state_with_url(history, &[scroll.x, scroll.y], None);
+}
+
+fn same_path(current_route: &str, new_route: &str) -> bool {
+    route_path(current_route) == route_path(new_route)
+}
+
+fn route_path(route: &str) -> &str {
+    let end = route.find(['?', '#']).unwrap_or(route.len());
+    route[..end].trim_end_matches('/')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::same_path;
+
+    #[test]
+    fn same_path_with_different_query() {
+        assert!(same_path("/search?q=one", "/search?q=two"));
+        assert!(same_path("/search", "/search?q=one"));
+        assert!(same_path("/search?q=one", "/search"));
+    }
+
+    #[test]
+    fn same_path_with_different_fragment() {
+        assert!(same_path("/page#one", "/page#two"));
+        assert!(same_path("/page", "/page#one"));
+        assert!(same_path("/page#one", "/page"));
+    }
+
+    #[test]
+    fn same_path_with_different_query_and_fragment() {
+        assert!(same_path("/page?q=one#one", "/page?q=two#two"));
+        assert!(same_path("/page", "/page?q=one#one"));
+    }
+
+    #[test]
+    fn same_path_with_identical_routes() {
+        assert!(same_path("/page", "/page"));
+        assert!(same_path("/page?q=one#one", "/page?q=one#one"));
+    }
+
+    #[test]
+    fn same_path_ignores_trailing_slashes() {
+        assert!(same_path("/page", "/page/"));
+        assert!(same_path("/page/", "/page"));
+        assert!(same_path("/page/?q=one", "/page?q=two"));
+        assert!(same_path("/page/#one", "/page#two"));
+    }
+
+    #[test]
+    fn same_path_for_root_and_empty_routes() {
+        assert!(same_path("/", ""));
+        assert!(same_path("", "/"));
+        assert!(same_path("/", "/?q=one"));
+        assert!(same_path("", "#one"));
+        assert!(same_path("/", "?q=one"));
+    }
+
+    #[test]
+    fn different_path() {
+        assert!(!same_path("/page", "/other"));
+        assert!(!same_path("/page", "/page/child"));
+        assert!(!same_path("/page/child", "/page"));
+        assert!(!same_path("/", "/page"));
+        assert!(!same_path("/page?q=one", "/other?q=one"));
+        assert!(!same_path("/page#one", "/other#one"));
+    }
+
+    #[test]
+    fn query_and_fragment_characters_do_not_count_as_path() {
+        assert!(same_path("/page?next=/other", "/page"));
+        assert!(same_path("/page#/other", "/page"));
+        assert!(!same_path("/page?q=one", "/pageq=one"));
+    }
+
+    #[test]
+    fn path_comparison_is_case_sensitive() {
+        assert!(!same_path("/Page", "/page"));
+    }
 }
