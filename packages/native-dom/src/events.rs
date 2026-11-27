@@ -3,8 +3,9 @@ use blitz_dom::{
     ScrollLogicalPosition as BlitzScrollLogicalPosition,
 };
 use blitz_traits::events::{
-    BlitzDragEvent, BlitzKeyEvent, BlitzPointerEvent, BlitzScrollEvent, BlitzWheelDelta,
-    BlitzWheelEvent, BlitzWheelPhase, BlitzWheelSource, MouseEventButton, PointerKind,
+    BlitzDragEvent, BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, BlitzScrollEvent,
+    BlitzWheelDelta, BlitzWheelEvent, BlitzWheelPhase, BlitzWheelSource, MouseEventButton,
+    PointerKind,
 };
 use blitz_traits::net::Bytes;
 use dioxus_html::{
@@ -191,7 +192,31 @@ impl NodeHandle {
         let err = MountedError::OperationFailed(Box::new(NodeNotExistErr(node_id)));
         Box::pin(async move { Err(err) })
     }
+
+    fn pointer_capture_op(
+        &self,
+        pointer_id: i32,
+        op: impl FnOnce(&mut BaseDocument, BlitzPointerId) -> bool,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        let Some(pointer_id) = BlitzPointerId::from_i32(pointer_id) else {
+            let err = MountedError::OperationFailed(Box::new(InvalidPointerIdErr(pointer_id)));
+            return Box::pin(async move { Err(err) });
+        };
+        if !op(&mut self.doc_mut(), pointer_id) {
+            return self.node_not_exist_err();
+        }
+        Box::pin(async { Ok(()) })
+    }
 }
+
+#[derive(Debug)]
+struct InvalidPointerIdErr(i32);
+impl Display for InvalidPointerIdErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "No active pointer has the id {}", self.0)
+    }
+}
+impl std::error::Error for InvalidPointerIdErr {}
 
 #[derive(Debug)]
 struct NodeNotExistErr(NodeId);
@@ -313,6 +338,25 @@ impl RenderedElementBacking for NodeHandle {
         }
 
         Box::pin(async { Ok(()) })
+    }
+
+    fn set_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        let node_id = self.node_id;
+        self.pointer_capture_op(pointer_id, |doc, id| doc.set_pointer_capture(node_id, id))
+    }
+
+    fn release_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        let node_id = self.node_id;
+        self.pointer_capture_op(pointer_id, |doc, id| {
+            doc.release_pointer_capture(id, Some(node_id));
+            doc.get_node(node_id).is_some()
+        })
     }
 }
 
