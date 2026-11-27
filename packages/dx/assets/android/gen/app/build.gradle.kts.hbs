@@ -15,6 +15,11 @@ android {
         targetSdk = {{ target_sdk }}
         versionCode = 1
         versionName = "{{ version }}"
+        ndk {
+            // dx stages a single ABI's libraries in jniLibs. Pin the APK to it so nothing else —
+            // a stale build, or a prebuilt library from a plugin module — can be packaged.
+            abiFilters.add("{{ abi }}")
+        }
     }
     {{#if android_bundle}}
     signingConfigs {
