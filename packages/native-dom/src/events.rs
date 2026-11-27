@@ -144,6 +144,15 @@ impl HtmlEventConverter for NativeConverter {
         (*event.downcast::<NativeResizeData>().unwrap()).into()
     }
 
+    fn convert_window_resize_data(
+        &self,
+        _event: &PlatformEventData,
+    ) -> dioxus_html::WindowResizeData {
+        unimplemented!(
+            "todo: convert_window_resize_data in dioxus-native. requires support in blitz"
+        )
+    }
+
     fn convert_visible_data(&self, _event: &PlatformEventData) -> VisibleData {
         unimplemented!("todo: convert_visible_data in dioxus-native. requires support in blitz")
     }

@@ -4,11 +4,18 @@ mod document;
 mod elements;
 mod error;
 mod eval;
+mod listener;
 
 pub use document::*;
 pub use elements::*;
 pub use error::*;
 pub use eval::*;
+
+#[doc(hidden)]
+pub mod __private {
+    pub use crate::listener::{HookOptions, use_global_listener};
+    pub use dioxus_html::events::{DocumentTarget, WindowTarget};
+}
 
 /// Get the document provider for the current platform or a no-op provider if the platform doesn't document functionality.
 pub fn document() -> Rc<dyn Document> {

@@ -57,7 +57,9 @@ pub mod prelude {
     };
 
     #[cfg(feature = "document")]
-    pub use dioxus_document::{self as document, Meta, Stylesheet, Title};
+    pub use dioxus_document::{
+        self as document, Meta, Stylesheet, Title, use_document_listener, use_window_listener,
+    };
     #[cfg(feature = "hooks")]
     pub use dioxus_hooks::*;
     #[cfg(feature = "html")]

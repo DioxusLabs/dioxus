@@ -147,6 +147,8 @@ where
 }
 
 mod generated;
+mod global;
+pub use global::*;
 
 mod animation;
 mod before_input;

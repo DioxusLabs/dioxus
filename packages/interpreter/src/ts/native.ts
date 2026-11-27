@@ -23,6 +23,7 @@ export class NativeInterpreter extends JSChannel_ {
   edits: WebSocket;
   baseUri: string;
   eventsPath: string;
+  private globalEventListeners = new Map<number, () => void>();
   headless: boolean;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
@@ -349,6 +350,33 @@ export class NativeInterpreter extends JSChannel_ {
       // @ts-ignore
       window.dxDragLastElement = null;
     }
+  }
+
+  // Flags are a bitset: 1 = window (else document), 2 = capture, 4 = passive.
+  addGlobalEventListener(id: number, name: string, flags: number) {
+    const onWindow = (flags & 1) !== 0;
+    const capture = (flags & 2) !== 0;
+    const passive = (flags & 4) !== 0;
+    const target: EventTarget = onWindow ? window : document;
+    const callback = (event: Event) => {
+      const data = onWindow && name === "resize" ?
+        { width: window.innerWidth, height: window.innerHeight } :
+        serializeEvent(event, event.target ?? target);
+      const result = handleVirtualdomEventSync(`${this.baseUri}/__global_events`, JSON.stringify({
+        id,
+        data,
+        bubbles: event.bubbles,
+      }));
+      if (result.preventDefault && event.cancelable && !passive) event.preventDefault();
+    };
+    this.removeGlobalEventListener(id);
+    target.addEventListener(name, callback, { capture, passive });
+    this.globalEventListeners.set(id, () => target.removeEventListener(name, callback, capture));
+  }
+
+  removeGlobalEventListener(id: number) {
+    this.globalEventListeners.get(id)?.();
+    this.globalEventListeners.delete(id);
   }
 
   handleEvent(event: Event, name: string, bubbles: boolean) {

@@ -1,14 +1,43 @@
-use crate::{DesktopContext, WeakDesktopContext, query::Query};
+use crate::{DesktopContext, WeakDesktopContext, edits::WryQueue, query::Query};
 use dioxus_document::{
     Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
     create_element_in_head,
 };
+use dioxus_html::{EventTargetKind, GlobalEventCallback};
+use dioxus_html::{GlobalListenerOptions, GlobalListenerRegistration, GlobalListeners};
+use dioxus_interpreter_js::GlobalListenerFlags;
 use dioxus_vdom::queue_effect;
+use std::{cell::Cell, cell::RefCell, collections::BTreeMap};
 
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 /// Code for the Dioxus channel used to communicate between the dioxus and javascript code
 pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
+
+/// The window and document listeners registered in one webview.
+pub(crate) struct DesktopGlobalListeners {
+    next_id: Cell<u32>,
+    registrations: RefCell<BTreeMap<u32, (GlobalEventCallback, &'static str, EventTargetKind)>>,
+    edit_queue: WryQueue,
+}
+
+impl DesktopGlobalListeners {
+    pub(crate) fn new(edit_queue: WryQueue) -> Self {
+        Self {
+            next_id: Cell::new(0),
+            registrations: RefCell::default(),
+            edit_queue,
+        }
+    }
+
+    /// The callback, event name and target of the listener `id`.
+    pub(crate) fn get(
+        &self,
+        id: u32,
+    ) -> Option<(GlobalEventCallback, &'static str, EventTargetKind)> {
+        self.registrations.borrow().get(&id).cloned()
+    }
+}
 
 /// Represents the desktop-target's provider of evaluators.
 #[derive(Clone)]
@@ -20,6 +49,63 @@ impl DesktopDocument {
     pub fn new(desktop_ctx: DesktopContext) -> Self {
         let desktop_ctx = std::rc::Rc::downgrade(&desktop_ctx);
         Self { desktop_ctx }
+    }
+
+    /// Register the listener through the webview's edit stream, so it is attached in order with
+    /// the DOM edits of the render that produced it.
+    fn add_global_listener(
+        &self,
+        target: EventTargetKind,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        let ctx = self.desktop_ctx.upgrade()?;
+        let listeners = &ctx.global_listeners;
+        let id = listeners.next_id.get();
+        listeners.next_id.set(id.checked_add(1)?);
+        listeners
+            .registrations
+            .borrow_mut()
+            .insert(id, (callback, name, target));
+        let flags = GlobalListenerFlags {
+            window: target == EventTargetKind::Window,
+            capture: options.capture,
+            passive: options.passive,
+        };
+        listeners
+            .edit_queue
+            .with_mutation_state(|state| state.add_global_event_listener(id, name, flags));
+        let ctx = self.desktop_ctx.clone();
+        Some(GlobalListenerRegistration::new(move || {
+            if let Some(ctx) = ctx.upgrade() {
+                let listeners = &ctx.global_listeners;
+                listeners.registrations.borrow_mut().remove(&id);
+                listeners
+                    .edit_queue
+                    .with_mutation_state(|state| state.remove_global_event_listener(id));
+            }
+        }))
+    }
+}
+
+impl GlobalListeners for DesktopDocument {
+    fn add_window_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        self.add_global_listener(EventTargetKind::Window, name, options, callback)
+    }
+
+    fn add_document_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        self.add_global_listener(EventTargetKind::Document, name, options, callback)
     }
 }
 

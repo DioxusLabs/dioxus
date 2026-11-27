@@ -185,6 +185,7 @@ macro_rules! with_html_event_groups {
                 Media(MediaData),
 
                 #[convert = convert_mounted_data]
+                #[targets(element)]
                 #[events = [
                     #[doc(alias = "ref")]
                     #[doc(alias = "createRef")]
@@ -310,10 +311,19 @@ macro_rules! with_html_event_groups {
                 Pointer(PointerData),
 
                 #[convert = convert_resize_data]
+                #[targets(element)]
                 #[events = [
                     onresize => resize,
                 ]]
                 Resize(ResizeData),
+
+                #[convert = convert_window_resize_data]
+                #[targets(window)]
+                #[events = [
+                    /// Fired on the window when the layout viewport changes size.
+                    onresize => resize,
+                ]]
+                WindowResize(WindowResizeData),
 
                 #[convert = convert_scroll_data]
                 #[events = [
@@ -353,6 +363,7 @@ macro_rules! with_html_event_groups {
                 Transition(TransitionData),
 
                 #[convert = convert_visible_data]
+                #[targets(element)]
                 #[events = [
                     onvisible => visible,
                 ]]
@@ -374,6 +385,7 @@ macro_rules! expand_html_event_converter {
         enum Event {
             $(
                 #[convert = $converter:ident]
+                $(#[targets($($target:ident),* $(,)?)])?
                 #[events = [
                     $(
                         $( #[$attr:meta] )*
@@ -408,6 +420,7 @@ macro_rules! expand_html_event_deserialize {
         enum Event {
             $(
                 #[convert = $converter:ident]
+                $(#[targets($($target:ident),* $(,)?)])?
                 #[events = [
                     $(
                         $( #[$attr:meta] )*
@@ -422,6 +435,7 @@ macro_rules! expand_html_event_deserialize {
         pub(crate) fn deserialize_raw_event(
             name: &str,
             data: &serde_json::Value,
+            target: EventTargetKind,
         ) -> Result<Option<crate::transit::EventData>, serde_json::Error> {
             #[inline]
             fn de<'de, F>(f: &'de serde_json::Value) -> Result<F, serde_json::Error>
@@ -431,9 +445,13 @@ macro_rules! expand_html_event_deserialize {
                 F::deserialize(f)
             }
 
+            // Two groups may share an event name when their targets differ, so a group that
+            // declares its targets only matches for those.
             Ok(match name {
                 $(
-                    $( stringify!($raw) )|* $($(| stringify!($raw_only))*)? => {
+                    $( stringify!($raw) )|* $($(| stringify!($raw_only))*)?
+                        $(if matches!(target, $(EventTargetKind::$target)|*))? =>
+                    {
                         Some(expand_html_event_deserialize!(@deserialize $group, data))
                     }
                 )*
@@ -454,6 +472,7 @@ macro_rules! expand_html_event_listeners {
         enum Event {
             $(
                 #[convert = $converter:ident]
+                $(#[targets($($target:ident),* $(,)?)])?
                 #[events = [
                     $(
                         $( #[$attr:meta] )*
@@ -467,10 +486,13 @@ macro_rules! expand_html_event_listeners {
     ) => {
         dioxus_html_internal_macro::impl_event_extensions! {
             $(
-                $(
-                    $( #[$attr] )*
-                    $name => $raw => $data,
-                )*
+                $(#[targets($($target),*)])?
+                [
+                    $(
+                        $( #[$attr] )*
+                        $name => $raw => $data,
+                    )*
+                ]
             )*
         }
     };

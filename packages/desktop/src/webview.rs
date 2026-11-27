@@ -10,7 +10,10 @@ use crate::{
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_hooks::to_owned;
-use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
+use dioxus_html::{
+    EventData, FileData, FormValue, GlobalEventInput, HtmlEvent, PlatformEventData,
+    SerializedFileData, deserialize_event_data,
+};
 use dioxus_vdom::{RenderTargetId, Runtime, VirtualDom};
 use std::rc::Rc;
 use std::sync::{Arc, atomic::AtomicBool};
@@ -61,6 +64,14 @@ pub(crate) struct WebviewEdits {
     desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GlobalEventMessage {
+    id: u32,
+    data: serde_json::Value,
+    bubbles: bool,
+}
+
 impl WebviewEdits {
     fn new(runtime: Rc<Runtime>, target_id: RenderTargetId, wry_queue: WryQueue) -> Self {
         Self {
@@ -75,9 +86,10 @@ impl WebviewEdits {
         &self,
         request: wry::http::Request<Vec<u8>>,
         responder: wry::RequestAsyncResponder,
+        global: bool,
     ) {
         let body = self
-            .try_handle_event(request)
+            .try_handle_event(request, global)
             .expect("Writing bodies to succeed");
         responder.respond(wry::http::Response::new(body))
     }
@@ -85,6 +97,7 @@ impl WebviewEdits {
     pub fn try_handle_event(
         &self,
         request: wry::http::Request<Vec<u8>>,
+        global: bool,
     ) -> Result<Vec<u8>, serde_json::Error> {
         use serde::de::Error;
 
@@ -105,6 +118,19 @@ impl WebviewEdits {
 
         let data_from_header = base64::Engine::decode(&BASE64_STANDARD, as_utf)
             .map_err(|_| Error::custom("dioxus-data header is not a base64 string"))?;
+
+        if global {
+            #[cfg(target_os = "android")]
+            let _lock = crate::android_sync_lock::android_runtime_lock();
+            let response = match serde_json::from_slice::<GlobalEventMessage>(&data_from_header) {
+                Ok(event) => self.handle_global_event(event),
+                Err(error) => {
+                    tracing::debug!(%error, "Ignoring malformed Desktop global event message");
+                    SynchronousEventResponse::default()
+                }
+            };
+            return serde_json::to_vec(&response);
+        }
 
         let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
@@ -129,6 +155,33 @@ impl WebviewEdits {
         })
     }
 
+    fn handle_global_event(&self, event: GlobalEventMessage) -> SynchronousEventResponse {
+        let Some(context) = self
+            .desktop_context
+            .get()
+            .and_then(|context| context.upgrade())
+        else {
+            return SynchronousEventResponse::default();
+        };
+        let Some((callback, name, target)) = context.global_listeners.get(event.id) else {
+            return SynchronousEventResponse::default();
+        };
+        let data = match deserialize_event_data(name, target, &event.data) {
+            Ok(data) => data,
+            Err(error) => {
+                tracing::debug!(%error, "Ignoring malformed Desktop global event data");
+                return SynchronousEventResponse::default();
+            }
+        };
+        let result = callback(GlobalEventInput {
+            payload: platform_event_data(&context, data),
+            bubbles: event.bubbles,
+        });
+        SynchronousEventResponse {
+            prevent_default: result.prevent_default,
+        }
+    }
+
     pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
         let HtmlEvent {
             element,
@@ -145,77 +198,14 @@ impl WebviewEdits {
 
         let desktop_context = desktop_context.upgrade().unwrap();
 
-        let query = desktop_context.query.clone();
-        let hovered_file = desktop_context.file_hover.clone();
-
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
-            dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
+            EventData::Mounted => {
+                let query = desktop_context.query.clone();
+                let element = DesktopElement::new(element, desktop_context.clone(), query);
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
-            dioxus_html::EventData::Form(form) => {
-                Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
-                    value: form.value,
-                    valid: form.valid,
-                    values: form
-                        .values
-                        .into_iter()
-                        .map(|obj| {
-                            if let Some(text) = obj.text {
-                                return (obj.key, FormValue::Text(text));
-                            }
-
-                            if let Some(file_data) = obj.file {
-                                if file_data.path.capacity() == 0 {
-                                    return (obj.key, FormValue::File(None));
-                                }
-
-                                return (
-                                    obj.key,
-                                    FormValue::File(Some(FileData::new(DesktopFileData(
-                                        file_data.path,
-                                    )))),
-                                );
-                            };
-
-                            (obj.key, FormValue::Text(String::new()))
-                        })
-                        .collect(),
-                })))
-            }
-            // Which also includes drops...
-            dioxus_html::EventData::Drag(ref drag) => {
-                // we want to override this with a native file engine, provided by the most recent drag event
-                let full_file_paths = hovered_file.current_paths();
-
-                let xfer_data = drag.data_transfer.clone();
-                let new_file_data = xfer_data
-                    .files
-                    .iter()
-                    .map(|f| {
-                        let new_path = full_file_paths
-                            .iter()
-                            .find(|p| p.ends_with(&f.path))
-                            .unwrap_or(&f.path);
-                        SerializedFileData {
-                            path: new_path.clone(),
-                            ..f.clone()
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                let new_xfer_data = dioxus_html::SerializedDataTransfer {
-                    files: new_file_data,
-                    ..xfer_data
-                };
-
-                Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
-                    mouse: drag.mouse.clone(),
-                    data_transfer: new_xfer_data,
-                    files: full_file_paths,
-                })))
-            }
-            _ => data.into_any(),
+            data => platform_event_data(&desktop_context, data),
         };
 
         let event = dioxus_vdom::Event::new(as_any, bubbles);
@@ -224,6 +214,75 @@ impl WebviewEdits {
 
         // Get the response from the event
         SynchronousEventResponse::new(!event.default_action_enabled())
+    }
+}
+
+/// Convert deserialized event data to the platform data handlers receive, replacing the parts
+/// that only the desktop side can provide.
+fn platform_event_data(desktop_context: &DesktopContext, data: EventData) -> Rc<dyn std::any::Any> {
+    match data {
+        dioxus_html::EventData::Form(form) => {
+            Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
+                value: form.value,
+                valid: form.valid,
+                values: form
+                    .values
+                    .into_iter()
+                    .map(|obj| {
+                        if let Some(text) = obj.text {
+                            return (obj.key, FormValue::Text(text));
+                        }
+
+                        if let Some(file_data) = obj.file {
+                            if file_data.path.capacity() == 0 {
+                                return (obj.key, FormValue::File(None));
+                            }
+
+                            return (
+                                obj.key,
+                                FormValue::File(Some(FileData::new(DesktopFileData(
+                                    file_data.path,
+                                )))),
+                            );
+                        };
+
+                        (obj.key, FormValue::Text(String::new()))
+                    })
+                    .collect(),
+            })))
+        }
+        // Which also includes drops...
+        dioxus_html::EventData::Drag(ref drag) => {
+            // we want to override this with a native file engine, provided by the most recent drag event
+            let full_file_paths = desktop_context.file_hover.current_paths();
+
+            let xfer_data = drag.data_transfer.clone();
+            let new_file_data = xfer_data
+                .files
+                .iter()
+                .map(|f| {
+                    let new_path = full_file_paths
+                        .iter()
+                        .find(|p| p.ends_with(&f.path))
+                        .unwrap_or(&f.path);
+                    SerializedFileData {
+                        path: new_path.clone(),
+                        ..f.clone()
+                    }
+                })
+                .collect::<Vec<_>>();
+            let new_xfer_data = dioxus_html::SerializedDataTransfer {
+                files: new_file_data,
+                ..xfer_data
+            };
+
+            Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
+                mouse: drag.mouse.clone(),
+                data_transfer: new_xfer_data,
+                files: full_file_paths,
+            })))
+        }
+        _ => data.into_any(),
     }
 }
 
@@ -621,6 +680,7 @@ impl WebviewInstance {
             asset_handlers,
             file_hover,
             cfg.window_close_behavior,
+            edit_queue,
         ));
 
         // Provide the desktop context to the edit handler.

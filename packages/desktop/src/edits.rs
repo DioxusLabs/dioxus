@@ -48,19 +48,13 @@ pub(crate) struct WryQueue {
 }
 
 impl WryQueue {
-    /// Whether any mutations have been written since the last `clear_touched`.
+    /// Whether any mutations have been written since the last `send_edits`.
     pub(crate) fn is_touched(&self) -> bool {
         self.inner.borrow().touched
     }
 
-    /// Reset the touched flag - called after `send_edits` so the next render
-    /// pass can detect a fresh batch of writes.
-    pub(crate) fn clear_touched(&self) {
-        self.inner.borrow_mut().touched = false;
-    }
-
     #[inline]
-    fn with_mutation_state(&mut self, f: impl FnOnce(&mut MutationState)) {
+    pub(crate) fn with_mutation_state(&self, f: impl FnOnce(&mut MutationState)) {
         let mut inner = self.inner.borrow_mut();
         inner.touched = true;
         f(&mut inner.mutation_state);
@@ -103,6 +97,7 @@ impl WryQueue {
     pub(crate) fn send_edits(&self) {
         let mut myself = self.inner.borrow_mut();
         let webview_id = myself.location.webview_id;
+        myself.touched = false;
         let serialized_edits = myself.mutation_state.export_memory();
         let receiver = myself.websocket.send_edits(webview_id, serialized_edits);
         myself.edits_in_progress = Some(receiver);
@@ -174,7 +169,7 @@ pub(crate) struct WryQueueInner {
     // new server location. The notify it waits on is owned by `websocket.server_location`.
     server_location_changed_future: Pin<Box<dyn Future<Output = ()>>>,
     mutation_state: MutationState,
-    /// `true` if any mutation has been forwarded since the last `clear_touched`.
+    /// `true` if any mutation has been forwarded since the last `send_edits`.
     /// Used by the desktop app to decide which webviews need a `send_edits` call
     /// after a render pass.
     touched: bool,

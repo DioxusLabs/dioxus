@@ -155,6 +155,13 @@ macro_rules! with_web_event_converters {
             convert_resize_data(ResizeData) => web_sys::CustomEvent => |event| {
                 Synthetic::<web_sys::ResizeObserverEntry>::from(downcast_event(event).raw.clone()).into()
             };
+            convert_window_resize_data(WindowResizeData) => web_sys::Event => |_event| {
+                let size = |value: Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>| {
+                    value.ok().and_then(|value| value.as_f64()).unwrap_or_default()
+                };
+                let window = web_sys::window().expect("should have access to the Window");
+                dioxus_html::WindowResizeData::new(size(window.inner_width()), size(window.inner_height()))
+            };
             convert_scroll_data(ScrollData) => web_sys::Event;
             convert_selection_data(SelectionData) => web_sys::Event;
             convert_toggle_data(ToggleData) => web_sys::Event;
@@ -209,6 +216,7 @@ macro_rules! expand_web_event_changes {
         enum Event {
             $(
                 #[convert = $converter:ident]
+                $(#[targets($($target:ident),* $(,)?)])?
                 #[events = [
                     $(
                         $( #[$attr:meta] )*
@@ -220,10 +228,16 @@ macro_rules! expand_web_event_changes {
             )*
         }
     ) => {
-        pub(crate) fn event_type_matches(name: &str, event: &web_sys::Event) -> bool {
+        pub(crate) fn event_type_matches(
+            name: &str,
+            event: &web_sys::Event,
+            target: dioxus_html::EventTargetKind,
+        ) -> bool {
             let m = match name {
                 $(
-                    $( stringify!($raw) )|* $($(| stringify!($raw_only))*)? => {
+                    $( stringify!($raw) )|* $($(| stringify!($raw_only))*)?
+                        $(if matches!(target, $(dioxus_html::EventTargetKind::$target)|*))? =>
+                    {
                         web_event_type_matches!(event, $converter)
                     }
                 )*

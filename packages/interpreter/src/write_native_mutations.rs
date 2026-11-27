@@ -22,6 +22,33 @@ impl MutationState {
     }
 }
 
+/// Where a window or document listener is attached and how it is registered.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GlobalListenerFlags {
+    /// Attach to the window rather than the document.
+    pub window: bool,
+    /// Run during capture rather than bubble.
+    pub capture: bool,
+    /// Register the listener as passive.
+    pub passive: bool,
+}
+
+impl MutationState {
+    /// Attach a listener to the window or the document.
+    ///
+    /// `id` identifies the listener in the events it reports and in
+    /// [`Self::remove_global_event_listener`].
+    pub fn add_global_event_listener(&mut self, id: u32, name: &str, flags: GlobalListenerFlags) {
+        let flags = flags.window as u8 | (flags.capture as u8) << 1 | (flags.passive as u8) << 2;
+        self.channel.add_global_event_listener(id, name, flags);
+    }
+
+    /// Detach a listener added by [`Self::add_global_event_listener`].
+    pub fn remove_global_event_listener(&mut self, id: u32) {
+        self.channel.remove_global_event_listener(id);
+    }
+}
+
 impl WriteMutations for MutationState {
     fn push_id(&mut self, id: dioxus_vdom::ElementId) {
         self.channel.push_id(id.raw() as u32);

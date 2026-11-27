@@ -2,6 +2,8 @@ use dioxus_document::{
     Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
 };
 use dioxus_history::History;
+use dioxus_html::{EventTargetKind, GlobalEventCallback, GlobalEventInput};
+use dioxus_html::{GlobalListenerOptions, GlobalListenerRegistration, GlobalListeners};
 use dioxus_vdom::ScopeId;
 use dioxus_vdom::queue_effect;
 use dioxus_vdom::{Runtime, provide_context};
@@ -73,6 +75,9 @@ fn init_document_with(document: impl FnOnce(), history: impl FnOnce()) {
         if has_context::<Rc<dyn Document>>().is_none() {
             document();
         }
+        if has_context::<Rc<dyn GlobalListeners>>().is_none() {
+            provide_context(Rc::new(WebDocument) as Rc<dyn GlobalListeners>);
+        }
         if has_context::<Rc<dyn History>>().is_none() {
             history();
         }
@@ -114,6 +119,83 @@ pub fn init_fullstack_document() {
 /// The web-target's document provider.
 #[derive(Clone)]
 pub struct WebDocument;
+impl WebDocument {
+    fn add_global_listener(
+        kind: EventTargetKind,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        use crate::events::{event_type_matches, virtual_event_from_websys_event};
+
+        let window = web_sys::window()?;
+        let document = window.document()?;
+        let target: web_sys::EventTarget = match kind {
+            EventTargetKind::Window => window.into(),
+            _ => document.clone().into(),
+        };
+        let capture = options.capture;
+        let passive = options.passive;
+        let handler = Closure::<dyn Fn(web_sys::Event)>::new(move |event: web_sys::Event| {
+            if !event_type_matches(name, &event, kind) {
+                return;
+            }
+            let Some(element) = event
+                .target()
+                .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+                .or_else(|| document.document_element())
+            else {
+                return;
+            };
+            let payload = Rc::new(virtual_event_from_websys_event(event.clone(), element));
+            let result = callback(GlobalEventInput {
+                payload,
+                bubbles: event.bubbles(),
+            });
+            if result.prevent_default && event.cancelable() && !passive {
+                event.prevent_default();
+            }
+        });
+        let event_options = web_sys::AddEventListenerOptions::new();
+        event_options.set_capture(capture);
+        event_options.set_passive(passive);
+        target
+            .add_event_listener_with_callback_and_add_event_listener_options(
+                name,
+                handler.as_ref().unchecked_ref(),
+                &event_options,
+            )
+            .ok()?;
+        Some(GlobalListenerRegistration::new(move || {
+            let _ = target.remove_event_listener_with_callback_and_bool(
+                name,
+                handler.as_ref().unchecked_ref(),
+                capture,
+            );
+        }))
+    }
+}
+
+impl GlobalListeners for WebDocument {
+    fn add_window_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        Self::add_global_listener(EventTargetKind::Window, name, options, callback)
+    }
+
+    fn add_document_listener(
+        &self,
+        name: &'static str,
+        options: &GlobalListenerOptions,
+        callback: GlobalEventCallback,
+    ) -> Option<GlobalListenerRegistration> {
+        Self::add_global_listener(EventTargetKind::Document, name, options, callback)
+    }
+}
+
 impl Document for WebDocument {
     fn eval(&self, js: String) -> Eval {
         Eval::new(WebEvaluator::create(js))
