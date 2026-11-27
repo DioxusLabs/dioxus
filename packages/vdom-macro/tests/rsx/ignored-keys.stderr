@@ -1,0 +1,23 @@
+error: use of deprecated unit struct `main::_::Warning`: The key `"{id}"` is ignored because it is on a node nested inside an element. Keys are only read from the first node of an `rsx!` block, a `for` loop body, an `if` branch, or a component's children.
+  --> tests/rsx/ignored-keys.rs:15:23
+   |
+15 |             li { key: "{id}" }
+   |                       ^^^^^^
+   |
+note: the lint level is defined here
+  --> tests/rsx/ignored-keys.rs:1:9
+   |
+ 1 | #![deny(deprecated)]
+   |         ^^^^^^^^^^
+
+error: use of deprecated unit struct `main::_::Warning`: The key `"{id}"` is ignored because it is on a node nested inside an element. Keys are only read from the first node of an `rsx!` block, a `for` loop body, an `if` branch, or a component's children.
+  --> tests/rsx/ignored-keys.rs:16:25
+   |
+16 |             Item { key: "{id}", id }
+   |                         ^^^^^^
+
+error: use of deprecated unit struct `main::{closure#1}::_::Warning`: The key `"{id}"` is ignored because it is on a node nested inside an element. Keys are only read from the first node of an `rsx!` block, a `for` loop body, an `if` branch, or a component's children.
+  --> tests/rsx/ignored-keys.rs:20:29
+   |
+20 |                 span { key: "{id}" }
+   |                             ^^^^^^
