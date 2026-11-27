@@ -570,11 +570,7 @@ mod tests {
         );
 
         // Cumulative argument count cap leaves overflowing files intact rather than truncating.
-        let raw_arg_cap = vec![
-            "rustc".into(),
-            exact_arg.clone(),
-            exact_arg.clone(),
-        ];
+        let raw_arg_cap = vec!["rustc".into(), exact_arg.clone(), exact_arg.clone()];
         assert_eq!(
             expand_rustc_args_with_limits(&raw_arg_cap, 1024, 1024, 3),
             vec!["rustc", "a", "b", exact_arg.as_str()]
