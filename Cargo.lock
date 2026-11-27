@@ -3536,7 +3536,6 @@ name = "dioxus-fullstack-core"
 version = "0.8.0-alpha.4"
 dependencies = [
  "anyhow",
- "axum-core",
  "base64 0.22.1",
  "ciborium",
  "dioxus",

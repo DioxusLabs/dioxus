@@ -38,6 +38,12 @@ pub use magic::*;
 pub mod request;
 pub use request::*;
 
+mod context_ext;
+pub use context_ext::*;
+
+mod server_error;
+pub use server_error::*;
+
 pub use http::StatusCode;
 
 pub mod encoding;

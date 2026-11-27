@@ -552,7 +552,7 @@ pub mod req_from {
 
                 let out = serde_json::from_slice::<In>(bytes)
                     .map(map)
-                    .map_err(|e| ServerFnError::from(e).into_response())?;
+                    .map_err(|e| ServerFnError::from(e).into_http_response().into_response())?;
 
                 Ok((out, headers))
             }

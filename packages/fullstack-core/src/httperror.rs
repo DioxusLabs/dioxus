@@ -1,4 +1,3 @@
-use axum_core::response::IntoResponse;
 use http::StatusCode;
 use std::fmt;
 
@@ -203,16 +202,21 @@ impl<T> OrHttpError<T, AnyhowMarker> for Result<T, anyhow::Error> {
     }
 }
 
-impl IntoResponse for HttpError {
-    fn into_response(self) -> axum_core::response::Response {
-        let body = match &self.message {
-            Some(msg) => msg.clone(),
-            None => self
-                .status
+impl HttpError {
+    /// Convert this error into a plain-text HTTP response with the error's status code.
+    pub fn into_http_response(self) -> http::Response<String> {
+        let body = self.message.unwrap_or_else(|| {
+            self.status
                 .canonical_reason()
                 .unwrap_or("Unknown error")
-                .to_string(),
-        };
-        (self.status, body).into_response()
+                .to_string()
+        });
+        let mut resp = http::Response::new(body);
+        *resp.status_mut() = self.status;
+        resp.headers_mut().insert(
+            http::header::CONTENT_TYPE,
+            http::HeaderValue::from_static("text/plain; charset=utf-8"),
+        );
+        resp
     }
 }

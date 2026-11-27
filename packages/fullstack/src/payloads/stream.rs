@@ -285,7 +285,7 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> FromResponse
 }
 
 impl<S> FromRequest<S> for Streaming<String> {
-    type Rejection = ServerFnError;
+    type Rejection = crate::ServerError;
 
     fn from_request(
         req: Request,
@@ -320,7 +320,7 @@ impl<S> FromRequest<S> for Streaming<String> {
 }
 
 impl<S> FromRequest<S> for ByteStream {
-    type Rejection = ServerFnError;
+    type Rejection = crate::ServerError;
 
     fn from_request(
         req: Request,
@@ -354,7 +354,7 @@ impl<S> FromRequest<S> for ByteStream {
 impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding, S> FromRequest<S>
     for Streaming<T, E>
 {
-    type Rejection = ServerFnError;
+    type Rejection = crate::ServerError;
 
     fn from_request(
         req: Request,

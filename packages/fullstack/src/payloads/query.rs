@@ -16,7 +16,7 @@ where
     T: DeserializeOwned,
     S: Send + Sync,
 {
-    type Rejection = ServerFnError;
+    type Rejection = crate::ServerError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let inner: T = serde_qs::from_str(parts.uri.query().unwrap_or_default())
