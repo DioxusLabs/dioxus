@@ -486,7 +486,7 @@ impl BuildRequest {
                 self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
 
                 // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
-                Self::strip_gradle_plugin_versions(&module_dir)?;
+                Self::strip_agp8_incompatible_settings(&module_dir)?;
 
                 // Add to settings.gradle
                 self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
@@ -935,7 +935,7 @@ impl BuildRequest {
         Ok(env_vars)
     }
 
-    /// Strip version specifiers from build.gradle.kts plugins block.
+    /// Strip AGP 8 declarations that an AGP 9-bundled library module cannot build.
     ///
     /// When a plugin module is included as a subproject, having version specifiers in the
     /// plugins block causes conflicts because the parent project already has the plugins
@@ -945,7 +945,7 @@ impl BuildRequest {
     ///
     /// It also drops AGP 8 declarations that AGP 9 rejects: the Kotlin Android plugin,
     /// `kotlinOptions`, and library `targetSdk`.
-    pub(crate) fn strip_gradle_plugin_versions(module_dir: &Path) -> Result<()> {
+    pub(crate) fn strip_agp8_incompatible_settings(module_dir: &Path) -> Result<()> {
         use std::fs;
 
         let build_gradle = module_dir.join("build.gradle.kts");
@@ -1531,7 +1531,7 @@ mod tests {
     }
 
     #[test]
-    fn strip_gradle_plugin_versions_removes_agp8_library_syntax() {
+    fn strip_agp8_incompatible_settings_removes_agp8_library_syntax() {
         let module = tempfile::tempdir().unwrap();
         let build_gradle = module.path().join("build.gradle.kts");
         std::fs::write(
@@ -1567,7 +1567,7 @@ dependencies {
         )
         .unwrap();
 
-        BuildRequest::strip_gradle_plugin_versions(module.path()).unwrap();
+        BuildRequest::strip_agp8_incompatible_settings(module.path()).unwrap();
 
         assert_eq!(
             std::fs::read_to_string(build_gradle).unwrap(),
