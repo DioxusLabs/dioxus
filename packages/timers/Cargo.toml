@@ -1,0 +1,24 @@
+[package]
+name = "dioxus-timers"
+version = { workspace = true }
+edition = "2024"
+description = "Cross-platform timers and timer hooks for Dioxus apps"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
+
+[dependencies]
+dioxus-vdom = { workspace = true }
+dioxus-signals = { workspace = true }
+dioxus-hooks = { workspace = true }
+futures = { workspace = true }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { workspace = true, features = ["time"] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+gloo-timers = { workspace = true, features = ["futures"] }
+
+[dev-dependencies]
+dioxus = { path = "../dioxus", features = ["timers"] }

@@ -10,6 +10,7 @@
 //! - `hooks`: (default) re-exports `dioxus-hooks`
 //! - `hot-reload`: (default) enables hot rsx reloading in all renderers that support it
 //! - `router`: exports the [router](https://dioxuslabs.com/learn/0.7/essentials/router/) and enables any router features for the current platform
+//! - `timers`: exports [`dioxus-timers`](dioxus_timers): `use_interval`, `use_timeout`, `use_debounce` and `sleep`
 //! - `third-party-renderer`: Just disables warnings about no active platform when no renderers are enabled
 //! - `logger`: Enable the default tracing subscriber for Dioxus apps
 //!
@@ -99,6 +100,10 @@ pub use dioxus_web as web;
 #[cfg(feature = "router")]
 #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
 pub use dioxus_router as router;
+
+#[cfg(feature = "timers")]
+#[cfg_attr(docsrs, doc(cfg(feature = "timers")))]
+pub use dioxus_timers as timers;
 
 #[cfg(feature = "fullstack")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]

@@ -16,6 +16,7 @@ members = [
     "packages/router-macro",
     "packages/extension",
     "packages/router",
+    "packages/timers",
     "packages/html",
     "packages/html-internal-macro",
     "packages/hooks",
@@ -133,6 +134,7 @@ dioxus-vdom-macro = { path = "packages/vdom-macro", version = "=0.8.0-alpha.4" }
 dioxus-config-macro = { path = "packages/config-macro", version = "=0.8.0-alpha.4" }
 dioxus-router = { path = "packages/router", version = "=0.8.0-alpha.4" }
 dioxus-router-macro = { path = "packages/router-macro", version = "=0.8.0-alpha.4" }
+dioxus-timers = { path = "packages/timers", version = "=0.8.0-alpha.4" }
 dioxus-document = { path = "packages/document", version = "=0.8.0-alpha.4", default-features = false }
 dioxus-history = { path = "packages/history", version = "=0.8.0-alpha.4", default-features = false }
 dioxus-html = { path = "packages/html", version = "=0.8.0-alpha.4", default-features = false }
