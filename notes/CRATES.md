@@ -6,7 +6,7 @@ side: it uses Base crates but no crate depends across the CLI boundary.
 
 ```
 Framework       dioxus, renderers, fullstack
-Core libraries  devtools, history, router
+Core libraries  devtools, history, router, timers
 Core            dioxus-core facade, vdom, rsx, signals, hooks, html
 Base            subsecond, manganis, const-serialize, generational-box, ...
                                                     CLI: dx and its helper crates
@@ -59,7 +59,7 @@ The renderer-agnostic UI model. `dioxus-core` is the facade that re-exports this
 | `html-internal-macro` | `dioxus-html-internal-macro` | Internal macros that generate `dioxus-html`'s element, event and extension-attribute definitions. |
 | `document` | `dioxus-document` | The `Document` trait: `eval`, and head elements (`Title`, `Meta`, `Link`, `Script`, `Style`, `Stylesheet`). |
 
-## Core libraries (6 crates)
+## Core libraries (7 crates)
 
 Libraries built on Core that are not tied to a specific renderer.
 
@@ -70,6 +70,7 @@ Libraries built on Core that are not tied to a specific renderer.
 | `history` | `dioxus-history` | The `History` trait the router navigates through, with an in-memory implementation; renderers provide their own. |
 | `router` | `dioxus-router` | Type-safe router: `Router`, `Link`, `Outlet`, navigation, nested routes and layouts. |
 | `router-macro` | `dioxus-router-macro` | `#[derive(Routable)]`. |
+| `timers` | `dioxus-timers` | Timer hooks and `sleep`: `use_interval`, `use_timeout`, `use_debounce`. Browser timers on wasm, `tokio::time` elsewhere. Re-exported as `dioxus::timers` by the `timers` feature. Moved from `dioxus-sdk-time`. |
 | `config-macro` | `dioxus-config-macro` | `server_only!`, `client!`, `web!`, `desktop!`, `native!`, `mobile!`, `fullstack!`, `ssr!`, `liveview!`: code that is kept or dropped by enabled platform features. |
 
 ## Framework (11 crates)
@@ -174,7 +175,7 @@ common app needs.
 | `packages/notification` | `dioxus-sdk-notification` | Send notifications from the app. |
 | `packages/storage` | `dioxus-sdk-storage` | Local and persistent storage hooks. |
 | `packages/sync` | `dioxus-sdk-sync` | Synchronization primitives such as channels. |
-| `packages/time` | `dioxus-sdk-time` | Timers, intervals, debounce and timeouts. |
+| `packages/time` | `dioxus-sdk-time` | Timers, intervals, debounce and timeouts. Moving to `dioxus-timers` in this repo. |
 | `packages/util` | `dioxus-sdk-util` | General utilities such as scroll position. |
 | `packages/window` | `dioxus-sdk-window` | Window size and theme hooks. |
 
