@@ -477,6 +477,7 @@ impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "WebSocket response not initialized",
             )
+            .into_http_response()
             .into_response();
         };
 

@@ -1,6 +1,4 @@
 use crate::{HttpError, ServerFnError};
-use axum_core::extract::FromRequest;
-use axum_core::response::IntoResponse;
 use dioxus_vdom::{CapturedError, ReactiveContext};
 use http::StatusCode;
 use http::{HeaderMap, request::Parts};
@@ -119,36 +117,6 @@ impl FullstackContext {
     pub fn extension<T: Clone + Send + Sync + 'static>(&self) -> Option<T> {
         let lock = self.request_headers.read();
         lock.extensions.get::<T>().cloned()
-    }
-
-    /// Extract an axum extractor from the current request.
-    ///
-    /// The body of the request is always empty when using this method, as the body can only be consumed once in the server
-    /// function extractors.
-    pub async fn extract<T: FromRequest<Self, M>, M>() -> Result<T, ServerFnError> {
-        let this = Self::current().unwrap_or_else(|| {
-            // Create a dummy context if one doesn't exist, making the function usable outside of a request context
-            FullstackContext::new(
-                axum_core::extract::Request::builder()
-                    .method("GET")
-                    .uri("/")
-                    .header("X-Dummy-Header", "true")
-                    .body(())
-                    .unwrap()
-                    .into_parts()
-                    .0,
-            )
-        });
-
-        let parts = this.request_headers.read().clone();
-        let request = axum_core::extract::Request::from_parts(parts, Default::default());
-        match T::from_request(request, &this).await {
-            Ok(res) => Ok(res),
-            Err(err) => {
-                let resp = err.into_response();
-                Err(ServerFnError::from_axum_response(resp).await)
-            }
-        }
     }
 
     /// Get the current `FullstackContext` if it exists. This will return `None` if called on the client
@@ -273,13 +241,6 @@ pub fn commit_initial_chunk() {
     if let Some(mut streaming) = FullstackContext::current() {
         streaming.commit_initial_chunk();
     }
-}
-
-/// Extract an axum extractor from the current request.
-#[deprecated(note = "Use FullstackContext::extract instead", since = "0.7.0")]
-pub fn extract<T: FromRequest<FullstackContext, M>, M>()
--> impl std::future::Future<Output = Result<T, ServerFnError>> {
-    FullstackContext::extract::<T, M>()
 }
 
 /// Get the current status of the streaming response. This method is reactive and will cause

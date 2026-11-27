@@ -137,6 +137,7 @@ impl<S: Send + Sync + 'static, D> FromRequest<S> for MultipartFormData<D> {
                 http::StatusCode::INTERNAL_SERVER_ERROR,
                 "MultipartFormData extractor is not supported on non-server builds",
             )
+            .into_http_response()
             .into_response())
         }
     }

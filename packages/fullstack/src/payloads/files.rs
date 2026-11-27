@@ -199,7 +199,7 @@ impl IntoRequest for FileStream {
 }
 
 impl<S> FromRequest<S> for FileStream {
-    type Rejection = ServerFnError;
+    type Rejection = crate::ServerError;
 
     fn from_request(
         req: Request,
@@ -314,6 +314,7 @@ impl IntoResponse for FileStream {
         let Some(body) = self.server_body else {
             use dioxus_fullstack_core::HttpError;
             return HttpError::new(http::StatusCode::BAD_REQUEST, "FileStream has no body")
+                .into_http_response()
                 .into_response();
         };
 

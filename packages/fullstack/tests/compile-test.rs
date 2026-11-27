@@ -211,7 +211,7 @@ mod custom_types {
         }
     }
     impl<T> FromRequest<T> for MyCustomPayload {
-        type Rejection = ServerFnError;
+        type Rejection = ServerError;
         #[allow(clippy::manual_async_fn)]
         fn from_request(
             _req: axum::extract::Request,
@@ -251,7 +251,7 @@ mod overlap {
         }
     }
     impl<T> FromRequest<T> for MyCustomPayload {
-        type Rejection = ServerFnError;
+        type Rejection = ServerError;
         #[allow(clippy::manual_async_fn)]
         fn from_request(
             _req: axum::extract::Request,

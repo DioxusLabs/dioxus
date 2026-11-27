@@ -560,7 +560,7 @@ fn route_impl_with_route(
                 }
 
                 // Extract the server arguments from the context if needed.
-                let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
+                let (#(#server_names,)*) = <dioxus_fullstack::FullstackContext as dioxus_fullstack::FullstackContextExt>::extract::<(#(#server_types,)*), _>().await?;
 
                 // Call the function directly
                 return #fn_on_server_name #ty_generics(
