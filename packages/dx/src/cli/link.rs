@@ -1,5 +1,6 @@
 use crate::Result;
 use anyhow::{Context, bail};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString, path::PathBuf, process::ExitCode};
 use target_lexicon::Triple;
@@ -149,10 +150,30 @@ impl LinkAction {
         match self.linker {
             Some(linker) => {
                 let mut cmd = std::process::Command::new(linker);
-                match cfg!(target_os = "windows") {
-                    true => cmd.arg(format!("@{}", self.link_args_file.display())),
-                    false => cmd.args(args),
-                };
+                let command_file;
+                if cfg!(windows) {
+                    let linker_flavor = if self.triple.environment
+                        == target_lexicon::Environment::Msvc
+                    {
+                        LinkerFlavor::Msvc
+                    } else if matches!(
+                        self.triple.architecture,
+                        target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
+                    ) {
+                        LinkerFlavor::WasmLld
+                    } else {
+                        LinkerFlavor::Gnu
+                    };
+                    command_file = tempfile::NamedTempFile::new()?;
+                    let contents = args
+                        .iter()
+                        .map(|arg| quote_linker_command_file_argument(arg, &linker_flavor))
+                        .join(" ");
+                    std::fs::write(command_file.path(), contents)?;
+                    cmd.arg(format!("@{}", command_file.path().display()));
+                } else {
+                    cmd.args(args);
+                }
                 let res = cmd.output().expect("Failed to run linker");
 
                 if !res.status.success() {
@@ -242,6 +263,18 @@ impl LinkAction {
     }
 }
 
+pub(crate) fn quote_linker_command_file_argument(
+    arg: &str,
+    linker_flavor: &LinkerFlavor,
+) -> String {
+    let arg = if matches!(linker_flavor, LinkerFlavor::Gnu | LinkerFlavor::Darwin) {
+        arg.replace('\\', "\\\\").replace('"', "\\\"")
+    } else {
+        arg.to_owned()
+    };
+    format!("\"{arg}\"")
+}
+
 pub fn get_actual_linker_args_excluding_program_name(args: Vec<String>) -> Vec<String> {
     args.into_iter()
         .skip(1) // the first arg is program name
@@ -282,5 +315,42 @@ pub fn handle_linker_arg_response_file(arg: String) -> Vec<String> {
             .collect()
     } else {
         vec![arg]
+    }
+}
+
+#[cfg(test)]
+mod linker_response_file_tests {
+    use super::*;
+
+    #[test]
+    fn response_file_arguments_use_the_target_linker_quoting() {
+        assert_eq!(
+            quote_linker_command_file_argument(
+                r#"C:\Users\me\objects with spaces\file.o"#,
+                &LinkerFlavor::Gnu,
+            ),
+            r#""C:\\Users\\me\\objects with spaces\\file.o""#
+        );
+        assert_eq!(
+            quote_linker_command_file_argument(
+                r#"C:\path\with spaces "quoted".o"#,
+                &LinkerFlavor::Darwin,
+            ),
+            r#""C:\\path\\with spaces \"quoted\".o""#
+        );
+        assert_eq!(
+            quote_linker_command_file_argument(
+                r#"C:\Users\me\objects with spaces\file.o"#,
+                &LinkerFlavor::Msvc,
+            ),
+            r#""C:\Users\me\objects with spaces\file.o""#
+        );
+        assert_eq!(
+            quote_linker_command_file_argument(
+                r#"C:\Users\me\objects with spaces\file.o"#,
+                &LinkerFlavor::WasmLld,
+            ),
+            r#""C:\Users\me\objects with spaces\file.o""#
+        );
     }
 }
