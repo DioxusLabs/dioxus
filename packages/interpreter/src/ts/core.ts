@@ -347,14 +347,20 @@ export class BaseInterpreter {
     node.setAttribute("data-dioxus-id", `${id}`);
 
     if (event_name === "mounted") {
-      (window as any).ipc.postMessage(
-        this.sendSerializedEvent({
-          name: event_name,
-          element: id,
-          data: null,
-          bubbles,
-        }),
-      );
+      // Deliver through the normal synchronous path, as every other event does.
+      // This branch used to *also* post the event to `window.ipc.postMessage`,
+      // which was a no-op on every platform: that channel's handler
+      // deserializes `{ method, params }` and discards anything else
+      // (`packages/desktop/src/ipc.rs`). On Android it was worse than a no-op —
+      // the bridge backing `ipc.postMessage` there cannot convert a JS object
+      // argument, so it threw a TypeError that failed the whole edit batch and
+      // froze the UI on its first frame.
+      this.sendSerializedEvent({
+        name: event_name,
+        element: id,
+        data: null,
+        bubbles,
+      });
     } else {
       this.createListener(event_name, node, bubbles);
     }
