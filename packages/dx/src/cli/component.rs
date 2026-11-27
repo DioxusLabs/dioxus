@@ -347,6 +347,9 @@ pub struct RemoteComponentRegistry {
     rev: Option<String>,
 }
 
+const DEFAULT_REGISTRY_URL: &str = "https://github.com/dioxuslabs/components";
+const DEFAULT_REGISTRY_REV: &str = "main";
+
 impl RemoteComponentRegistry {
     /// Resolve the path to the component registry, downloading the remote registry if needed
     async fn resolve(&self) -> Result<PathBuf> {
@@ -365,14 +368,14 @@ impl RemoteComponentRegistry {
 
             // Make sure the parent directory exists
             tokio::fs::create_dir_all(&repo_dir).await?;
-            tokio::task::spawn_blocking({
+            let clone_result = tokio::task::spawn_blocking({
                 let git = git.clone();
                 let repo_dir = repo_dir.clone();
                 move || {
                     println!("Downloading {git}...");
 
                     // Clone the repo
-                    let repo = Repository::clone(&git, repo_dir)?;
+                    let repo = Repository::clone(&git, &repo_dir)?;
 
                     // If a rev is provided, checkout that rev
                     if let Some(rev) = &rev {
@@ -382,7 +385,12 @@ impl RemoteComponentRegistry {
                     anyhow::Ok(())
                 }
             })
-            .await??;
+            .await?;
+
+            if let Err(err) = clone_result {
+                _ = tokio::fs::remove_dir_all(&repo_dir).await;
+                return Err(err);
+            }
         }
 
         Ok(repo_dir)
@@ -401,8 +409,8 @@ impl RemoteComponentRegistry {
             move || {
                 let repo = Repository::open(path)?;
                 let mut remote = repo.find_remote("origin")?;
-                // Fetch all remote branches with the same name as local branches
-                remote.fetch(&["refs/heads/*:refs/heads/*"], None, None)?;
+                // Fetch all remote branches into origin/* tracking refs
+                remote.fetch(&["+refs/heads/*:refs/remotes/origin/*"], None, None)?;
                 // If a rev is provided, checkout that rev
                 if let Some(rev) = &rev {
                     Self::checkout_rev(&repo, &git, rev)?;
@@ -429,18 +437,28 @@ impl RemoteComponentRegistry {
         if let Some(git) = &self.git {
             (git.clone(), self.rev.clone())
         } else {
-            ("https://github.com/dioxuslabs/components".into(), None)
+            (
+                DEFAULT_REGISTRY_URL.into(),
+                Some(
+                    self.rev
+                        .clone()
+                        .unwrap_or_else(|| DEFAULT_REGISTRY_REV.into()),
+                ),
+            )
         }
     }
 
     /// Checkout the given rev in the given repo
     fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
         let (object, reference) = repo
-            .revparse_ext(rev)
+            .revparse_ext(&format!("refs/remotes/origin/{rev}"))
+            .or_else(|_| repo.revparse_ext(rev))
             .with_context(|| format!("Failed to find revision '{}' in '{}'", rev, git))?;
-        repo.checkout_tree(&object, None)?;
+        let mut checkout_builder = git2::build::CheckoutBuilder::new();
+        checkout_builder.force();
+        repo.checkout_tree(&object, Some(&mut checkout_builder))?;
 
-        if let Some(gref) = reference {
+        if let Some(gref) = reference.filter(|r| r.is_branch()) {
             if let Ok(name) = gref.name() {
                 repo.set_head(name)?;
             }
