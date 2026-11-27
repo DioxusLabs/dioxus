@@ -3323,7 +3323,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.7.10"
+version = "0.7.11"
 dependencies = [
  "ansi-to-html",
  "ansi-to-tui",
