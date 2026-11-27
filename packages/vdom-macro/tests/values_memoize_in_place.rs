@@ -1,4 +1,4 @@
-use dioxus::{
+use dioxus_core::{
     core::{generation, needs_update},
     prelude::*,
 };
@@ -45,7 +45,7 @@ async fn values_memoize_in_place() {
         }
     }
 
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
 
     let mutations = dom.rebuild_to_vec();
@@ -91,7 +91,7 @@ fn cloning_event_handler_components_work() {
         }
     }
 
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
 
     let mutations = dom.rebuild_to_vec();
@@ -205,7 +205,7 @@ fn cloning_read_signal_components_work() {
         rsx! {}
     }
 
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
 
     let mutations = dom.rebuild_to_vec();

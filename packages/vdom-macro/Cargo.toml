@@ -21,7 +21,8 @@ dioxus-rsx = { workspace = true }
 convert_case = { workspace = true }
 
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }
+dioxus-core = { workspace = true, features = ["default"] }
 dioxus-html = { workspace = true, features = ["serialize"]}
 rustversion = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }

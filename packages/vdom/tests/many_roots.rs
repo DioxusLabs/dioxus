@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 
 macro_rules! oversized_static_divs {

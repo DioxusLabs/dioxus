@@ -26,7 +26,8 @@ rustversion = { workspace = true }
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }
 dioxus-vdom = { workspace = true }
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }
+dioxus-core = { workspace = true, features = ["default"] }
 web-sys = { workspace = true, features = ["Document", "Window", "Element"] }
 tokio = { workspace = true, features = ["full"] }
 reqwest = { workspace = true }

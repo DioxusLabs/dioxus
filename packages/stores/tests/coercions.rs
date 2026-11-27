@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_stores::*;
 
 #[derive(Store)]

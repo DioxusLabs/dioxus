@@ -2,7 +2,7 @@
 //!
 //! This tests to ensure we clean it up
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::RendererOracle;
 use dioxus_vdom::{ScopeId, generation};
 

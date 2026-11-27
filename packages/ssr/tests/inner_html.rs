@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 
 #[test]
 fn static_inner_html() {

@@ -1,5 +1,5 @@
-use dioxus::core::view::ViewExt;
-use dioxus::prelude::*;
+use dioxus_core::core::view::ViewExt;
+use dioxus_core::prelude::*;
 
 // This test just checks that event handlers compile without explicit type annotations
 // It will not actually run any code

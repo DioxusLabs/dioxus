@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 
 /// Make sure that rsx! handles conditional attributes with one formatted branch correctly
 /// Regression test for https://github.com/DioxusLabs/dioxus/issues/2997. There are no assertions in

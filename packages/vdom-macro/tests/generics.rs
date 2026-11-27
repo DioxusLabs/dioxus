@@ -1,6 +1,6 @@
 use std::{fmt::Display, marker::PhantomData};
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 
 // This test just checks that props compile with generics
 // It will not actually run any code

@@ -1,8 +1,8 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotAttr, SnapshotNode, fresh_snapshot};
 use dioxus_vdom::{Mutation, Mutations, ScopeId, VNode, VNodeChild};
 
-dioxus::html::define_elements! {
+dioxus_core::html::define_elements! {
     #[element(name = "style-panel")]
     stylePanel {}
 

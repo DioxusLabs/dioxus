@@ -1,6 +1,6 @@
 //! Tests related to safety of the library.
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 
 /// Ensure no issues with not calling rebuild_to_vec
 #[test]

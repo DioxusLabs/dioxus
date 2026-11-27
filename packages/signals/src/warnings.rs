@@ -49,11 +49,11 @@ Fixed example ✅:
 #[allow(unused)]
 fn hoist() {
     mod broken {
-        use dioxus::prelude::*;
+        use dioxus_core::prelude::*;
         include!("../docs/hoist/error.rs");
     }
     mod fixed {
-        use dioxus::prelude::*;
+        use dioxus_core::prelude::*;
         include!("../docs/hoist/fixed_list.rs");
     }
 }

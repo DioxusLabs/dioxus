@@ -16,7 +16,8 @@ dioxus-stores-macro = { workspace = true, optional = true }
 generational-box.workspace = true
 
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }
+dioxus-core = { workspace = true, features = ["default"] }
 trybuild = { workspace = true }
 dioxus-stores-visibility-helper = { path = "tests/visibility-helper" }
 

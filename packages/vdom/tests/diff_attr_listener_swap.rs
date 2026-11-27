@@ -8,7 +8,7 @@
 //! share a key. The only way to reach that arm is to hand-construct the
 //! attribute lists.
 
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use dioxus_vdom::{AttributeValue, ScopeId, generation};
 

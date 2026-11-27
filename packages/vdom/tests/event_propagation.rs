@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_renderer_oracle::RendererOracle;
 use dioxus_vdom::ScopeId;
 use std::{any::Any, rc::Rc, sync::Mutex};
@@ -15,7 +15,7 @@ fn click_event() -> Event<dyn Any> {
 
 #[test]
 fn events_propagate() {
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
     *CLICKS.lock().unwrap() = 0;
 
     fn app() -> Element {
@@ -78,7 +78,7 @@ fn events_propagate() {
 
 #[test]
 fn nested_listeners_in_one_vnode_bubble_from_target_first() {
-    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus_core::html::SerializedHtmlEventConverter));
     CLICK_ORDER.lock().unwrap().clear();
 
     fn app() -> Element {

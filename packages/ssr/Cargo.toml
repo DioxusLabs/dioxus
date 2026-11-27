@@ -14,7 +14,8 @@ askama_escape = { workspace = true }
 rustc-hash = { workspace = true }
 
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }
+dioxus-core = { workspace = true, features = ["default"] }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

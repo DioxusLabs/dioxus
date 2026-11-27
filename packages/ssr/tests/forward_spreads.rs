@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/3844
 #[test]

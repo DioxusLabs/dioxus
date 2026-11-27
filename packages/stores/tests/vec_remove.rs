@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_vdom::generation;
 
 #[derive(Debug, Clone, dioxus_stores::Store)]

@@ -18,7 +18,7 @@
 //! These numbers don't represent Dioxus with the heuristic engine installed, so I assume it'll be even faster.
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_vdom::{NoOpMutations, ScopeId};
 use rand::prelude::*;
 use std::{cell::RefCell, hint::black_box, option::Option, rc::Rc};

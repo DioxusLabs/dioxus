@@ -4,7 +4,7 @@ use dioxus_vdom::generation;
 async fn memo_updates() {
     use std::cell::RefCell;
 
-    use dioxus::prelude::*;
+    use dioxus_core::prelude::*;
 
     thread_local! {
         static VEC_SIGNAL: RefCell<Option<Signal<Vec<usize>, SyncStorage>>> = const { RefCell::new(None) };
@@ -60,14 +60,14 @@ async fn memo_updates() {
         // Wait for the signal to update
         for _ in 0..2 {
             dom.wait_for_work().await;
-            dom.render_immediate(&mut dioxus::dioxus_vdom::NoOpMutations);
+            dom.render_immediate(&mut dioxus_core::dioxus_vdom::NoOpMutations);
         }
         assert_eq!(signal(), vec![0, 1, 2, 3, 4, 5]);
         // Remove each element from the vec
         for _ in 0..6 {
             signal.pop();
             dom.wait_for_work().await;
-            dom.render_immediate(&mut dioxus::dioxus_vdom::NoOpMutations);
+            dom.render_immediate(&mut dioxus_core::dioxus_vdom::NoOpMutations);
             println!("Signal: {signal:?}");
         }
     };
@@ -80,7 +80,7 @@ async fn memo_updates() {
 
 #[tokio::test]
 async fn use_memo_only_triggers_one_update() {
-    use dioxus::prelude::*;
+    use dioxus_core::prelude::*;
     use std::cell::RefCell;
 
     thread_local! {
@@ -118,7 +118,7 @@ async fn use_memo_only_triggers_one_update() {
         _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
     };
 
-    dom.render_immediate(&mut dioxus::dioxus_vdom::NoOpMutations);
+    dom.render_immediate(&mut dioxus_core::dioxus_vdom::NoOpMutations);
 
     assert_eq!(VEC_SIGNAL.with(|v| v.borrow().clone()), vec![0, 20]);
 }

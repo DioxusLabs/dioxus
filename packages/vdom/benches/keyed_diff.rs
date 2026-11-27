@@ -14,7 +14,7 @@
 //! reverse, shuffle), and the disjoint-key path (replace all).
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use dioxus_vdom::{NoOpMutations, ScopeId};
 use rand::prelude::*;
 use std::{cell::RefCell, hint::black_box, rc::Rc};

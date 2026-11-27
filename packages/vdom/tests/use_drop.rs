@@ -1,6 +1,6 @@
 //! Tests the use_drop hook
-use dioxus::dioxus_vdom::use_drop;
-use dioxus::prelude::*;
+use dioxus_core::dioxus_vdom::use_drop;
+use dioxus_core::prelude::*;
 use std::sync::{Arc, Mutex};
 
 type Shared<T> = Arc<Mutex<T>>;
