@@ -4,6 +4,15 @@ use manganis_core::{ImageAssetOptions, ImageFormat, ImageSize};
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
+/// The dimension that follows a fixed one, rounded to the nearest pixel and never zero.
+fn derived_dimension(fixed: u32, source_fixed: u32, source_other: u32) -> u32 {
+    if source_fixed == 0 {
+        return 1;
+    }
+    ((source_other as u64 * fixed as u64 + source_fixed as u64 / 2) / source_fixed as u64).max(1)
+        as u32
+}
+
 pub(crate) fn process_image(
     image_options: &ImageAssetOptions,
     source: &Path,
@@ -15,7 +24,19 @@ pub(crate) fn process_image(
         .decode();
 
     if let Ok(image) = &mut image {
-        if let ImageSize::Manual { width, height } = image_options.size() {
+        let size = match image_options.size() {
+            ImageSize::Manual { width, height } => Some((width, height)),
+            ImageSize::Width(width) => Some((
+                width,
+                derived_dimension(width, image.width(), image.height()),
+            )),
+            ImageSize::Height(height) => Some((
+                derived_dimension(height, image.height(), image.width()),
+                height,
+            )),
+            ImageSize::Automatic => None,
+        };
+        if let Some((width, height)) = size {
             *image = image.resize_exact(width, height, image::imageops::FilterType::Lanczos3);
         }
     }
@@ -140,4 +161,60 @@ pub(crate) fn compress_jpg(image: DynamicImage, output_location: &Path) -> anyho
     let w = &mut BufWriter::new(file);
     w.write_all(&jpeg_bytes)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{Rgba, RgbaImage};
+    use manganis_core::{AssetOptions, AssetVariant};
+
+    /// A 400x200 source, so a derived dimension is unambiguous.
+    fn processed_size(size: ImageSize) -> (u32, u32) {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.png");
+        RgbaImage::from_pixel(400, 200, Rgba([255, 0, 0, 255]))
+            .save(&source)
+            .unwrap();
+        let output = dir.path().join("output.png");
+
+        let options = AssetOptions::image().with_size(size).into_asset_options();
+        let AssetVariant::Image(image_options) = options.variant() else {
+            panic!("image options expected");
+        };
+
+        process_image(image_options, &source, &output).unwrap();
+        let image = image::open(output).unwrap();
+        (image.width(), image.height())
+    }
+
+    /// Given an image with only a width, when it is processed, then the height follows the source aspect ratio.
+    #[test]
+    fn a_width_only_size_derives_the_height() {
+        assert_eq!(processed_size(ImageSize::Width(100)), (100, 50));
+    }
+
+    /// Given an image with only a height, when it is processed, then the width follows the source aspect ratio.
+    #[test]
+    fn a_height_only_size_derives_the_width() {
+        assert_eq!(processed_size(ImageSize::Height(50)), (100, 50));
+    }
+
+    /// Given an image with both dimensions, when it is processed, then the exact size is kept.
+    #[test]
+    fn a_manual_size_keeps_both_dimensions() {
+        assert_eq!(
+            processed_size(ImageSize::Manual {
+                width: 64,
+                height: 64
+            }),
+            (64, 64)
+        );
+    }
+
+    /// Given an image with no requested size, when it is processed, then the source dimensions are kept.
+    #[test]
+    fn an_automatic_size_keeps_the_source_dimensions() {
+        assert_eq!(processed_size(ImageSize::Automatic), (400, 200));
+    }
 }

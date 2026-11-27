@@ -51,6 +51,10 @@ pub enum ImageSize {
         /// The height of the image in pixels
         height: u32,
     },
+    /// A manual width in pixels; the height is derived from the source image's aspect ratio
+    Width(u32),
+    /// A manual height in pixels; the width is derived from the source image's aspect ratio
+    Height(u32),
     /// The size will be automatically determined from the image source
     Automatic,
 }
@@ -225,11 +229,64 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
         self
     }
 
+    /// Sets the width of the image, deriving the height from the source image's aspect ratio
+    ///
+    /// This is the same as [`Self::with_size`] with [`ImageSize::Width`].
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_width(512));
+    /// ```
+    pub const fn with_width(mut self, width: u32) -> Self {
+        self.variant.size = ImageSize::Width(width);
+        self
+    }
+
+    /// Sets the height of the image, deriving the width from the source image's aspect ratio
+    ///
+    /// This is the same as [`Self::with_size`] with [`ImageSize::Height`].
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_height(512));
+    /// ```
+    pub const fn with_height(mut self, height: u32) -> Self {
+        self.variant.size = ImageSize::Height(height);
+        self
+    }
+
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
         AssetOptions {
             add_hash: self.add_hash,
             variant: AssetVariant::Image(self.variant),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Given an image asset with only a width, when the options are read, then the size asks for a derived height.
+    #[test]
+    fn with_width_sets_a_width_only_size() {
+        let options = AssetOptions::image().with_width(512).into_asset_options();
+        let AssetVariant::Image(image) = options.variant() else {
+            panic!("image options expected");
+        };
+
+        assert_eq!(image.size(), ImageSize::Width(512));
+    }
+
+    /// Given an image asset with only a height, when the options are read, then the size asks for a derived width.
+    #[test]
+    fn with_height_sets_a_height_only_size() {
+        let options = AssetOptions::image().with_height(512).into_asset_options();
+        let AssetVariant::Image(image) = options.variant() else {
+            panic!("image options expected");
+        };
+
+        assert_eq!(image.size(), ImageSize::Height(512));
     }
 }
