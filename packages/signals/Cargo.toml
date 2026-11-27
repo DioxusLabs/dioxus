@@ -25,7 +25,7 @@ warnings = { workspace = true }
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
-dioxus-core = { workspace = true, features = ["default"] }
+dioxus-core = { path = "../core" }
 tokio = { workspace = true, features = ["full"] }
 tracing-subscriber = { workspace = true, default-features = true }
 reqwest = { workspace = true }

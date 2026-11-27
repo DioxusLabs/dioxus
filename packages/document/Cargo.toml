@@ -25,4 +25,4 @@ lazy-js-bundle = { workspace = true }
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
-dioxus-vdom-template = { workspace = true }
+dioxus-vdom-template = { path = "../vdom-template" }

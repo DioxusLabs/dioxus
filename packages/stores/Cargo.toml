@@ -17,7 +17,7 @@ generational-box.workspace = true
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
-dioxus-core = { workspace = true, features = ["default"] }
+dioxus-core = { path = "../core" }
 trybuild = { workspace = true }
 dioxus-stores-visibility-helper = { path = "tests/visibility-helper" }
 

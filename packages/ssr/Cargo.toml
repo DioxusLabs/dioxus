@@ -15,7 +15,7 @@ rustc-hash = { workspace = true }
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
-dioxus-core = { workspace = true, features = ["default"] }
+dioxus-core = { path = "../core" }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

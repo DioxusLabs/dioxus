@@ -17,7 +17,7 @@ convert_case = { workspace = true }
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
-dioxus-stores = { workspace = true }
+dioxus-stores = { path = "../stores" }
 
 [lib]
 proc-macro = true

@@ -19,4 +19,4 @@ dx-env = { workspace = true }
 winnow = { workspace = true }
 
 [dev-dependencies]
-manganis = { workspace = true }
+manganis = { path = "../manganis" }

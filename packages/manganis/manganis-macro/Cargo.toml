@@ -27,5 +27,5 @@ macro-string = { workspace = true }
 default = []
 
 [dev-dependencies]
-manganis = { workspace = true }
+manganis = { path = "../manganis" }
 tempfile = { workspace = true }
