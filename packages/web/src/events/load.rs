@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use dioxus_html::HasImageData;
 use web_sys::Event;
 
@@ -20,10 +18,6 @@ impl WebImageEvent {
 impl HasImageData for WebImageEvent {
     fn load_error(&self) -> bool {
         self.error
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        &self.raw
     }
 }
 

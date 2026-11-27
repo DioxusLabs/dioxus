@@ -83,10 +83,6 @@ macro_rules! scripted_getter {
 }
 
 impl RenderedElementBacking for DesktopElement {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     scripted_getter!(
         get_scroll_offset,
         "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]",

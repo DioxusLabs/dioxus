@@ -62,10 +62,6 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
         Box::pin(async { result })
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
-
     fn scroll_to(
         &self,
         input_options: dioxus_html::ScrollToOptions,
@@ -173,6 +169,7 @@ impl WebEventExt for MountedData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::Element> {
-        self.downcast::<web_sys::Element>().cloned()
+        self.downcast::<Synthetic<web_sys::Element>>()
+            .map(|backing| backing.event.clone())
     }
 }

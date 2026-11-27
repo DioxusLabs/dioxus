@@ -59,17 +59,14 @@ impl PointerInteraction for Synthetic<MouseEvent> {
     }
 }
 
-impl HasMouseData for Synthetic<MouseEvent> {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
-}
+impl HasMouseData for Synthetic<MouseEvent> {}
 
 impl WebEventExt for dioxus_html::MouseData {
     type WebEvent = web_sys::MouseEvent;
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::MouseEvent> {
-        self.downcast::<web_sys::MouseEvent>().cloned()
+        self.downcast::<Synthetic<web_sys::MouseEvent>>()
+            .map(|backing| backing.event.clone())
     }
 }

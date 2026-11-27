@@ -48,10 +48,6 @@ impl HasPointerData for Synthetic<PointerEvent> {
     fn is_primary(&self) -> bool {
         self.event.is_primary()
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
 }
 
 impl InteractionLocation for Synthetic<PointerEvent> {
@@ -110,6 +106,7 @@ impl WebEventExt for dioxus_html::PointerData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::PointerEvent> {
-        self.downcast::<web_sys::PointerEvent>().cloned()
+        self.downcast::<Synthetic<web_sys::PointerEvent>>()
+            .map(|backing| backing.event.clone())
     }
 }

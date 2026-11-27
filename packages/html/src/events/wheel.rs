@@ -59,7 +59,7 @@ impl WheelData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        HasWheelData::as_any(&*self.inner).downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -149,18 +149,10 @@ impl HasWheelData for SerializedWheelData {
     fn delta(&self) -> WheelDelta {
         WheelDelta::from_web_attributes(self.delta_mode, self.delta_x, self.delta_y, self.delta_z)
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(feature = "serialize")]
-impl HasMouseData for SerializedWheelData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl HasMouseData for SerializedWheelData {}
 
 #[cfg(feature = "serialize")]
 impl InteractionLocation for SerializedWheelData {
@@ -223,10 +215,7 @@ impl<'de> serde::Deserialize<'de> for WheelData {
     }
 }
 
-pub trait HasWheelData: HasMouseData + std::any::Any {
+pub trait HasWheelData: HasMouseData {
     /// The amount of wheel movement
     fn delta(&self) -> WheelDelta;
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }

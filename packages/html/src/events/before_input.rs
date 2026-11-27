@@ -193,7 +193,7 @@ impl BeforeInputData {
     /// Downcast this event to a concrete platform-specific event type.
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -236,9 +236,6 @@ pub trait HasBeforeInputData: std::any::Any {
 
     /// The current value of the editable target, prior to the change.
     fn value(&self) -> String;
-
-    /// Return self as `Any` so the event can be downcast to its concrete type.
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 #[cfg(feature = "serialize")]
@@ -295,10 +292,6 @@ mod serialize {
 
         fn value(&self) -> String {
             self.value.clone()
-        }
-
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
         }
     }
 

@@ -5,10 +5,6 @@ use web_sys::{Document, Element, Event};
 use super::{Synthetic, WebEventExt};
 
 impl HasScrollData for Synthetic<Event> {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
-
     fn scroll_top(&self) -> f64 {
         if let Some(target) = self.event.target().as_ref() {
             if let Some(element) = target.dyn_ref::<Element>() {
@@ -99,6 +95,7 @@ impl WebEventExt for dioxus_html::ScrollData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::Event>().cloned()
+        self.downcast::<Synthetic<web_sys::Event>>()
+            .map(|backing| backing.event.clone())
     }
 }

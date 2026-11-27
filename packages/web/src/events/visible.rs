@@ -72,10 +72,6 @@ impl HasVisibleData for Synthetic<IntersectionObserverEntry> {
         let duration = std::time::Duration::from_millis(rounded);
         Ok(SystemTime::UNIX_EPOCH + duration)
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 impl WebEventExt for VisibleData {
@@ -83,7 +79,7 @@ impl WebEventExt for VisibleData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<IntersectionObserverEntry> {
-        self.downcast::<CustomEvent>()
-            .and_then(|e| e.detail().dyn_into::<IntersectionObserverEntry>().ok())
+        self.downcast::<Synthetic<IntersectionObserverEntry>>()
+            .map(|backing| backing.event.clone())
     }
 }

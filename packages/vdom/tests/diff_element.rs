@@ -130,6 +130,14 @@ fn attribute_diff() {
 }
 
 #[test]
+fn erased_attribute_equality() {
+    let value = AttributeValue::any_value(42_u32);
+    assert_eq!(value, AttributeValue::any_value(42_u32));
+    assert_ne!(value, AttributeValue::any_value(43_u32));
+    assert_ne!(value, AttributeValue::any_value(42_u64));
+}
+
+#[test]
 fn dynamic_attr_override_restores_static_attr() {
     fn attr(name: &'static str, value: &'static str) -> Attribute {
         Attribute::new(name, AttributeValue::Text(value.into()), None, false)

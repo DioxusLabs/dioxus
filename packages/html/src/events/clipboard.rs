@@ -62,7 +62,7 @@ impl ClipboardData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_ref().as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -72,10 +72,7 @@ impl HasFileData for ClipboardData {
     }
 }
 
-pub trait HasClipboardData: HasDataTransferData + HasFileData {
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-}
+pub trait HasClipboardData: HasDataTransferData + HasFileData {}
 
 #[cfg(feature = "serialize")]
 pub use ser::*;
@@ -113,11 +110,7 @@ mod ser {
         }
     }
 
-    impl HasClipboardData for SerializedClipboardData {
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-    }
+    impl HasClipboardData for SerializedClipboardData {}
 
     impl serde::Serialize for ClipboardData {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

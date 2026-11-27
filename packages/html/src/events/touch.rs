@@ -58,7 +58,7 @@ impl TouchData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -138,10 +138,6 @@ impl HasTouchData for SerializedTouchData {
             .map(Into::into)
             .collect()
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(feature = "serialize")]
@@ -170,9 +166,6 @@ pub trait HasTouchData: ModifiersInteraction + std::any::Any {
 
     /// Get the touches that started and stayed on the element that triggered this event
     fn target_touches(&self) -> Vec<TouchPoint>;
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 pub struct TouchPoint {
@@ -216,7 +209,7 @@ impl TouchPoint {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -261,9 +254,6 @@ pub trait HasTouchPointData: InteractionLocation + std::any::Any {
 
     /// the rotation of the touch in degrees between 0 and 90
     fn rotation(&self) -> f64;
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 #[cfg(feature = "serialize")]
@@ -326,11 +316,6 @@ impl HasTouchPointData for SerializedTouchPoint {
     /// the rotation of the touch in degrees between 0 and 90
     fn rotation(&self) -> f64 {
         self.rotation_angle
-    }
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 

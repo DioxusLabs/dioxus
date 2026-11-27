@@ -28,10 +28,6 @@ impl HasKeyboardData for Synthetic<KeyboardEvent> {
     fn is_composing(&self) -> bool {
         self.event.is_composing()
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
 }
 
 impl ModifiersInteraction for Synthetic<KeyboardEvent> {
@@ -60,6 +56,7 @@ impl WebEventExt for dioxus_html::KeyboardData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::KeyboardEvent> {
-        self.downcast::<web_sys::KeyboardEvent>().cloned()
+        self.downcast::<Synthetic<web_sys::KeyboardEvent>>()
+            .map(|backing| backing.event.clone())
     }
 }

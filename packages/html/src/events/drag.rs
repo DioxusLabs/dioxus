@@ -63,7 +63,7 @@ impl DragData {
     /// Downcast this event data to a specific type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        HasDragData::as_any(&*self.inner).downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -144,11 +144,7 @@ mod ser {
         }
     }
 
-    impl HasDragData for SerializedDragData {
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-    }
+    impl HasDragData for SerializedDragData {}
 
     impl crate::file_data::HasFileData for SerializedDragData {
         fn files(&self) -> Vec<FileData> {
@@ -156,11 +152,7 @@ mod ser {
         }
     }
 
-    impl HasMouseData for SerializedDragData {
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-    }
+    impl HasMouseData for SerializedDragData {}
 
     impl InteractionLocation for SerializedDragData {
         fn client_coordinates(&self) -> ClientPoint {
@@ -219,7 +211,4 @@ mod ser {
 }
 
 /// A trait for any object that has the data for a drag event
-pub trait HasDragData: HasMouseData + crate::HasFileData + crate::HasDataTransferData {
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-}
+pub trait HasDragData: HasMouseData + crate::HasFileData + crate::HasDataTransferData {}

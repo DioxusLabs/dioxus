@@ -239,7 +239,10 @@ macro_rules! expand_web_event_changes {
 
 dioxus_html::with_html_event_groups!(expand_web_event_changes);
 
-/// A extension trait for web-sys events that provides a way to get the event as a web-sys event.
+/// Access the underlying `web-sys` value from Dioxus web event data.
+///
+/// The event data's `downcast` method targets the renderer's backing type, not the
+/// `web-sys` value it wraps.
 pub trait WebEventExt {
     /// The web specific event type
     type WebEvent;

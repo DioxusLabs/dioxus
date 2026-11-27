@@ -61,17 +61,9 @@ impl PointerInteraction for Synthetic<DragEvent> {
     }
 }
 
-impl HasMouseData for Synthetic<DragEvent> {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
-}
+impl HasMouseData for Synthetic<DragEvent> {}
 
-impl HasDragData for Synthetic<DragEvent> {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
-}
+impl HasDragData for Synthetic<DragEvent> {}
 
 impl HasDataTransferData for Synthetic<DragEvent> {
     fn data_transfer(&self) -> dioxus_html::DataTransfer {
@@ -126,6 +118,7 @@ impl WebEventExt for dioxus_html::DragData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::DragEvent> {
-        self.downcast::<DragEvent>().cloned()
+        self.downcast::<Synthetic<DragEvent>>()
+            .map(|backing| backing.event.clone())
     }
 }

@@ -37,7 +37,7 @@ impl ImageData {
     }
 
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -60,10 +60,6 @@ impl From<&ImageData> for SerializedImageData {
 
 #[cfg(feature = "serialize")]
 impl HasImageData for SerializedImageData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn load_error(&self) -> bool {
         self.load_error
     }
@@ -90,7 +86,4 @@ impl<'de> serde::Deserialize<'de> for ImageData {
 pub trait HasImageData: std::any::Any {
     /// If the renderer encountered an error while loading the image
     fn load_error(&self) -> bool;
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }

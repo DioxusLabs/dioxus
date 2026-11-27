@@ -1,7 +1,7 @@
 use dioxus_html::HasTransitionData;
 use web_sys::TransitionEvent;
 
-use super::Synthetic;
+use super::{Synthetic, WebEventExt};
 
 impl HasTransitionData for Synthetic<TransitionEvent> {
     fn elapsed_time(&self) -> f32 {
@@ -15,8 +15,14 @@ impl HasTransitionData for Synthetic<TransitionEvent> {
     fn pseudo_element(&self) -> String {
         self.event.pseudo_element()
     }
+}
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
+impl WebEventExt for dioxus_html::TransitionData {
+    type WebEvent = TransitionEvent;
+
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<Self::WebEvent> {
+        self.downcast::<Synthetic<TransitionEvent>>()
+            .map(|backing| backing.event.clone())
     }
 }

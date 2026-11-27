@@ -10,7 +10,7 @@ use crate::{
 use std::ops::Deref;
 use std::rc::Rc;
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     fmt::{Arguments, Debug},
 };
 
@@ -626,30 +626,18 @@ impl std::fmt::Debug for BorrowedAttributeValue<'_> {
 }
 
 #[doc(hidden)]
-pub trait AnyValue: 'static {
+pub trait AnyValue: Any {
     /// Compare this value with another erased value.
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
-
-    /// Return this value as [`Any`] for downcasting.
-    fn as_any(&self) -> &dyn Any;
-
-    /// Return the underlying value's [`TypeId`].
-    fn type_id(&self) -> TypeId {
-        self.as_any().type_id()
-    }
 }
 
-impl<T: Any + PartialEq + 'static> AnyValue for T {
+impl<T: Any + PartialEq> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
-        if let Some(other) = other.as_any().downcast_ref() {
+        if let Some(other) = (other as &dyn Any).downcast_ref() {
             self == other
         } else {
             false
         }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

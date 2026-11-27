@@ -70,7 +70,7 @@ impl FormData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 
     /// Did this form pass its own validation?
@@ -193,15 +193,12 @@ impl PartialEq<&str> for FormValue {
 }
 
 /// An object that has all the data for a form event
-pub trait HasFormData: HasFileData + std::any::Any {
+pub trait HasFormData: HasFileData {
     fn value(&self) -> String;
 
     fn valid(&self) -> bool;
 
     fn values(&self) -> Vec<(String, FormValue)>;
-
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 #[cfg(feature = "serialize")]
@@ -302,10 +299,6 @@ mod serialize {
 
         fn valid(&self) -> bool {
             self.valid
-        }
-
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
         }
     }
 

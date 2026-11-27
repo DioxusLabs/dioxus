@@ -35,7 +35,7 @@ impl FocusData {
     /// Downcast this event data to a specific type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        (self.inner.as_ref() as &dyn std::any::Any).downcast_ref::<T>()
     }
 }
 
@@ -52,11 +52,7 @@ impl From<&FocusData> for SerializedFocusData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasFocusData for SerializedFocusData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+impl HasFocusData for SerializedFocusData {}
 
 #[cfg(feature = "serialize")]
 impl serde::Serialize for FocusData {
@@ -75,7 +71,4 @@ impl<'de> serde::Deserialize<'de> for FocusData {
     }
 }
 
-pub trait HasFocusData: std::any::Any {
-    /// return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-}
+pub trait HasFocusData: std::any::Any {}
