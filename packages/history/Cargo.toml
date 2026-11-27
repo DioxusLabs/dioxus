@@ -15,4 +15,4 @@ dioxus-vdom = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["router"] }
+dioxus = { path = "../dioxus", features = ["router"] }

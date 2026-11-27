@@ -30,14 +30,14 @@ html = ["dep:dioxus-html"]
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }
-dioxus = { workspace = true, features = ["router"] }
+dioxus = { path = "../dioxus", features = ["router"] }
 dioxus-ssr = { workspace = true }
 criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
 ciborium = { workspace = true }
 base64 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
-dioxus-router = { workspace = true }
+dioxus-router = { path = "." }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

@@ -32,7 +32,7 @@ ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
 
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }
 serde_json = { workspace = true }
 
 [features]

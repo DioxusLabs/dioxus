@@ -24,7 +24,7 @@ digest = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["router"] }
+dioxus = { path = "../dioxus", features = ["router"] }
 
 [features]
 default = []
