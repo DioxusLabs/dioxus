@@ -218,7 +218,8 @@ impl NodeHandle {
         op: impl FnOnce(BlitzPointerId) -> bool,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         let Some(id) = BlitzPointerId::from_i32(pointer_id.raw()) else {
-            let err = MountedError::OperationFailed(Box::new(InvalidPointerIdErr(pointer_id.raw())));
+            let err =
+                MountedError::OperationFailed(Box::new(InvalidPointerIdErr(pointer_id.raw())));
             return Box::pin(async move { Err(err) });
         };
         if !op(id) {
