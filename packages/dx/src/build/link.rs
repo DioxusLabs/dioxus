@@ -17,7 +17,7 @@
 use super::HotpatchModuleCache;
 use crate::{BuildArtifacts, BuildMode, WorkspaceRustcArgs};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
-use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
+use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR, prepare_rustc_command_args};
 use anyhow::{Context, bail, ensure};
 use cargo_metadata::diagnostic::Diagnostic;
 use depinfo::RustcDepInfo;
@@ -557,7 +557,20 @@ impl BuildRequest {
             idx += 1;
         }
 
-        cmd.args(&replay_args);
+        // Wasm hotpatches are linked as relocatable PIC modules, so replayed workspace crate
+        // compilations need to emit PIC-compatible objects too.
+        if self.is_wasm_or_wasi() {
+            replay_args.push("-Crelocation-model=pic".to_string());
+        }
+
+        let argfile_path = self
+            .session_cache_dir()
+            .join(format!("rustc_dep_args_{crate_name}.rsp"));
+        let cmd_args =
+            prepare_rustc_command_args(&replay_args, &argfile_path).with_context(|| {
+                format!("Failed to prepare rustc args for workspace crate '{crate_name}'")
+            })?;
+        cmd.args(cmd_args);
 
         // Restore the captured environment, filtering out wrapper env vars and
         // stale cargo jobserver vars to prevent recursive invocation and warnings.
@@ -577,12 +590,6 @@ impl BuildRequest {
                 })
                 .cloned(),
         );
-
-        // Wasm hotpatches are linked as relocatable PIC modules, so replayed workspace crate
-        // compilations need to emit PIC-compatible objects too.
-        if self.is_wasm_or_wasi() {
-            cmd.arg("-Crelocation-model=pic");
-        }
 
         // Stream stdout/stderr and collect diagnostics/text lines. The captured rustc args
         // include `--error-format=json-*`, so each diagnostic arrives as a single JSON line that

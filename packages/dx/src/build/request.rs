@@ -197,6 +197,7 @@ use super::HotpatchModuleCache;
 use crate::{
     AndroidTools, BuildContext, BuildId, BundleFormat, DX_RUSTC_WRAPPER_ENV_VAR, DioxusConfig,
     LinkAction, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
+    prepare_rustc_command_args,
 };
 use crate::{
     WorkspaceRustcArgs,
@@ -1597,10 +1598,23 @@ impl BuildRequest {
                     .get(&format!("{}.bin", self.tip_crate_name()))
                     .context("Missing rustc args for tip crate")?;
 
+                let mut replay_args = rustc_args.args.get(1..).unwrap_or_default().to_vec();
+                replay_args.push(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
+
+                if self.is_wasm_or_wasi() {
+                    replay_args.push("-Crelocation-model=pic".to_string());
+                }
+
+                let argfile_path = self
+                    .session_cache_dir()
+                    .join(format!("rustc_tip_args_{}.rsp", self.tip_crate_name()));
+                let cmd_args = prepare_rustc_command_args(&replay_args, &argfile_path)
+                    .context("Failed to prepare rustc args for tip crate")?;
+
                 let mut cmd = Command::new("rustc");
                 cmd.current_dir(&rustc_args.cwd);
                 cmd.env_clear();
-                cmd.args(rustc_args.args[1..].iter());
+                cmd.args(cmd_args);
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
@@ -1609,11 +1623,6 @@ impl BuildRequest {
                         .iter()
                         .map(|(k, v)| (k.as_ref(), v)),
                 );
-                cmd.arg(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
-
-                if self.is_wasm_or_wasi() {
-                    cmd.arg("-Crelocation-model=pic");
-                }
 
                 cmd.envs(rustc_args.envs.iter().cloned());
 
