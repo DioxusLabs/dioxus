@@ -786,7 +786,7 @@ fn has_user_shared_contexts(scope: &Scope) -> bool {
     })
 }
 
-/// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
+/// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has its own runtime.
 ///
 /// ```rust
 /// use dioxus::prelude::*;

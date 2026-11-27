@@ -11,7 +11,7 @@ pub type DioxusTrayMenu = tray_icon::menu::Menu;
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub type DioxusTrayMenu = ();
 
-/// tray icon icon type trait
+/// tray icon type trait
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub type DioxusTrayIcon = tray_icon::Icon;
 #[cfg(any(target_os = "ios", target_os = "android"))]
