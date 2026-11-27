@@ -199,6 +199,12 @@ impl Runtime {
             (local_task.unwrap(), task_id)
         };
 
+        // Tie the task to its owner so `remove_scope` cancels it. Without this, a task spawned
+        // directly through `Runtime::spawn` outlives its scope and is polled after unmount.
+        if let Some(state) = self.try_get_state(scope) {
+            state.spawned_tasks.borrow_mut().insert(task_id);
+        }
+
         // Get a borrow on the task, holding no borrows on the tasks map
         debug_assert!(self.tasks.try_borrow_mut().is_ok());
         debug_assert!(task.task.try_borrow_mut().is_ok());

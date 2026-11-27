@@ -349,16 +349,12 @@ impl Scope {
     /// });
     /// ```
     pub(crate) fn spawn_isomorphic(&self, fut: impl Future<Output = ()> + 'static) -> Task {
-        let id = Runtime::with(|rt| rt.spawn_isomorphic(self.id, fut));
-        self.spawned_tasks.borrow_mut().insert(id);
-        id
+        Runtime::with(|rt| rt.spawn_isomorphic(self.id, fut))
     }
 
     /// Spawns the future and returns the [`Task`]
     pub(crate) fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
-        let id = Runtime::with(|rt| rt.spawn(self.id, fut));
-        self.spawned_tasks.borrow_mut().insert(id);
-        id
+        Runtime::with(|rt| rt.spawn(self.id, fut))
     }
 
     /// Queue an effect to run after the next render
