@@ -76,7 +76,7 @@ dunce = { workspace = true }
 dirs = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls-no-provider", "json", "blocking"] }
 tower = { workspace = true }
-git2 = { version = "0.21.0" }
+git2 = { version = "0.21.0", features = ["https", "ssh"] }
 
 # path lookup
 which = { version = "8.0.0" }
