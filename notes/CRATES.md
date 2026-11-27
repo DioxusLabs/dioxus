@@ -14,7 +14,7 @@ Base            subsecond, manganis, const-serialize, generational-box, ...
 
 Each entry is `directory` (`crate name`) when the two differ.
 
-## Base (16 crates)
+## Base (17 crates)
 
 General-purpose building blocks with no dependency on Dioxus Core. Usable outside Dioxus.
 
@@ -30,6 +30,7 @@ General-purpose building blocks with no dependency on Dioxus Core. Usable outsid
 | `manganis/manganis` | `manganis` | The `asset!()` macro and asset options: assets are recorded as linker symbols that `dx` collects and optimizes. |
 | `manganis/manganis-core` | `manganis-core` | Core asset types (`Asset`, `BundledAsset`, asset options) shared by manganis, the CLI and renderers. |
 | `manganis/manganis-macro` | `manganis-macro` | Proc macros behind `asset!()` and friends. |
+| `asset-resolver` | `dioxus-asset-resolver` | Resolves manganis assets at runtime per platform: HTTP on web, bundle paths or Android's AssetManager on native. |
 | `wasm-split/wasm-split` | `wasm-splitter` | User-facing WASM code-splitting runtime: `#[wasm_split]`, `lazy_loader!` and the lazy loaders. Published as `wasm-splitter`. |
 | `wasm-split/wasm-split-macro` | `wasm-split-macro` | Proc macros that generate the split points and loaders for `wasm-splitter`. |
 | `lazy-js-bundle` | `lazy-js-bundle` | Build-script helper that bundles TypeScript into JavaScript without requiring a bundler to be installed. |
@@ -71,7 +72,7 @@ Libraries built on Core that are not tied to a specific renderer.
 | `router-macro` | `dioxus-router-macro` | `#[derive(Routable)]`. |
 | `config-macro` | `dioxus-config-macro` | `server_only!`, `client!`, `web!`, `desktop!`, `native!`, `mobile!`, `fullstack!`, `ssr!`, `liveview!`: code that is kept or dropped by enabled platform features. |
 
-## Framework (12 crates)
+## Framework (11 crates)
 
 Renderers, fullstack, and the `dioxus` umbrella that ties them together with `launch`.
 
@@ -79,7 +80,6 @@ Renderers, fullstack, and the `dioxus` umbrella that ties them together with `la
 | --- | --- | --- |
 | `dioxus` | `dioxus` | The umbrella crate apps depend on: re-exports Core, router, renderers and fullstack behind features, and provides `launch`/`LaunchBuilder`. |
 | `fullstack-core` | `dioxus-fullstack-core` | Fullstack types, contexts and hooks (serialized futures/values, `use_server_future` support) for libraries that integrate with fullstack without pulling in the server. |
-| `asset-resolver` | `dioxus-asset-resolver` | Resolves manganis assets at runtime per platform: HTTP on web, bundle paths or Android's AssetManager on native. |
 | `web` | `dioxus-web` | Browser renderer for WASM, with hydration. |
 | `desktop` | `dioxus-desktop` | Desktop and mobile renderer using a system webview (wry/tao). |
 | `liveview` | `dioxus-liveview` | Server-side renderer that streams mutations to the browser over a WebSocket. |
