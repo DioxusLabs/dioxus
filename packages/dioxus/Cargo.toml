@@ -15,6 +15,7 @@ dioxus-core = { workspace = true }
 dioxus-history = { workspace = true, optional = true }
 dioxus-config-macro = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
+dioxus-timers = { workspace = true, optional = true }
 dioxus-web = { workspace = true, default-features = false, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
@@ -70,6 +71,7 @@ wasm-split = [
 
 launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]
+timers = ["dep:dioxus-timers"]
 
 # Platforms
 fullstack = [
@@ -118,4 +120,4 @@ dioxus = { path = "." }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-features = ["router", "ssr", "web", "fullstack", "signals", "hooks", "html", "liveview", "server", "warnings"]
+features = ["router", "timers", "ssr", "web", "fullstack", "signals", "hooks", "html", "liveview", "server", "warnings"]

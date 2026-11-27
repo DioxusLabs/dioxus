@@ -3068,6 +3068,7 @@ dependencies = [
  "dioxus-native",
  "dioxus-router",
  "dioxus-server",
+ "dioxus-timers",
  "dioxus-web",
  "env_logger",
  "futures-util",
@@ -4103,6 +4104,19 @@ version = "0.0.0"
 dependencies = [
  "dioxus",
  "manganis",
+]
+
+[[package]]
+name = "dioxus-timers"
+version = "0.8.0-alpha.4"
+dependencies = [
+ "dioxus",
+ "dioxus-hooks",
+ "dioxus-signals",
+ "dioxus-vdom",
+ "futures",
+ "gloo-timers",
+ "tokio",
 ]
 
 [[package]]
