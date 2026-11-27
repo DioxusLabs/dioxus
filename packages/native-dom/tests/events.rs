@@ -4,6 +4,8 @@ mod drag_and_drop;
 mod event_queue;
 #[path = "events/native_wheel_data.rs"]
 mod native_wheel_data;
+#[path = "events/pointer_capture.rs"]
+mod pointer_capture;
 
 use blitz_dom::{BaseDocument, DocumentConfig, NodeId, UserAgentStylesheet};
 use blitz_html::HtmlDocument;
