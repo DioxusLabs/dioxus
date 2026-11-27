@@ -79,7 +79,7 @@ Renderers, fullstack, and the `dioxus` umbrella that ties them together with `la
 
 | Directory | Crate | What it is |
 | --- | --- | --- |
-| `dioxus` | `dioxus` | The umbrella crate apps depend on: re-exports Core, router, renderers and fullstack behind features, and provides `launch`/`LaunchBuilder`. |
+| `dioxus` | `dioxus` | The umbrella crate apps depend on: re-exports Core, router, timers, renderers and fullstack behind features, and provides `launch`/`LaunchBuilder`. |
 | `fullstack-core` | `dioxus-fullstack-core` | Fullstack types, contexts and hooks (serialized futures/values, `use_server_future` support) for libraries that integrate with fullstack without pulling in the server. |
 | `web` | `dioxus-web` | Browser renderer for WASM, with hydration. |
 | `desktop` | `dioxus-desktop` | Desktop and mobile renderer using a system webview (wry/tao). |
