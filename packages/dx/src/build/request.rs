@@ -944,13 +944,18 @@ impl BuildRequest {
             return Ok(());
         }
 
-        // Run the tailwind build before bundling anything else
-        _ = crate::TailwindCli::run_once(
+        // Run the tailwind build before bundling anything else. Tailwind is optional, so errors
+        // (including a project without tailwind) are only logged at debug level here;
+        // `dx tools tailwind` surfaces them.
+        if let Err(err) = crate::TailwindCli::run_once(
             self.package_manifest_dir(),
             self.config.application.tailwind_input.clone(),
             self.config.application.tailwind_output.clone(),
         )
-        .await;
+        .await
+        {
+            tracing::debug!("Skipping tailwind: {err}");
+        }
 
         // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
         if self.bundle == BundleFormat::Android {
