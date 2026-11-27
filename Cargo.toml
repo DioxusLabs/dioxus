@@ -480,10 +480,10 @@ sqlx = { version = "0.9.0", features = [
 wasm-streams = "0.5.0"
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["router", "fullstack"] }
-dioxus-html = { workspace = true, features = ["serialize"] }
-dioxus-stores = { workspace = true }
-dioxus-ssr = { workspace = true }
+dioxus = { path = "packages/dioxus", features = ["router", "fullstack"] }
+dioxus-html = { path = "packages/html", default-features = false, features = ["serialize"] }
+dioxus-stores = { path = "packages/stores" }
+dioxus-ssr = { path = "packages/ssr", default-features = false }
 futures-util = { workspace = true }
 separator = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

@@ -31,7 +31,7 @@ html = ["dep:dioxus-html"]
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }
 dioxus = { path = "../dioxus", features = ["router"] }
-dioxus-ssr = { workspace = true }
+dioxus-ssr = { path = "../ssr", default-features = false }
 criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
 ciborium = { workspace = true }
 base64 = { workspace = true }

@@ -118,11 +118,11 @@ targets = [
 ]
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["desktop"] }
+dioxus = { path = "../dioxus", features = ["desktop"] }
 exitcode = "1.1.2"
 reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
-dioxus-ssr = { workspace = true, default-features = false }
+dioxus-ssr = { path = "../ssr", default-features = false }
 separator = "0.4.1"
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.

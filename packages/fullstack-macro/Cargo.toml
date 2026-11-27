@@ -21,7 +21,7 @@ const_format = { workspace = true, default-features = true }
 convert_case = { workspace = true, default-features = true }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["fullstack"] }
+dioxus = { path = "../dioxus", features = ["fullstack"] }
 serde = { workspace = true, features = ["derive"] }
 tower-http = { workspace = true, features = ["timeout"] }
 axum = { workspace = true }

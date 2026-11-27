@@ -37,8 +37,8 @@ web = []
 server = []
 
 [dev-dependencies]
-dioxus-fullstack = { workspace = true }
-dioxus = { workspace = true, features = ["fullstack"] }
+dioxus-fullstack = { path = "../fullstack", default-features = false }
+dioxus = { path = "../dioxus", features = ["fullstack"] }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

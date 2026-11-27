@@ -39,7 +39,7 @@ axum = { workspace = true, optional = true, default-features = true, features = 
 tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true, features = ["ws"] }
 tower = { workspace = true }
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }
 
 [features]
 default = ["devtools", "multi-thread"]

@@ -15,4 +15,4 @@ dioxus-vdom = { workspace = true }
 pretty_assertions = { workspace = true }
 
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }

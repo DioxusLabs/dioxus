@@ -114,7 +114,7 @@ rand = { workspace = true, features = ["small_rng"] }
 thiserror = { workspace = true }
 env_logger = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-dioxus = { workspace = true }
+dioxus = { path = "." }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

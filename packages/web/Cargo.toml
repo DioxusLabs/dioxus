@@ -119,7 +119,7 @@ document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 [dev-dependencies]
 dioxus = { path = "../dioxus", default-features = true }
 wasm-bindgen-test = { workspace = true }
-dioxus-ssr = { workspace = true, default-features = false }
+dioxus-ssr = { path = "../ssr", default-features = false }
 gloo-dialogs = { workspace = true }
 dioxus-web = { path = ".", features = ["hydrate"] }
 

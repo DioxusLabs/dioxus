@@ -43,7 +43,7 @@ futures-util = { workspace = true }
 
 [dev-dependencies]
 blitz-html = { workspace = true }
-dioxus = { workspace = true }
+dioxus = { path = "../dioxus" }
 
 [package.metadata.docs.rs]
 all-features = true

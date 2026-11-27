@@ -88,8 +88,8 @@ webpki-roots = { workspace = true }
 tokio-util = { workspace = true, features = ["codec", "rt"] }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["fullstack", "router"] }
-dioxus-server = { workspace = true }
+dioxus = { path = "../dioxus", features = ["fullstack", "router"] }
+dioxus-server = { path = "../fullstack-server" }
 
 [features]
 default = ["ws"]
