@@ -6,6 +6,8 @@ mod event_queue;
 mod native_wheel_data;
 #[path = "events/pointer_capture.rs"]
 mod pointer_capture;
+#[path = "events/resize.rs"]
+mod resize;
 
 use blitz_dom::{BaseDocument, DocumentConfig, NodeId, UserAgentStylesheet};
 use blitz_html::HtmlDocument;

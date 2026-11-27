@@ -3,20 +3,21 @@ use blitz_dom::{
     ScrollLogicalPosition as BlitzScrollLogicalPosition,
 };
 use blitz_traits::events::{
-    BlitzDragEvent, BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, BlitzScrollEvent,
-    BlitzWheelDelta, BlitzWheelEvent, BlitzWheelPhase, BlitzWheelSource, MouseEventButton,
-    PointerKind,
+    BlitzDragEvent, BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, BlitzResizeEvent,
+    BlitzScrollEvent, BlitzWheelDelta, BlitzWheelEvent, BlitzWheelPhase, BlitzWheelSource,
+    MouseEventButton, PointerKind,
 };
 use blitz_traits::net::Bytes;
 use dioxus_html::{
     AnimationData, BeforeInputData, CancelData, ClipboardData, CompositionData, DataTransfer,
     DragData, FileData, FocusData, FormData, FormValue, HasDataTransferData, HasDragData,
     HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData, HasPointerData,
-    HasScrollData, HasTouchData, HasTouchPointData, HasWheelData, HtmlEventConverter, ImageData,
-    KeyboardData, MediaData, MountedData, MountedError, MountedResult, MouseData,
-    NativeDataTransfer, NativeFileData, PlatformEventData, PointerData, RenderedElementBacking,
-    ResizeData, ScrollBehavior, ScrollData, ScrollLogicalPosition, ScrollToOptions, SelectionData,
-    ToggleData, TouchData, TouchPoint, TransitionData, VisibleData, WheelData,
+    HasResizeData, HasScrollData, HasTouchData, HasTouchPointData, HasWheelData,
+    HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MountedError,
+    MountedResult, MouseData, NativeDataTransfer, NativeFileData, PlatformEventData, PointerData,
+    RenderedElementBacking, ResizeData, ResizeResult, ScrollBehavior, ScrollData,
+    ScrollLogicalPosition, ScrollToOptions, SelectionData, ToggleData, TouchData, TouchPoint,
+    TransitionData, VisibleData, WheelData,
     geometry::{
         ClientPoint, ElementPoint, PagePoint, PixelsRect, PixelsSize, PixelsVector2D, ScreenPoint,
         WheelDelta,
@@ -139,8 +140,8 @@ impl HtmlEventConverter for NativeConverter {
         event.downcast::<NativeWheelData>().unwrap().clone().into()
     }
 
-    fn convert_resize_data(&self, _event: &PlatformEventData) -> ResizeData {
-        unimplemented!("todo: convert_resize_data in dioxus-native. requires support in blitz")
+    fn convert_resize_data(&self, event: &PlatformEventData) -> ResizeData {
+        (*event.downcast::<NativeResizeData>().unwrap()).into()
     }
 
     fn convert_visible_data(&self, _event: &PlatformEventData) -> VisibleData {
@@ -660,6 +661,29 @@ impl HasScrollData for NativeScrollData {
 
     fn client_height(&self) -> i32 {
         self.0.client_height
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct NativeResizeData(pub(crate) BlitzResizeEvent);
+
+impl HasResizeData for NativeResizeData {
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+
+    fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
+        Ok(PixelsSize::new(
+            self.0.border_box_width as f64,
+            self.0.border_box_height as f64,
+        ))
+    }
+
+    fn get_content_box_size(&self) -> ResizeResult<PixelsSize> {
+        Ok(PixelsSize::new(
+            self.0.content_box_width as f64,
+            self.0.content_box_height as f64,
+        ))
     }
 }
 

@@ -387,13 +387,19 @@ impl RealDom for BlitzBackend<'_> {
         self.set_attribute_impl(node, "data-dioxus-id", None, value);
 
         if let Ok(kind) = DomEventKind::from_str(name) {
+            if kind == DomEventKind::Resize {
+                self.docm.doc.observe_resize(node);
+            }
             let idx = kind.discriminant() as usize;
             self.event_handler_counts[idx] += 1;
         }
     }
 
-    fn remove_event_listener(&mut self, _node: NodeId, _element_id: ElementId, name: &str) {
+    fn remove_event_listener(&mut self, node: NodeId, _element_id: ElementId, name: &str) {
         if let Ok(kind) = DomEventKind::from_str(name) {
+            if kind == DomEventKind::Resize {
+                self.docm.doc.unobserve_resize(node);
+            }
             let idx = kind.discriminant() as usize;
             self.event_handler_counts[idx] -= 1;
         }
