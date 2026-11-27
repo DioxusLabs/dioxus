@@ -198,12 +198,12 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "=0
 warnings = { version = "0.2.1" }
 
 # blitz / native
-blitz-dom = { version = "=0.3.0-beta.5", default-features = false }
-blitz-net = { version = "=0.3.0-beta.5" }
-blitz-html = { version = "=0.3.0-beta.5" }
-blitz-paint = { version = "=0.3.0-beta.5" }
-blitz-traits = { version = "=0.3.0-beta.5" }
-blitz-shell = { version = "=0.3.0-beta.5", default-features = false }
+blitz-dom = { version = "=0.3.0-beta.6", default-features = false }
+blitz-net = { version = "=0.3.0-beta.6" }
+blitz-html = { version = "=0.3.0-beta.6" }
+blitz-paint = { version = "=0.3.0-beta.6" }
+blitz-traits = { version = "=0.3.0-beta.6" }
+blitz-shell = { version = "=0.3.0-beta.6", default-features = false }
 peniko = { version = "0.6.1", default-features = false }
 anyrender = { version = "0.15.0" }
 anyrender_vello = { version = "0.16.0" }

@@ -362,6 +362,10 @@ impl EventHandler for DioxusEventHandler<'_> {
             // AppleStandardKeybinding events are not exposed to script
             DomEventData::AppleStandardKeybinding(_) => None,
 
+            DomEventData::GotPointerCapture(_)
+            | DomEventData::LostPointerCapture(_)
+            | DomEventData::Resize(_) => None,
+
             DomEventData::DragEnter(devent)
             | DomEventData::DragOver(devent)
             | DomEventData::DragLeave(devent)

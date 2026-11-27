@@ -3,8 +3,8 @@ use blitz_dom::{
     ScrollLogicalPosition as BlitzScrollLogicalPosition,
 };
 use blitz_traits::events::{
-    BlitzDragEvent, BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, BlitzScrollEvent,
-    BlitzWheelDelta, BlitzWheelEvent, BlitzWheelPhase, BlitzWheelSource, MouseEventButton,
+    BlitzDragEvent, BlitzKeyEvent, BlitzPointerEvent, BlitzScrollEvent, BlitzWheelDelta,
+    BlitzWheelEvent, BlitzWheelPhase, BlitzWheelSource, MouseEventButton, PointerKind,
 };
 use blitz_traits::net::Bytes;
 use dioxus_html::{
@@ -445,19 +445,14 @@ impl HasPointerData for NativePointerData {
     }
 
     fn pointer_id(&self) -> i32 {
-        match self.0.id {
-            BlitzPointerId::Mouse => 0,
-            BlitzPointerId::Pen => 1,
-            // Fingers map into 2..=i32::MAX so they never collide with mouse or pen
-            BlitzPointerId::Finger(id) => (id % (i32::MAX as u64 - 1)) as i32 + 2,
-        }
+        self.0.id.as_i32()
     }
 
     fn pointer_type(&self) -> String {
-        match self.0.id {
-            BlitzPointerId::Mouse => String::from("mouse"),
-            BlitzPointerId::Pen => String::from("pen"),
-            BlitzPointerId::Finger(_) => String::from("touch"),
+        match self.0.id.kind() {
+            PointerKind::Mouse => String::from("mouse"),
+            PointerKind::Pen => String::from("pen"),
+            PointerKind::Finger => String::from("touch"),
         }
     }
 
@@ -553,9 +548,9 @@ impl InteractionLocation for NativeTouchPointData {
 
 impl HasTouchPointData for NativeTouchPointData {
     fn identifier(&self) -> i32 {
-        match self.0.id {
-            BlitzPointerId::Finger(id) => id as i32,
-            BlitzPointerId::Mouse | BlitzPointerId::Pen => 0,
+        match self.0.id.kind() {
+            PointerKind::Finger => self.0.id.as_i32(),
+            PointerKind::Mouse | PointerKind::Pen => 0,
         }
     }
 
@@ -910,7 +905,7 @@ mod tests {
 
     fn finger_event(id: u64, x: f32, y: f32) -> BlitzPointerEvent {
         BlitzPointerEvent {
-            id: BlitzPointerId::Finger(id),
+            id: BlitzPointerId::finger(id),
             is_primary: id == 0,
             coords: PointerCoords {
                 page_x: x,
@@ -926,6 +921,21 @@ mod tests {
             details: PointerDetails::default(),
             element: Point::default(),
             active_pointers: Default::default(),
+        }
+    }
+
+    #[test]
+    fn pointer_data_uses_blitz_ids_and_kinds() {
+        let mut event = finger_event(7, 1.0, 2.0);
+        for (id, kind) in [
+            (BlitzPointerId::mouse(), "mouse"),
+            (BlitzPointerId::pen(), "pen"),
+            (event.id, "touch"),
+        ] {
+            event.id = id;
+            let data = NativePointerData(event.clone());
+            assert_eq!(data.pointer_id(), id.as_i32());
+            assert_eq!(data.pointer_type(), kind);
         }
     }
 
@@ -961,6 +971,8 @@ mod tests {
         // ... while `changed_touches` reports only the triggering touch.
         assert_eq!(data.touches_changed().len(), 1);
         let changed = data.touches_changed();
+        let changed_touch = changed[0].downcast::<NativeTouchPointData>().unwrap();
+        assert_eq!(changed_touch.identifier(), f1.id.as_i32());
         let changed_coords = changed[0].client_coordinates();
         assert_eq!((changed_coords.x, changed_coords.y), (30.0, 40.0));
     }
