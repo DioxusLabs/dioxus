@@ -128,7 +128,7 @@ fn mouse_pen_and_fingers_get_distinct_pointer_ids() {
                 id: "handle",
                 style: "width: 100px; height: 100px",
                 onpointerdown: move |event| {
-                    seen.push(format!("{} {}", event.pointer_type(), event.pointer_id()));
+                    seen.push(format!("{} {}", event.pointer_type(), event.pointer_id().raw()));
                 },
             }
             div { id: "seen", {seen().join(", ")} }

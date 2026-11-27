@@ -15,7 +15,7 @@ use dioxus_html::{
     HasResizeData, HasScrollData, HasTouchData, HasTouchPointData, HasWheelData,
     HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MountedError,
     MountedResult, MouseData, NativeDataTransfer, NativeFileData, PlatformEventData, PointerData,
-    RenderedElementBacking, ResizeData, ResizeResult, ScrollBehavior, ScrollData,
+    PointerId, RenderedElementBacking, ResizeData, ResizeResult, ScrollBehavior, ScrollData,
     ScrollLogicalPosition, ScrollToOptions, SelectionData, ToggleData, TouchData, TouchPoint,
     TransitionData, VisibleData, WheelData,
     geometry::{
@@ -214,14 +214,15 @@ impl NodeHandle {
 
     fn pointer_capture_op(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
         op: impl FnOnce(BlitzPointerId) -> bool,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        let Some(pointer_id) = BlitzPointerId::from_i32(pointer_id) else {
-            let err = MountedError::OperationFailed(Box::new(InvalidPointerIdErr(pointer_id)));
+        let Some(id) = BlitzPointerId::from_i32(pointer_id.raw()) else {
+            let err =
+                MountedError::OperationFailed(Box::new(InvalidPointerIdErr(pointer_id.raw())));
             return Box::pin(async move { Err(err) });
         };
-        if !op(pointer_id) {
+        if !op(id) {
             return self.node_not_exist_err();
         }
         Box::pin(async { Ok(()) })
@@ -361,14 +362,14 @@ impl RenderedElementBacking for NodeHandle {
 
     fn set_pointer_capture(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.pointer_capture_op(pointer_id, |id| NodeHandle::set_pointer_capture(self, id))
     }
 
     fn release_pointer_capture(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.pointer_capture_op(pointer_id, |id| {
             if self.doc().get_node(self.node_id).is_none() {
@@ -509,8 +510,8 @@ impl HasPointerData for NativePointerData {
         self.0.is_primary
     }
 
-    fn pointer_id(&self) -> i32 {
-        self.0.id.as_i32()
+    fn pointer_id(&self) -> PointerId {
+        PointerId::from_raw(self.0.id.as_i32())
     }
 
     fn pointer_type(&self) -> String {
@@ -1022,7 +1023,7 @@ mod tests {
         ] {
             event.id = id;
             let data = NativePointerData(event.clone());
-            assert_eq!(data.pointer_id(), id.as_i32());
+            assert_eq!(data.pointer_id(), PointerId::from_raw(id.as_i32()));
             assert_eq!(data.pointer_type(), kind);
         }
     }

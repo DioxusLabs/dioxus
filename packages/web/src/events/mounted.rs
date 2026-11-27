@@ -1,7 +1,7 @@
 use std::{future::Future, pin::Pin};
 
 use dioxus_html::{
-    MountedData, MountedError, MountedResult,
+    MountedData, MountedError, MountedResult, PointerId,
     geometry::euclid::{Point2D, Size2D},
 };
 use wasm_bindgen::JsCast;
@@ -147,22 +147,22 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
 
     fn set_pointer_capture(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         let result = self
             .event
-            .set_pointer_capture(pointer_id)
+            .set_pointer_capture(pointer_id.raw())
             .map_err(|err| MountedError::OperationFailed(format!("{err:?}").into()));
         Box::pin(async { result })
     }
 
     fn release_pointer_capture(
         &self,
-        pointer_id: i32,
+        pointer_id: PointerId,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         let result = self
             .event
-            .release_pointer_capture(pointer_id)
+            .release_pointer_capture(pointer_id.raw())
             .map_err(|err| MountedError::OperationFailed(format!("{err:?}").into()));
         Box::pin(async { result })
     }
