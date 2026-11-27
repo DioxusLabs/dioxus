@@ -226,29 +226,95 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
     get_mime_from_ext(ext)
 }
 
-/// Get the mime type from a URI using its extension
+/// Get the mime type from a file extension (without the leading dot, matched case-insensitively)
+///
+/// Covers the common types listed by MDN, and falls back to `application/octet-stream` when the
+/// extension is missing or unknown:
+/// <https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types/Common_types>
 pub fn get_mime_from_ext(ext: Option<&str>) -> &'static str {
-    match ext {
+    match ext.map(str::to_ascii_lowercase).as_deref() {
         // The common assets are all utf-8 encoded
-        Some("js") => "text/javascript; charset=utf-8",
+        Some("js" | "mjs") => "text/javascript; charset=utf-8",
         Some("css") => "text/css; charset=utf-8",
         Some("json") => "application/json; charset=utf-8",
         Some("svg") => "image/svg+xml; charset=utf-8",
-        Some("html") => "text/html; charset=utf-8",
+        Some("html" | "htm") => "text/html; charset=utf-8",
 
-        // the rest... idk? probably not
-        Some("mjs") => "text/javascript; charset=utf-8",
-        Some("bin") => "application/octet-stream",
+        // text
+        Some("txt") => "text/plain; charset=utf-8",
         Some("csv") => "text/csv",
-        Some("ico") => "image/vnd.microsoft.icon",
+        Some("ics") => "text/calendar",
+        Some("md") => "text/markdown",
+        Some("xml") => "application/xml",
+        Some("xhtml") => "application/xhtml+xml",
         Some("jsonld") => "application/ld+json",
-        Some("rtf") => "application/rtf",
+        Some("webmanifest") => "application/manifest+json",
+
+        // images
+        Some("apng") => "image/apng",
+        Some("avif") => "image/avif",
+        Some("bmp") => "image/bmp",
+        Some("gif") => "image/gif",
+        Some("ico") => "image/vnd.microsoft.icon",
+        Some("jpeg" | "jpg") => "image/jpeg",
+        Some("png") => "image/png",
+        Some("tif" | "tiff") => "image/tiff",
+        Some("webp") => "image/webp",
+
+        // audio
+        Some("aac") => "audio/aac",
+        Some("mid" | "midi") => "audio/midi",
+        Some("mp3") => "audio/mpeg",
+        Some("oga") => "audio/ogg",
+        Some("opus") => "audio/ogg",
+        Some("wav") => "audio/wav",
+        Some("weba") => "audio/webm",
+
+        // video
+        Some("avi") => "video/x-msvideo",
         Some("mp4") => "video/mp4",
-        // Assume HTML when a TLD is found for eg. `dioxus:://dioxuslabs.app` | `dioxus://hello.com`
-        Some(_) => "text/html; charset=utf-8",
-        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-        // using octet stream according to this:
-        None => "application/octet-stream",
+        Some("mpeg") => "video/mpeg",
+        Some("ogv") => "video/ogg",
+        Some("ts") => "video/mp2t",
+        Some("webm") => "video/webm",
+        Some("3gp") => "video/3gpp",
+        Some("3g2") => "video/3gpp2",
+
+        // fonts
+        Some("eot") => "application/vnd.ms-fontobject",
+        Some("otf") => "font/otf",
+        Some("ttf") => "font/ttf",
+        Some("woff") => "font/woff",
+        Some("woff2") => "font/woff2",
+
+        // documents
+        Some("doc") => "application/msword",
+        Some("docx") => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        Some("epub") => "application/epub+zip",
+        Some("odp") => "application/vnd.oasis.opendocument.presentation",
+        Some("ods") => "application/vnd.oasis.opendocument.spreadsheet",
+        Some("odt") => "application/vnd.oasis.opendocument.text",
+        Some("pdf") => "application/pdf",
+        Some("ppt") => "application/vnd.ms-powerpoint",
+        Some("pptx") => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        Some("rtf") => "application/rtf",
+        Some("xls") => "application/vnd.ms-excel",
+        Some("xlsx") => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+        // archives and binaries
+        Some("bz") => "application/x-bzip",
+        Some("bz2") => "application/x-bzip2",
+        Some("gz") => "application/gzip",
+        Some("jar") => "application/java-archive",
+        Some("ogx") => "application/ogg",
+        Some("rar") => "application/vnd.rar",
+        Some("tar") => "application/x-tar",
+        Some("wasm") => "application/wasm",
+        Some("zip") => "application/zip",
+        Some("7z") => "application/x-7z-compressed",
+
+        // Unknown or missing extension: use octet stream, as MDN recommends
+        _ => "application/octet-stream",
     }
 }
 
@@ -297,5 +363,41 @@ pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
 
         let mut asset = asset_manager.open(&cstr)?;
         Some(asset.buffer().unwrap().to_vec())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_mime_from_ext;
+
+    #[test]
+    fn known_extensions_get_their_mime_type() {
+        assert_eq!(get_mime_from_ext(Some("gif")), "image/gif");
+        assert_eq!(get_mime_from_ext(Some("png")), "image/png");
+        assert_eq!(get_mime_from_ext(Some("jpg")), "image/jpeg");
+        assert_eq!(get_mime_from_ext(Some("jpeg")), "image/jpeg");
+        assert_eq!(get_mime_from_ext(Some("pdf")), "application/pdf");
+        assert_eq!(get_mime_from_ext(Some("wasm")), "application/wasm");
+        assert_eq!(get_mime_from_ext(Some("woff2")), "font/woff2");
+        assert_eq!(get_mime_from_ext(Some("html")), "text/html; charset=utf-8");
+        assert_eq!(
+            get_mime_from_ext(Some("js")),
+            "text/javascript; charset=utf-8"
+        );
+    }
+
+    #[test]
+    fn extensions_are_matched_case_insensitively() {
+        assert_eq!(get_mime_from_ext(Some("GIF")), "image/gif");
+        assert_eq!(get_mime_from_ext(Some("Html")), "text/html; charset=utf-8");
+    }
+
+    #[test]
+    fn unknown_or_missing_extensions_are_octet_stream() {
+        assert_eq!(get_mime_from_ext(None), "application/octet-stream");
+        assert_eq!(get_mime_from_ext(Some("")), "application/octet-stream");
+        assert_eq!(get_mime_from_ext(Some("bin")), "application/octet-stream");
+        assert_eq!(get_mime_from_ext(Some("xyz")), "application/octet-stream");
+        assert_eq!(get_mime_from_ext(Some("日本")), "application/octet-stream");
     }
 }
