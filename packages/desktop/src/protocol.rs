@@ -38,7 +38,7 @@ pub(super) fn desktop_handler(
     asset_handlers: AssetHandlerRegistry,
     responder: RequestAsyncResponder,
     edit_state: &WebviewEdits,
-    custom_head: Option<String>,
+    custom_head: &[String],
     custom_index: Option<String>,
     root_name: &str,
     headless: bool,
@@ -91,6 +91,24 @@ pub(super) fn desktop_handler(
     }
 }
 
+/// Insert the custom head content into the index.html, just before the closing head tag.
+///
+/// Entries are injected in the order they were added so that multiple callers stack instead of
+/// overwriting each other.
+///
+/// We look just for the closing head tag. If a user provided a custom index with weird syntax, this
+/// might fail.
+fn insert_custom_head(index: &mut String, custom_head: &[String]) {
+    if custom_head.is_empty() {
+        return;
+    }
+
+    index.insert_str(
+        index.find("</head>").expect("Head element to exist"),
+        &custom_head.concat(),
+    );
+}
+
 /// Build the index.html file we use for bootstrapping a new app
 ///
 /// We use wry/webview by building a special index.html that forms a bridge between the webview and your rust code
@@ -102,7 +120,7 @@ pub(super) fn desktop_handler(
 /// *do* have native control over elements, but that still won't work with liveview.
 fn index_request(
     request: &Request<Vec<u8>>,
-    custom_head: Option<String>,
+    custom_head: &[String],
     custom_index: Option<String>,
     root_name: &str,
     headless: bool,
@@ -116,11 +134,8 @@ fn index_request(
     // Load a custom index file if provided
     let mut index = custom_index.unwrap_or_else(|| DEFAULT_INDEX.to_string());
 
-    // Insert a custom head if provided
-    // We look just for the closing head tag. If a user provided a custom index with weird syntax, this might fail
-    if let Some(head) = custom_head {
-        index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
-    }
+    // Insert any custom head content, in the order it was added
+    insert_custom_head(&mut index, custom_head);
 
     // Inject our module loader by looking for a body tag
     // A failure mode here, obviously, is if the user provided a custom index without a body tag
@@ -272,4 +287,31 @@ fn respond_to_file_dialog(
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_custom_head_leaves_the_index_untouched() {
+        let mut index = "<head></head>".to_string();
+
+        insert_custom_head(&mut index, &[]);
+
+        assert_eq!(index, "<head></head>");
+    }
+
+    #[test]
+    fn custom_head_is_injected_in_registration_order() {
+        let mut index = "<head></head>".to_string();
+        let entries = [
+            "<style>app</style>".to_string(),
+            "<script>lib</script>".to_string(),
+        ];
+
+        insert_custom_head(&mut index, &entries);
+
+        assert_eq!(index, "<head><style>app</style><script>lib</script></head>");
+    }
 }
