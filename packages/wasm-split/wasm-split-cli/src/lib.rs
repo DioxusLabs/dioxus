@@ -46,6 +46,9 @@ pub struct Splitter<'a> {
     chunks: Vec<HashSet<Node>>,
     data_symbols: BTreeMap<usize, DataSymbol>,
     main_graph: HashSet<Node>,
+    /// Roots of the main module besides its exports, imports and start function: the functions
+    /// wasm-bindgen created, and the symbols reached from functions it removed.
+    extra_main_roots: HashSet<Node>,
     call_graph: HashMap<Node, HashSet<Node>>,
     parent_graph: HashMap<Node, HashSet<Node>>,
 }
@@ -99,6 +102,7 @@ impl<'a> Splitter<'a> {
             _ids_to_fns: ids,
             fns_to_ids,
             main_graph: Default::default(),
+            extra_main_roots: Default::default(),
             chunks: Default::default(),
             call_graph: Default::default(),
             parent_graph: Default::default(),
@@ -942,13 +946,9 @@ impl<'a> Splitter<'a> {
             .collect();
 
         let mut old_to_new = HashMap::new();
-        let mut new_call_graph: HashMap<Node, HashSet<Node>> = HashMap::new();
-
         for (new_name, new_func) in new_names.iter() {
             if let Some(old_func) = old_names.get(new_name) {
                 old_to_new.insert(*old_func, new_func);
-            } else {
-                new_call_graph.insert(Node::Function(*new_func), HashSet::new());
             }
         }
 
@@ -1026,15 +1026,17 @@ impl<'a> Splitter<'a> {
             }
         }
 
-        // We're going to attach the recovered children to the main function
-        let main_fn = self.source_module.funcs.by_name("main").context("Failed to find `main` function - was this built with LTO, --emit-relocs, and debug symbols?")?;
-        let main_fn_entry = new_call_graph.entry(Node::Function(main_fn)).or_default();
-        main_fn_entry.extend(recovered_children);
-
-        // Also attach any truly new symbols to the main function. Usually these are the shim functions
-        for (name, new) in new_names.iter() {
-            if !old_names.contains_key(name) {
-                main_fn_entry.insert(Node::Function(*new));
+        // The recovered children and any truly new symbols (usually the shim functions) become
+        // roots of the main module, so they stay in it. The module doesn't need a `main` function
+        // for this, which a `cdylib` doesn't have.
+        //
+        // `WASM_SPLIT_EXTRA_ROOTS=0` leaves them out of the main module's roots.
+        if std::env::var("WASM_SPLIT_EXTRA_ROOTS").as_deref() != Ok("0") {
+            self.extra_main_roots.extend(recovered_children);
+            for (name, new) in new_names.iter() {
+                if !old_names.contains_key(name) {
+                    self.extra_main_roots.insert(Node::Function(*new));
+                }
             }
         }
 
@@ -1131,6 +1133,9 @@ impl<'a> Splitter<'a> {
                 roots.insert(Node::Function(id));
             }
         }
+
+        // And the recovered children and new (shim) functions
+        roots.extend(self.extra_main_roots.iter().copied());
 
         roots
     }
