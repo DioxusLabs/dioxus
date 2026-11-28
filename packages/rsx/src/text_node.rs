@@ -44,10 +44,12 @@ impl ToTokens for TextNode {
 
 impl TextNode {
     pub fn from_text(text: &str) -> Self {
-        let ifmt = IfmtInput {
-            source: LitStr::new(text, Span::call_site()),
-            segments: vec![],
-        };
+        // Text coming from raw sources (like HTML) is always literal, so any `{`/`}` must be
+        // escaped to avoid being parsed as format-string interpolation when the generated `rsx!`
+        // source is compiled.
+        let source = LitStr::new(&IfmtInput::escape_literal_braces(text), Span::call_site());
+        let ifmt = IfmtInput::new_litstr(source)
+            .expect("escaping the braces should always produce a valid format string");
         Self { input: ifmt.into() }
     }
 

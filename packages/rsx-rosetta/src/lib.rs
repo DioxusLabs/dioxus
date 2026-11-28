@@ -18,12 +18,27 @@ pub fn rsx_from_html(dom: &Dom) -> CallBody {
     let nodes = dom
         .children
         .iter()
-        .filter_map(rsx_node_from_html)
+        .flat_map(rsx_nodes_from_html)
         .collect::<Vec<_>>();
 
     let template = TemplateBody::new(nodes);
 
     CallBody::new(template)
+}
+
+/// Convert an HTML Node into zero or more RSX BodyNodes.
+///
+/// This mostly defers to [`rsx_node_from_html`], except for the document root `<html>` element
+/// which has no RSX equivalent (`html` is the element vocabulary root in Dioxus). Its children
+/// (`<head>`, `<body>`, ...) are spliced in as siblings instead.
+fn rsx_nodes_from_html(node: &Node) -> Vec<BodyNode> {
+    if let Node::Element(el) = node
+        && el.name.eq_ignore_ascii_case("html")
+    {
+        return el.children.iter().flat_map(rsx_nodes_from_html).collect();
+    }
+
+    rsx_node_from_html(node).into_iter().collect()
 }
 
 /// Convert an HTML Node into an RSX BodyNode
