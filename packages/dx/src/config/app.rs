@@ -55,6 +55,17 @@ pub(crate) struct ApplicationConfig {
     /// Specified minimum sdk version for gradle to build the app with.
     #[serde(default)]
     pub(crate) android_min_sdk_version: Option<u32>,
+
+    /// Keep the original executable name when serving instead of appending an
+    /// entropy suffix.
+    ///
+    /// By default, `dx serve` copies the built app to `{name}-{entropy}.exe` so that
+    /// two instances of the same app can run side by side. On Windows, every new
+    /// binary name triggers a firewall prompt, so this can be disabled to keep the
+    /// original name. Note that with entropy disabled, running two instances of the
+    /// same app at once may collide on the filesystem.
+    #[serde(default)]
+    pub(crate) disable_entropy: bool,
 }
 
 fn public_dir_default() -> Option<PathBuf> {

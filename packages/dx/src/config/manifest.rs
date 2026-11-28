@@ -1778,6 +1778,7 @@ mod tests {
         // Verify application config properties
         assert!(json.contains("asset_dir"));
         assert!(json.contains("public_dir"));
+        assert!(json.contains("disable_entropy"));
 
         // Verify web config properties
         assert!(json.contains("pre_compress"));

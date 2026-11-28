@@ -513,6 +513,10 @@
             "null"
           ]
         },
+        "disable_entropy": {
+          "description": "Keep the original executable name when serving instead of appending an\nentropy suffix.\n\nBy default, `dx serve` copies the built app to `{name}-{entropy}.exe` so that\ntwo instances of the same app can run side by side. On Windows, every new\nbinary name triggers a firewall prompt, so this can be disabled to keep the\noriginal name. Note that with entropy disabled, running two instances of the\nsame app at once may collide on the filesystem.",
+          "type": "boolean"
+        },
         "ios_entitlements": {
           "description": "Use this file for the entitlements.plist associated with the iOS app.",
           "type": [
