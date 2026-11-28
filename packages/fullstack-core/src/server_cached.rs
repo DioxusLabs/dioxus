@@ -45,23 +45,16 @@ where
     #[allow(unused)]
     let entry: SerializeContextEntry<O> = serialize.create_entry();
 
-    #[cfg(feature = "server")]
-    {
-        let data = value();
-        entry.insert(&data, location);
-        data
-    }
-
-    #[cfg(all(not(feature = "server"), feature = "web"))]
-    {
-        match entry.get() {
+    #[cfg(feature = "web")]
+    if !crate::transport::is_server() {
+        return match entry.get() {
             Ok(value) => value,
             Err(_) => value(),
-        }
+        };
     }
 
-    #[cfg(not(any(feature = "server", feature = "web")))]
-    {
-        value()
-    }
+    let data = value();
+    #[cfg(feature = "server")]
+    entry.insert(&data, location);
+    data
 }
