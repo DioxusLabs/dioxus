@@ -55,6 +55,15 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 
+	{{#if scene_manifest}}
+	<!-- The UIScene life cycle, required by the iOS 27 SDK. One window: tao attaches it to the scene. -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	{{/if}}
+
 	<!-- Permission usage descriptions from Dioxus.toml [permissions] section -->
 	{{#each permissions}}
 	<key>{{ this.key }}</key>
