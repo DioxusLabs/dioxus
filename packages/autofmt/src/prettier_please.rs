@@ -1,4 +1,5 @@
 use dioxus_rsx::CallBody;
+use std::ops::RangeInclusive;
 use syn::{Expr, File, Item, MacroDelimiter, parse::Parser, visit_mut::VisitMut};
 
 use crate::{IndentOptions, Writer};
@@ -6,6 +7,10 @@ use crate::{IndentOptions, Writer};
 impl Writer<'_> {
     pub fn unparse_expr(&mut self, expr: &Expr) -> String {
         unparse_expr(expr, self.raw_src, &self.out.indent)
+    }
+
+    pub(crate) fn unparse_expr_with_nested_rsx(&mut self, expr: &Expr) -> (String, Vec<NestedRsx>) {
+        unparse_expr_with_nested_rsx(expr, self.raw_src, &self.out.indent)
     }
 
     pub fn unparse_pat(&self, pat: &syn::Pat) -> String {
@@ -17,10 +22,29 @@ impl Writer<'_> {
 const MARKER: &str = "𝕣𝕤𝕩";
 const MARKER_REPLACE: &str = "𝕣𝕤𝕩! {}";
 
+/// The lines taken up by an `rsx!` call that is nested in an expression
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct NestedRsx {
+    /// The lines of its delimiters in the source file (starting from 1)
+    pub src_lines: RangeInclusive<usize>,
+    /// The lines of its delimiters in the formatted expression (starting from 0)
+    pub formatted_lines: RangeInclusive<usize>,
+}
+
 pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
+    unparse_expr_with_nested_rsx(expr, src, cfg).0
+}
+
+pub(crate) fn unparse_expr_with_nested_rsx(
+    expr: &Expr,
+    src: &str,
+    cfg: &IndentOptions,
+) -> (String, Vec<NestedRsx>) {
     struct ReplaceMacros<'a> {
         src: &'a str,
-        formatted_stack: Vec<String>,
+        /// Each formatted block, whether it has to be written on its own lines, and the lines
+        /// of its delimiters in the source
+        formatted_stack: Vec<(String, bool, RangeInclusive<usize>)>,
         cfg: &'a IndentOptions,
     }
 
@@ -39,13 +63,19 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 // once we've written out the unparsed expr from prettyplease, we can replace
                 // this dummy block with the actual formatted block
                 let body = CallBody::parse_strict.parse2(i.tokens.clone()).unwrap();
-                let multiline = !Writer::is_short_rsx_call(&body.body().roots);
-                let mut formatted = {
-                    let mut writer = Writer::new(self.src, self.cfg.clone());
-                    _ = writer.write_body_nodes(&body.body().roots).ok();
-                    writer.consume()
-                }
-                .unwrap();
+                let mut writer = Writer::new(self.src, self.cfg.clone());
+                let delimiter = i.delimiter.span();
+                let src_lines = delimiter.open().start().line..=delimiter.close().end().line;
+
+                // A comment after the opening delimiter ends its line, so the body can't follow
+                // on it. The comment itself is written with the other comments of the expression.
+                let has_open_comment = writer
+                    .inline_comment(i.delimiter.span().open().start(), 1)
+                    .is_some();
+                let multiline = !Writer::is_short_rsx_call(&body.body().roots) || has_open_comment;
+
+                _ = writer.write_body_nodes(&body.body().roots).ok();
+                let mut formatted = writer.consume().unwrap();
 
                 i.path = syn::parse_str(MARKER).unwrap();
                 i.tokens = Default::default();
@@ -72,7 +102,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 }
 
                 // Save this formatted block for later, when we apply it to the original expr
-                self.formatted_stack.push(formatted)
+                self.formatted_stack.push((formatted, multiline, src_lines))
             }
 
             syn::visit_mut::visit_macro_mut(self, i);
@@ -94,15 +124,14 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     let mut unparsed = unparse_inner(&modified_expr);
 
     // now we can replace the macros with the formatted blocks
-    for fmted in replacer.formatted_stack.drain(..) {
-        let is_multiline = fmted.ends_with('}') || fmted.contains('\n');
+    let mut nested_rsx = vec![];
+    for (fmted, multiline, src_lines) in replacer.formatted_stack.drain(..) {
+        let is_multiline = multiline || fmted.ends_with('}') || fmted.contains('\n');
         let is_empty = fmted.trim().is_empty();
 
         let mut out_fmt = String::from("rsx! {");
-        if is_multiline {
-            out_fmt.push('\n');
-        } else if !is_empty {
-            out_fmt.push(' ');
+        if !is_empty {
+            out_fmt.push(if is_multiline { '\n' } else { ' ' });
         }
 
         let mut whitespace = 0;
@@ -141,12 +170,21 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         // Replace the dioxus_autofmt_block__________ token with the formatted block
         out_fmt.push('}');
 
+        if let Some(marker) = unparsed.find(MARKER_REPLACE) {
+            let open = unparsed[..marker].matches('\n').count();
+            let close = open + out_fmt.matches('\n').count();
+            nested_rsx.push(NestedRsx {
+                src_lines,
+                formatted_lines: open..=close,
+            });
+        }
+
         unparsed = unparsed.replacen(MARKER_REPLACE, &out_fmt, 1);
         continue;
     }
 
     // stylistic choice to trim whitespace around the expr
-    if unparsed.starts_with("{ ") && unparsed.ends_with(" }") {
+    let unparsed = if unparsed.starts_with("{ ") && unparsed.ends_with(" }") {
         let mut out_fmt = String::new();
         out_fmt.push('{');
         out_fmt.push_str(&unparsed[2..unparsed.len() - 2]);
@@ -154,7 +192,9 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         out_fmt
     } else {
         unparsed
-    }
+    };
+
+    (unparsed, nested_rsx)
 }
 
 /// Unparse an expression back into a string
