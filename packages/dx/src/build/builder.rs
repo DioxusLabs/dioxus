@@ -1,6 +1,6 @@
 use crate::{
-    BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx,
-    Result, StructuredOutput, serve::WebServer, verbosity_or_default,
+    BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat, DioxusConfig,
+    ProgressRx, ProgressTx, Result, StructuredOutput, serve::WebServer, verbosity_or_default,
 };
 use crate::{BuildPhaseProfile, opt::process_file_to};
 use anyhow::{Context, Error, bail};
@@ -1595,11 +1595,15 @@ impl AppBuilder {
         entropy_server_exe
     }
 
-    fn app_exe(&mut self) -> PathBuf {
-        let mut main_exe = self.build.main_exe();
-
+    /// Whether the app exe should be copied to a unique name ("entropy") for this build.
+    ///
+    /// Bundled platforms never need entropy, but unbundled desktop/server builds do so
+    /// two instances can run side by side. Users can opt out with the
+    /// application.disable_entropy setting in Dioxus.toml or the DIOXUS_DISABLE_ENTROPY
+    /// env var - e.g. to avoid a Windows firewall prompt for every renamed binary.
+    fn requires_entropy(bundle: BundleFormat, config: &DioxusConfig) -> bool {
         // The requirement here is based on the platform, not necessarily our current architecture.
-        let requires_entropy = match self.build.bundle {
+        let platform_requires_entropy = match bundle {
             // When running "bundled", we don't need entropy
             BundleFormat::Web | BundleFormat::MacOS | BundleFormat::Ios | BundleFormat::Android => {
                 false
@@ -1609,7 +1613,17 @@ impl AppBuilder {
             BundleFormat::Windows | BundleFormat::Linux | BundleFormat::Server => true,
         };
 
-        if requires_entropy || crate::devcfg::should_force_entropy() {
+        platform_requires_entropy
+            && !config.application.disable_entropy
+            && !crate::devcfg::should_disable_entropy()
+    }
+
+    fn app_exe(&mut self) -> PathBuf {
+        let mut main_exe = self.build.main_exe();
+
+        if Self::requires_entropy(self.build.bundle, &self.build.config)
+            || crate::devcfg::should_force_entropy()
+        {
             // If we already have an entropy app exe, return it - this is useful for re-opening the same app
             if let Some(existing_app_exe) = self.entropy_app_exe.clone() {
                 return existing_app_exe;
@@ -2214,5 +2228,68 @@ impl AppBuilder {
         drop(_child);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ApplicationConfig, DioxusConfig};
+
+    fn config_with_disable_entropy(disable_entropy: bool) -> DioxusConfig {
+        DioxusConfig {
+            application: ApplicationConfig {
+                disable_entropy,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn unbundled_platforms_require_entropy_by_default() {
+        for bundle in [
+            BundleFormat::Windows,
+            BundleFormat::Linux,
+            BundleFormat::Server,
+        ] {
+            assert!(
+                AppBuilder::requires_entropy(bundle, &config_with_disable_entropy(false)),
+                "{bundle:?} should require entropy by default"
+            );
+        }
+    }
+
+    #[test]
+    fn disable_entropy_keeps_original_exe_name() {
+        for bundle in [
+            BundleFormat::Windows,
+            BundleFormat::Linux,
+            BundleFormat::Server,
+        ] {
+            assert!(
+                !AppBuilder::requires_entropy(bundle, &config_with_disable_entropy(true)),
+                "{bundle:?} should not require entropy when disable_entropy is set"
+            );
+        }
+    }
+
+    #[test]
+    fn bundled_platforms_never_require_entropy() {
+        for bundle in [
+            BundleFormat::Web,
+            BundleFormat::MacOS,
+            BundleFormat::Ios,
+            BundleFormat::Android,
+        ] {
+            assert!(!AppBuilder::requires_entropy(
+                bundle,
+                &config_with_disable_entropy(false)
+            ));
+            assert!(!AppBuilder::requires_entropy(
+                bundle,
+                &config_with_disable_entropy(true)
+            ));
+        }
     }
 }

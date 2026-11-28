@@ -112,6 +112,7 @@ impl Default for DioxusConfig {
                 android_manifest: None,
                 android_main_activity: None,
                 android_min_sdk_version: None,
+                disable_entropy: false,
                 macos_info_plist: None,
                 ios_entitlements: None,
                 macos_entitlements: None,

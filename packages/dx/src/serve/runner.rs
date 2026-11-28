@@ -2229,6 +2229,16 @@ fn analyze_dioxus_value(
         }
     }
 
+    // ---- [application].disable_entropy — applied when the app process is (re)spawned ----
+    if toml_get(old, &["application", "disable_entropy"])
+        != toml_get(new, &["application", "disable_entropy"])
+    {
+        outcome = outcome.escalate(ConfigChangeOutcome::WarnRestart {
+            subject: "Dioxus.toml [application].disable_entropy".to_string(),
+            detail: "changed — restart `dx serve` to apply.".to_string(),
+        });
+    }
+
     // ---- [web.app] — title and base_path get baked into HTML / WASM URLs ----
     if toml_get(old, &["web", "app"]) != toml_get(new, &["web", "app"]) {
         outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
@@ -2919,6 +2929,20 @@ script = ["http://example.com/x.js"]
 "#
         );
         assert_rebuild(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_disable_entropy_warns_restart() {
+        let modified = DIOXUS_BASELINE.replace(
+            r#"public_dir = "public""#,
+            r#"public_dir = "public"
+disable_entropy = true"#,
+        );
+        assert_warn(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
             &parse(&modified),
             &ctx_dev_web(),

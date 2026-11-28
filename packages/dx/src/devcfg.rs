@@ -8,6 +8,16 @@ pub(crate) fn should_force_entropy() -> bool {
     std::env::var("DIOXUS_FORCE_ENTRY").is_ok()
 }
 
+/// Should we disable the entropy on the main exe?
+///
+/// This is the env-var counterpart of the `application.disable_entropy` setting in
+/// Dioxus.toml and takes precedence over it. It is mainly useful to keep the
+/// original binary name on Windows, where every renamed executable triggers a new
+/// firewall prompt.
+pub(crate) fn should_disable_entropy() -> bool {
+    std::env::var("DIOXUS_DISABLE_ENTROPY").is_ok()
+}
+
 /// Should we test the installs?
 #[allow(dead_code)] // -> used in tests only
 pub(crate) fn test_installs() -> bool {
