@@ -61,7 +61,14 @@ impl FromResponse for NoContent {
                 Ok(NoContent)
             } else {
                 let body = res.text().await.unwrap_or_else(|_| "".into());
-                Err(RequestError::Status(body, status.into()).into())
+                let details = serde_json::from_str::<serde_json::Value>(&body)
+                    .ok()
+                    .and_then(|v| v.as_object().and_then(|obj| obj.get("data").cloned()));
+                Err(ServerFnError::ServerError {
+                    message: body,
+                    code: status.as_u16(),
+                    details,
+                })
             }
         }
     }
