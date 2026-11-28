@@ -440,7 +440,11 @@ where
                 router = serve_dir_cached(router, public_path, &path);
             }
         } else {
-            let serve_file = ServeFile::new(&path).precompressed_br();
+            // Serve a pre-compressed version of the file if the client accepts it: brotli where
+            // it is negotiated (only over HTTPS in browsers), gzip otherwise.
+            let serve_file = ServeFile::new(&path)
+                .precompressed_br()
+                .precompressed_gzip();
             // All cached assets are served at the root of the asset directory. If we know an asset
             // is hashed for cache busting, we can cache the response on the client side forever. If
             // the asset changes, the hash in the path will also change and the client will refetch it.
@@ -490,4 +494,49 @@ fn test_file_name_looks_immutable() {
     assert!(!file_name_looks_immutable("script.js"));
     assert!(!file_name_looks_immutable("main-dxh1234wyz.js"));
     assert!(!file_name_looks_immutable("main-dxh12345678-invalid.js"));
+}
+
+#[tokio::test]
+async fn test_serve_dir_cached_serves_precompressed_files() {
+    let dir = std::env::temp_dir().join(format!("dioxus-precompressed-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, contents) in [
+        ("both.wasm", "plain"),
+        ("both.wasm.br", "brotli"),
+        ("both.wasm.gz", "gzip"),
+        ("gz.wasm", "plain"),
+        ("gz.wasm.gz", "gzip"),
+    ] {
+        std::fs::write(dir.join(name), contents).unwrap();
+    }
+    let router = serve_dir_cached(Router::<()>::new(), &dir, &dir);
+
+    for (file, accept_encoding, content_encoding, body) in [
+        ("both.wasm", "gzip, deflate, br", Some("br"), "brotli"),
+        // Browsers only offer brotli over HTTPS
+        ("both.wasm", "gzip, deflate", Some("gzip"), "gzip"),
+        ("both.wasm", "deflate", None, "plain"),
+        ("gz.wasm", "gzip, deflate, br", Some("gzip"), "gzip"),
+    ] {
+        let request = Request::get(format!("/{file}"))
+            .header(ACCEPT_ENCODING, accept_encoding)
+            .body(Body::empty())
+            .unwrap();
+        let response = router.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(CONTENT_ENCODING)
+                .map(|value| value.to_str().unwrap()),
+            content_encoding,
+            "{file} with Accept-Encoding: {accept_encoding}"
+        );
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&bytes[..], body.as_bytes());
+    }
+
+    std::fs::remove_dir_all(&dir).unwrap();
 }
