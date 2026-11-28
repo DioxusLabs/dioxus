@@ -405,7 +405,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.replace_template_placeholders(&mut html, wasm_path, js_path);
 
         let title = self.config.web.app.title.clone();
-        Self::replace_or_insert_before("{app_title}", "</title", &title, &mut html);
+        inject_title(&title, &mut html);
 
         Ok(html)
     }
@@ -608,6 +608,35 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 }
 
+/// Put the app title in the page: replace `{app_title}`, fill an empty
+/// `<title>`, or add a `<title>` to `<head>`. A title already written in
+/// index.html is kept.
+fn inject_title(title: &str, html: &mut String) {
+    if html.contains("{app_title}") {
+        *html = html.replace("{app_title}", title);
+        return;
+    }
+    // Tag names are case-insensitive. ASCII lowercasing keeps byte offsets the same as in `html`.
+    let lower = html.to_ascii_lowercase();
+    // Only look inside `<head>`, so an inline `<svg><title>` in the body isn't mistaken for the page title
+    let head_end = lower.find("</head");
+    if let Some(open) = lower[..head_end.unwrap_or(lower.len())].find("<title") {
+        let Some(start) = lower[open..].find('>').map(|i| open + i + 1) else {
+            return;
+        };
+        let Some(end) = lower[start..].find("</title").map(|i| start + i) else {
+            return;
+        };
+        if html[start..end].trim().is_empty() {
+            html.replace_range(start..end, title);
+        }
+        return;
+    }
+    if let Some(head_end) = head_end {
+        html.insert_str(head_end, &format!("<title>{title}</title>"));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -617,5 +646,67 @@ mod tests {
 
         assert!(!DEV_INDEX.contains("fonts.googleapis.com"));
         assert!(!DEV_LOADING.contains("fonts.googleapis.com"));
+    }
+
+    fn titled(html: &str) -> String {
+        let mut html = html.to_string();
+        super::inject_title("My App", &mut html);
+        html
+    }
+
+    #[test]
+    fn title_placeholder_is_replaced() {
+        assert_eq!(
+            titled("<head><title>{app_title}</title></head>"),
+            "<head><title>My App</title></head>"
+        );
+    }
+
+    #[test]
+    fn empty_title_is_filled() {
+        assert_eq!(
+            titled("<head><title></title></head>"),
+            "<head><title>My App</title></head>"
+        );
+        assert_eq!(
+            titled("<head><title lang=\"en\">  </title></head>"),
+            "<head><title lang=\"en\">My App</title></head>"
+        );
+    }
+
+    #[test]
+    fn title_written_in_index_html_is_kept() {
+        assert_eq!(
+            titled("<head><title>Custom</title></head>"),
+            "<head><title>Custom</title></head>"
+        );
+    }
+
+    #[test]
+    fn missing_title_is_added_to_head() {
+        assert_eq!(
+            titled("<head><meta charset=\"utf-8\"></head>"),
+            "<head><meta charset=\"utf-8\"><title>My App</title></head>"
+        );
+    }
+
+    #[test]
+    fn uppercase_tags_are_matched() {
+        assert_eq!(
+            titled("<HEAD><TITLE></TITLE></HEAD>"),
+            "<HEAD><TITLE>My App</TITLE></HEAD>"
+        );
+        assert_eq!(
+            titled("<HEAD></HEAD>"),
+            "<HEAD><title>My App</title></HEAD>"
+        );
+    }
+
+    #[test]
+    fn svg_title_in_body_is_not_the_page_title() {
+        assert_eq!(
+            titled("<head></head><body><svg><title>Icon</title></svg></body>"),
+            "<head><title>My App</title></head><body><svg><title>Icon</title></svg></body>"
+        );
     }
 }
