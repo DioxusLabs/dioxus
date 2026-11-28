@@ -35,6 +35,9 @@ enum Route {
 
     #[route("/can-go-back")]
     HydrateCanGoBack,
+
+    #[route("/redirect-after-suspense")]
+    RedirectAfterSuspense,
 }
 
 #[component]
@@ -65,6 +68,31 @@ fn ThrowsAsyncError() -> Element {
     rsx! {
         "Hello, world!"
     }
+}
+
+#[component]
+fn RedirectAfterSuspense() -> Element {
+    rsx! {
+        SuspenseBoundary {
+            fallback: |_| rsx! { "Loading..." },
+            RedirectAfterServerFuture {}
+        }
+    }
+}
+
+// Navigating on the server after the router committed the initial route must not change the
+// route that gets rendered, or the client would hydrate a different route than the server sent
+#[component]
+fn RedirectAfterServerFuture() -> Element {
+    #[server]
+    async fn redirect_target() -> ServerFnResult<i32> {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        Ok(2)
+    }
+
+    let id = use_server_future(redirect_target)?().unwrap()?;
+    navigator().replace(Route::Blog { id });
+    rsx! { "Redirecting..." }
 }
 
 #[component]
