@@ -45,6 +45,9 @@ use tokio::sync::Notify;
 #[derive(Clone)]
 pub(crate) struct WryQueue {
     inner: Rc<RefCell<WryQueueInner>>,
+    // Kept outside `inner`: on Android the index request reads it from a WebView worker thread
+    // while the main thread may hold `inner` mutably. It never changes after `create_queue`.
+    location: WebviewWebsocketLocation,
 }
 
 impl WryQueue {
@@ -102,7 +105,7 @@ impl WryQueue {
     /// Send a list of mutations to the webview
     pub(crate) fn send_edits(&self) {
         let mut myself = self.inner.borrow_mut();
-        let webview_id = myself.location.webview_id;
+        let webview_id = self.location.webview_id;
         let serialized_edits = myself.mutation_state.export_memory();
         let receiver = myself.websocket.send_edits(webview_id, serialized_edits);
         myself.edits_in_progress = Some(receiver);
@@ -149,7 +152,7 @@ impl WryQueue {
     pub(crate) fn edits_path(&self) -> String {
         let WebviewWebsocketLocation {
             webview_id, server, ..
-        } = &self.inner.borrow().location;
+        } = &self.location;
         let server = server.lock().unwrap();
         let port = server.port;
         let key = &server.client_key;
@@ -159,14 +162,13 @@ impl WryQueue {
 
     /// Get the key the client should expect from the server when connecting to the websocket.
     pub(crate) fn required_server_key(&self) -> String {
-        let server = &self.inner.borrow().location.server;
+        let server = &self.location.server;
         let server = server.lock().unwrap();
         encode_key_string(&server.server_key)
     }
 }
 
 pub(crate) struct WryQueueInner {
-    location: WebviewWebsocketLocation,
     websocket: EditWebsocket,
     // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
     edits_in_progress: Option<oneshot::Receiver<()>>,
@@ -445,9 +447,9 @@ impl EditWebsocket {
         let server = self.current_location.clone();
         let server_location = self.server_location.clone();
         WryQueue {
+            location: WebviewWebsocketLocation { webview_id, server },
             inner: Rc::new(RefCell::new(WryQueueInner {
                 server_location_changed_future: owned_notify_future(server_location),
-                location: WebviewWebsocketLocation { webview_id, server },
                 websocket: self.clone(),
                 edits_in_progress: None,
                 mutation_state: MutationState::default(),
