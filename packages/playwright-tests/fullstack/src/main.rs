@@ -181,10 +181,7 @@ fn Assets() -> Element {
     );
 
     #[used]
-    static _UNHASHED_FOLDER: Asset = asset!(
-        "/assets/nested/",
-        AssetOptions::folder().with_hash_suffix(false)
-    );
+    static _UNHASHED_FOLDER: Asset = asset!("/assets/nested/", AssetOptions::folder());
 
     #[used]
     static _EMBEDDED_FOLDER: Asset = asset!("/assets/nested");
