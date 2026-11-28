@@ -364,7 +364,10 @@ impl WebviewInstance {
             // directory may not be writable. Fall back to %LOCALAPPDATA%/<exe_name> automatically.
             if cfg!(windows) {
                 let exe = std::env::current_exe().ok()?;
-                let name = exe.file_stem()?.to_str()?;
+                let name = default_data_dir_name(
+                    exe.file_stem()?.to_str()?,
+                    dioxus_cli_config::is_cli_enabled(),
+                );
                 let local_app_data = std::env::var("LOCALAPPDATA").ok()?;
                 Some(std::path::PathBuf::from(local_app_data).join(name))
             } else {
@@ -728,6 +731,22 @@ impl PendingWebview {
     }
 }
 
+/// The name of the default WebView2 data directory for an executable with the given file stem.
+///
+/// `dx` launches a copy of the executable named `<name>-<8 hex digits>` so rebuilds don't collide
+/// with the running (locked) exe. Strip that suffix so every `dx serve` run reuses one directory.
+fn default_data_dir_name(exe_stem: &str, launched_by_cli: bool) -> &str {
+    if launched_by_cli
+        && let Some((name, suffix)) = exe_stem.rsplit_once('-')
+        && !name.is_empty()
+        && suffix.len() == 8
+        && suffix.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return name;
+    }
+    exe_stem
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -736,6 +755,21 @@ mod tests {
 
     fn empty_app() -> Element {
         VNode::empty()
+    }
+
+    #[test]
+    fn default_data_dir_name_strips_dx_entropy_suffix() {
+        assert_eq!(default_data_dir_name("counters-f3b54404", true), "counters");
+        assert_eq!(default_data_dir_name("my-app-0a1b2c3d", true), "my-app");
+        assert_eq!(default_data_dir_name("counters", true), "counters");
+        assert_eq!(default_data_dir_name("my-app", true), "my-app");
+        assert_eq!(default_data_dir_name("app-notahexx", true), "app-notahexx");
+        assert_eq!(default_data_dir_name("-f3b54404", true), "-f3b54404");
+        // Outside of `dx` the executable name is used as-is.
+        assert_eq!(
+            default_data_dir_name("counters-f3b54404", false),
+            "counters-f3b54404"
+        );
     }
 
     #[test]
