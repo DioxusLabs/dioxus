@@ -3,7 +3,7 @@
     "remoteUser": "vscode",
     "build": {
         "dockerfile": "./Dockerfile",
-        "context": "."
+        "context": ".."
     },
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
@@ -15,8 +15,11 @@
         }
     },
     "containerEnv": {
+        "CARGO_TERM_COLOR": "always",
+        "RUST_BACKTRACE": "1",
         "RUST_LOG": "INFO"
     },
+    "postCreateCommand": "npm --prefix packages/playwright-tests ci",
     "customizations": {
         "vscode": {
             "settings": {
@@ -29,6 +32,7 @@
             },
             "extensions": [
                 "rust-lang.rust-analyzer",
+                "vadimcn.vscode-lldb",
                 "tamasfe.even-better-toml",
                 "fill-labs.dependi",
                 "ms-playwright.playwright"
