@@ -34,7 +34,8 @@ pub struct Component {
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
     pub spreads: Vec<Spread>,
-    pub brace: Option<token::Brace>,
+    /// The tokens around the body: the brace of `Comp { }` or the tags of `<Comp></Comp>`
+    pub delimiter: NodeDelimiter,
     pub children: TemplateBody,
     pub diagnostics: Diagnostics,
 }
@@ -56,23 +57,15 @@ impl Parse for Component {
             diagnostics,
         } = input.parse::<RsxBlock>()?;
 
-        let mut component = Self {
-            children: TemplateBody::new(children),
+        Ok(Self::from_parts(
             name,
             generics,
             fields,
-            brace: Some(brace),
             spreads,
+            children,
+            NodeDelimiter::Brace(brace),
             diagnostics,
-        };
-
-        // We've received a valid rsx block, but it's not necessarily a valid component
-        // validating it will dump diagnostics into the output
-        component.validate_component_path();
-        component.validate_fields();
-        component.validate_component_spread();
-
-        Ok(component)
+        ))
     }
 }
 
@@ -119,6 +112,35 @@ impl Component {
                 __comp
             })
         }
+    }
+
+    /// Assemble a component from its parsed parts, running validation on the result
+    pub(crate) fn from_parts(
+        name: syn::Path,
+        generics: Option<AngleBracketedGenericArguments>,
+        fields: Vec<Attribute>,
+        spreads: Vec<Spread>,
+        children: Vec<BodyNode>,
+        delimiter: NodeDelimiter,
+        diagnostics: Diagnostics,
+    ) -> Self {
+        let mut component = Self {
+            children: TemplateBody::new(children),
+            name,
+            generics,
+            fields,
+            delimiter,
+            spreads,
+            diagnostics,
+        };
+
+        // We've received a valid rsx block, but it's not necessarily a valid component
+        // validating it will dump diagnostics into the output
+        component.validate_component_path();
+        component.validate_fields();
+        component.validate_component_spread();
+
+        component
     }
 
     // Make sure this a proper component path (uppercase ident, a path, or contains an underscorea)
@@ -217,11 +239,10 @@ impl Component {
 
         let name = &self.name;
         let generics = &self.generics;
-        let inner_scope_span = self
-            .brace
-            .as_ref()
-            .map(|b| b.span.join())
-            .unwrap_or(self.name.span());
+        let inner_scope_span = match &self.delimiter {
+            NodeDelimiter::Brace(brace) => brace.span.join(),
+            delimiter => delimiter.open_span().unwrap_or(self.name.span()),
+        };
 
         let mut tokens = if let Some(props) = manual_props.as_ref() {
             quote_spanned! { props.span() => let mut __manual_props = #props; }
@@ -366,7 +387,7 @@ impl Component {
         Component {
             name,
             generics,
-            brace: None,
+            delimiter: NodeDelimiter::Missing,
             fields: vec![],
             spreads: vec![],
             children: TemplateBody::new(vec![]),
@@ -378,7 +399,7 @@ impl Component {
 /// Normalize the generics of a path
 ///
 /// Ensure there's a `::` after the last segment if there are generics
-fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
+pub(crate) fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
     let seg = name.segments.last_mut()?;
 
     let mut generics = match seg.arguments.clone() {

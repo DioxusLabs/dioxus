@@ -16,10 +16,12 @@
 //!
 mod attribute;
 mod component;
+mod delimiter;
 mod element;
 mod fill_order;
 mod forloop;
 mod ifchain;
+mod jsx;
 mod node;
 mod raw_expr;
 mod rsx_block;
@@ -40,6 +42,7 @@ mod util;
 // helpers in `innerlude`.
 pub use attribute::{Attribute, AttributeName, AttributeValue, IfAttributeValue, Spread};
 pub use component::Component;
+pub use delimiter::{ClosingTag, NodeDelimiter, TagDelimiter};
 pub use diagnostics::Diagnostics;
 pub use element::{Element, ElementName};
 pub use expr_node::ExprNode;
@@ -66,10 +69,12 @@ pub use innerlude::*;
 pub(crate) mod innerlude {
     pub use crate::attribute::*;
     pub use crate::component::*;
+    pub use crate::delimiter::*;
     pub use crate::element::*;
     pub use crate::expr_node::*;
     pub use crate::forloop::*;
     pub use crate::ifchain::*;
+    pub(crate) use crate::jsx::*;
     pub use crate::node::*;
     pub use crate::raw_expr::*;
     pub use crate::rsx_block::*;

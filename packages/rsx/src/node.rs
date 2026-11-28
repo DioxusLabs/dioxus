@@ -39,6 +39,11 @@ impl Parse for BodyNode {
             return Ok(BodyNode::Text(stream.parse()?));
         }
 
+        // A `<` token switches into the JSX/XML-like tag syntax
+        if stream.peek(Token![<]) {
+            return parse_jsx_node(stream);
+        }
+
         // Transform for loops into into_iter calls
         if stream.peek(Token![for]) {
             return Ok(BodyNode::ForLoop(stream.parse()?));
@@ -146,6 +151,23 @@ impl BodyNode {
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
             BodyNode::SyntheticBoundary(body) => body.first_root_span(),
+        }
+    }
+
+    /// The span of the first token of the node
+    ///
+    /// This is the same as [`BodyNode::span`] except for nodes written in the tag syntax, which
+    /// start with a `<` rather than with their name.
+    pub fn first_token_span(&self) -> Span {
+        let tag = match self {
+            BodyNode::Element(el) => el.delimiter.tag(),
+            BodyNode::Component(component) => component.delimiter.tag(),
+            _ => None,
+        };
+
+        match tag {
+            Some(tag) => tag.lt.span,
+            None => self.span(),
         }
     }
 
