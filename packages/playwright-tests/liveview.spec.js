@@ -15,6 +15,17 @@ test("button click", async ({ page }) => {
   await expect(main).toContainText("hello axum! 1");
 });
 
+test("eval receives a delayed message without blocking the browser", async ({ page }) => {
+  test.setTimeout(4_000);
+  await page.goto("http://127.0.0.1:3030");
+
+  await page.getByRole("button", { name: "Receive delayed message" }).click();
+  await expect(page.locator(".delayed-eval-result")).toHaveText("delivered", { timeout: 2_000 });
+
+  await page.getByRole("button", { name: "Increment" }).click();
+  await expect(page.locator("#main")).toContainText("hello axum! 1");
+});
+
 test("svg", async ({ page }) => {
   await page.goto("http://127.0.0.1:3030");
 
