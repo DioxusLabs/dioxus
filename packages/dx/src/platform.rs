@@ -163,7 +163,7 @@ pub(crate) enum Renderer {
     /// means you're only building the server variant without the `.wasm` to serve.
     Server,
 
-    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
+    /// Targeting the liveview renderer, served over a WebSocket by Axum
     Liveview,
 
     /// Targeting the web-sys renderer
