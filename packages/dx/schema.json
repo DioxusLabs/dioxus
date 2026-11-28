@@ -1042,7 +1042,7 @@
           ]
         },
         "plist": {
-          "description": "Additional Info.plist keys to merge.",
+          "description": "Additional Info.plist keys to merge.\n\nA key replaces the generated value. Prefix a key with `+` (e.g. `\"+UIBackgroundModes\"`)\nto append an array to the generated array instead.",
           "type": "object",
           "additionalProperties": true
         },
@@ -1199,7 +1199,7 @@
           ]
         },
         "info_plist": {
-          "description": "Raw XML to inject into Info.plist.",
+          "description": "Raw `<key>`/value XML merged into Info.plist, after `plist` entries and with the same\nreplace and `+` append rules.",
           "type": [
             "string",
             "null"
@@ -1722,7 +1722,7 @@
           ]
         },
         "plist": {
-          "description": "Additional Info.plist keys.",
+          "description": "Additional Info.plist keys to merge.\n\nA key replaces the generated value. Prefix a key with `+` (e.g. `\"+UIBackgroundModes\"`)\nto append an array to the generated array instead.",
           "type": "object",
           "additionalProperties": true
         },
@@ -1906,7 +1906,7 @@
           ]
         },
         "info_plist": {
-          "description": "Raw XML to inject into Info.plist.",
+          "description": "Raw `<key>`/value XML merged into Info.plist, after `plist` entries and with the same\nreplace and `+` append rules.",
           "type": [
             "string",
             "null"

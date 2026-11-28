@@ -339,6 +339,9 @@ pub struct IosConfig {
     pub entitlements: IosEntitlements,
 
     /// Additional Info.plist keys to merge.
+    ///
+    /// A key replaces the generated value. Prefix a key with `+` (e.g. `"+UIBackgroundModes"`)
+    /// to append an array to the generated array instead.
     #[serde(default)]
     pub plist: HashMap<String, serde_json::Value>,
 
@@ -507,7 +510,8 @@ pub struct IosEntitlements {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct IosRawConfig {
-    /// Raw XML to inject into Info.plist.
+    /// Raw `<key>`/value XML merged into Info.plist, after `plist` entries and with the same
+    /// replace and `+` append rules.
     #[serde(default)]
     pub info_plist: Option<String>,
 
@@ -904,7 +908,10 @@ pub struct MacosConfig {
     #[serde(default)]
     pub entitlements: MacosEntitlements,
 
-    /// Additional Info.plist keys.
+    /// Additional Info.plist keys to merge.
+    ///
+    /// A key replaces the generated value. Prefix a key with `+` (e.g. `"+UIBackgroundModes"`)
+    /// to append an array to the generated array instead.
     #[serde(default)]
     pub plist: HashMap<String, serde_json::Value>,
 
@@ -1009,7 +1016,8 @@ pub struct MacosEntitlements {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct MacosRawConfig {
-    /// Raw XML to inject into Info.plist.
+    /// Raw `<key>`/value XML merged into Info.plist, after `plist` entries and with the same
+    /// replace and `+` append rules.
     #[serde(default)]
     pub info_plist: Option<String>,
 
