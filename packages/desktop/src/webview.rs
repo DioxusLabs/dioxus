@@ -371,6 +371,8 @@ impl WebviewInstance {
                 None
             }
         }));
+        // WebDriver automation, see `WindowConfig::with_automation`.
+        web_context.set_allows_automation(cfg.automation);
         let edit_queue = app_context.websocket.create_queue();
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), target_id, edit_queue.clone());
