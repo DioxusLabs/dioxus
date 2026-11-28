@@ -47,4 +47,4 @@ pub mod isrg;
 pub use isrg::*;
 
 mod index_html;
-pub(crate) use index_html::IndexHtml;
+pub use index_html::{IndexHtml, IndexHtmlError};
