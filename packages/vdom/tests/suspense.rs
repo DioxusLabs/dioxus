@@ -97,6 +97,65 @@ async fn poll_three_times() {
 }
 
 #[test]
+fn empty_fallback_preserves_position_on_resuspend() {
+    fn app() -> Element {
+        let query = generation();
+        rsx! {
+            div {
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    Loader { query }
+                }
+            }
+            p { "after" }
+        }
+    }
+
+    #[component]
+    fn Loader(query: usize) -> Element {
+        use_resource(use_reactive!(|query| async move {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            query
+        }))
+        .suspend()?;
+        rsx! { div { "result" } }
+    }
+
+    fn expected() -> Element {
+        rsx! {
+            div { div { "result" } }
+            p { "after" }
+        }
+    }
+
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            let mut oracle = RendererOracle::new();
+            oracle.rebuild(&mut dom);
+            for _ in 0..3 {
+                oracle.render(&mut dom);
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+            oracle.assert_matches(expected);
+
+            for _ in 0..3 {
+                dom.mark_dirty(ScopeId::APP);
+                oracle.render(&mut dom);
+                for _ in 0..3 {
+                    oracle.render(&mut dom);
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                }
+                oracle.assert_stack_clean();
+                oracle.assert_matches(expected);
+            }
+        });
+}
+
+#[test]
 fn suspense_resolves_ssr() {
     // wait just a moment, not enough time for the boundary to resolve
     tokio::runtime::Builder::new_current_thread()
