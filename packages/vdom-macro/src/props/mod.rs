@@ -1255,7 +1255,7 @@ mod struct_info {
                 }
                 #[doc(hidden)]
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
-                pub enum #repeated_fields_error_type_name {}
+                pub struct #repeated_fields_error_type_name(pub ::core::convert::Infallible);
                 #[doc(hidden)]
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics #builder_name < #( #target_generics ),* > #where_clause {
@@ -1350,7 +1350,7 @@ mod struct_info {
             Ok(quote! {
                 #[doc(hidden)]
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
-                pub enum #early_build_error_type_name {}
+                pub struct #early_build_error_type_name(pub ::core::convert::Infallible);
                 #[doc(hidden)]
                 #[allow(dead_code, non_camel_case_types, missing_docs, clippy::panic)]
                 impl #impl_generics #builder_name < #( #builder_generics ),* > #where_clause {
