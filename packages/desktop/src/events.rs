@@ -181,4 +181,52 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .unwrap()
             .into()
     }
+
+    fn convert_custom_data(&self, event: &PlatformEventData) -> CustomData {
+        event
+            .downcast::<SerializedCustomData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SerializedHtmlEventConverter;
+    use dioxus_html::{CustomData, EventData, HtmlEvent, PlatformEventData};
+
+    #[test]
+    fn a_custom_event_from_the_page_reaches_its_handler_through_the_desktop_converter() {
+        dioxus_html::events::register_custom_event("desktop-notice", true);
+        dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+        let event: HtmlEvent = serde_json::from_slice(
+            br#"{"element":7,"name":"desktop-notice","bubbles":true,"data":{"detail":"{\"kind\":\"warm\"}"}}"#,
+        )
+        .expect("The page's custom event is read.");
+        assert!(matches!(event.data, EventData::Custom(_)));
+        let data = event
+            .data
+            .into_any()
+            .downcast::<PlatformEventData>()
+            .expect("A custom event is handed to its handler as platform event data.");
+        let custom = CustomData::from(&*data);
+        assert_eq!(custom.detail().as_deref(), Some(r#"{"kind":"warm"}"#));
+    }
+
+    #[test]
+    fn a_custom_event_whose_detail_was_not_a_string_reaches_its_handler_without_one() {
+        dioxus_html::events::register_custom_event("desktop-quiet", false);
+        dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+        let event: HtmlEvent = serde_json::from_slice(
+            br#"{"element":7,"name":"desktop-quiet","bubbles":false,"data":{}}"#,
+        )
+        .expect("The page's custom event is read.");
+        let data = event
+            .data
+            .into_any()
+            .downcast::<PlatformEventData>()
+            .expect("A custom event is handed to its handler as platform event data.");
+        assert_eq!(CustomData::from(&*data).detail(), None);
+    }
 }

@@ -390,6 +390,9 @@ macro_rules! expand_html_event_converter {
             $(
                 fn $converter(&self, event: &PlatformEventData) -> $data;
             )*
+
+            /// Convert an event dispatched under a name registered with [`register_event!`](crate::register_event).
+            fn convert_custom_data(&self, event: &PlatformEventData) -> CustomData;
         }
 
         $(
@@ -399,6 +402,22 @@ macro_rules! expand_html_event_converter {
                 }
             }
         )*
+
+        impl From<&PlatformEventData> for CustomData {
+            fn from(val: &PlatformEventData) -> Self {
+                with_event_converter(|c| c.convert_custom_data(val))
+            }
+        }
+
+        /// Whether Dioxus handles an event by this name itself, so that no custom event can take it.
+        pub(crate) fn is_built_in_event(name: &str) -> bool {
+            matches!(
+                name,
+                $(
+                    $( stringify!($raw) )|* $($(| stringify!($raw_only))*)?
+                )|*
+            )
+        }
     };
 }
 
@@ -437,6 +456,9 @@ macro_rules! expand_html_event_deserialize {
                         Some(expand_html_event_deserialize!(@deserialize $group, data))
                     }
                 )*
+                _ if crate::bubbles::is_custom_event(name) => {
+                    Some(crate::transit::EventData::Custom(de(data)?))
+                }
                 _ => None,
             })
         }

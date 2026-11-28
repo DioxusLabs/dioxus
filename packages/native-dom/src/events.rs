@@ -9,13 +9,13 @@ use blitz_traits::events::{
 };
 use blitz_traits::net::Bytes;
 use dioxus_html::{
-    AnimationData, BeforeInputData, CancelData, ClipboardData, CompositionData, DataTransfer,
-    DragData, FileData, FocusData, FormData, FormValue, HasDataTransferData, HasDragData,
-    HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData, HasPointerData,
-    HasResizeData, HasScrollData, HasTouchData, HasTouchPointData, HasWheelData,
-    HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MountedError,
-    MountedResult, MouseData, NativeDataTransfer, NativeFileData, PlatformEventData, PointerData,
-    RenderedElementBacking, ResizeData, ResizeResult, ScrollBehavior, ScrollData,
+    AnimationData, BeforeInputData, CancelData, ClipboardData, CompositionData, CustomData,
+    DataTransfer, DragData, FileData, FocusData, FormData, FormValue, HasCustomData,
+    HasDataTransferData, HasDragData, HasFileData, HasFocusData, HasFormData, HasKeyboardData,
+    HasMouseData, HasPointerData, HasResizeData, HasScrollData, HasTouchData, HasTouchPointData,
+    HasWheelData, HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData,
+    MountedError, MountedResult, MouseData, NativeDataTransfer, NativeFileData, PlatformEventData,
+    PointerData, RenderedElementBacking, ResizeData, ResizeResult, ScrollBehavior, ScrollData,
     ScrollLogicalPosition, ScrollToOptions, SelectionData, ToggleData, TouchData, TouchPoint,
     TransitionData, VisibleData, WheelData,
     geometry::{
@@ -138,6 +138,10 @@ impl HtmlEventConverter for NativeConverter {
 
     fn convert_wheel_data(&self, event: &PlatformEventData) -> WheelData {
         event.downcast::<NativeWheelData>().unwrap().clone().into()
+    }
+
+    fn convert_custom_data(&self, event: &PlatformEventData) -> CustomData {
+        event.downcast::<NativeCustomData>().unwrap().clone().into()
     }
 
     fn convert_resize_data(&self, event: &PlatformEventData) -> ResizeData {
@@ -641,6 +645,21 @@ impl HasTouchPointData for NativeTouchPointData {
 #[derive(Clone)]
 pub struct NativeFocusData;
 impl HasFocusData for NativeFocusData {
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+}
+
+/// The data of a custom event in the native renderer: the string `detail` it was dispatched with.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NativeCustomData {
+    pub detail: Option<String>,
+}
+impl HasCustomData for NativeCustomData {
+    fn detail(&self) -> Option<String> {
+        self.detail.clone()
+    }
+
     fn as_any(&self) -> &dyn Any {
         self as &dyn Any
     }
