@@ -61,7 +61,8 @@ pub enum AssetPathError {
 ///
 /// This function will only work on desktop platforms. It will always return an error in web and Android
 /// bundles. On Android assets are bundled in the APK, and cannot be represented as paths. In web bundles,
-/// Assets are fetched via HTTP requests and don't have a filesystem path.
+/// Assets are fetched via HTTP requests and don't have a filesystem path. Embedded assets also
+/// cannot be represented as filesystem paths.
 ///
 /// ## Example
 /// ```rust
@@ -70,17 +71,13 @@ pub enum AssetPathError {
 /// // Bundle the static JSON asset into the application
 /// static JSON_ASSET: Asset = asset!("/assets/data.json");
 ///
-/// // Resolve the path of the asset. This will not work in web or Android bundles
-/// let path = dioxus::asset_resolver::asset_path(&JSON_ASSET).unwrap();
-///
-/// println!("Asset path: {:?}", path);
-///
-/// // Read the bytes of the JSON asset
-/// let bytes = std::fs::read(path).unwrap();
-///
-/// // Deserialize the JSON data
-/// let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-/// assert_eq!(json["key"].as_str(), Some("value"));
+/// // Embedded assets, web, and Android bundles do not provide filesystem paths.
+/// if let Ok(path) = dioxus::asset_resolver::asset_path(&JSON_ASSET) {
+///     println!("Asset path: {:?}", path);
+///     let bytes = std::fs::read(path).unwrap();
+///     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+///     assert_eq!(json["key"].as_str(), Some("value"));
+/// }
 /// ```
 ///
 /// ## Resolving assets from a folder

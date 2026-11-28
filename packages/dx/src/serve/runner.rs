@@ -624,6 +624,10 @@ impl AppServer {
 
                 // Otherwise hotpatches go through patching system
                 HotReloadMode::Hotpatch => {
+                    let asset_reload = asset_reload_for_patch(assets);
+                    if !asset_reload.is_empty() {
+                        server.send_hotreload(asset_reload).await;
+                    }
                     let changed_crates = self.order_changed_crates(files);
 
                     self.client.patch_rebuild(
@@ -2312,9 +2316,28 @@ fn analyze_dioxus_value(
     outcome
 }
 
+fn asset_reload_for_patch(assets: Vec<PathBuf>) -> HotReloadMsg {
+    HotReloadMsg {
+        assets,
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn asset_reload_during_patch() {
+        let empty = asset_reload_for_patch(vec![]);
+        assert!(empty.is_empty());
+
+        let path = PathBuf::from("/assets/style.css");
+        let reload = asset_reload_for_patch(vec![path.clone()]);
+        assert_eq!(reload.assets, vec![path]);
+        assert!(reload.templates.is_empty());
+        assert!(reload.jump_table.is_none());
+    }
 
     fn parse(s: &str) -> toml::Value {
         toml::from_str(s).expect("valid toml")
