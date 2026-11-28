@@ -1034,14 +1034,13 @@ pub fn create_undefined_symbol_stub(
                     // The windows ABI and calling convention is different than the SystemV ABI.
                     OperatingSystem::Windows => match triple.architecture {
                         Architecture::X86_64 => {
-                            // Windows x64 has specific requirements for alignment and position-independent code
-                            let mut code = vec![
-                                0x48, 0xB8, // movabs RAX, imm64 (move 64-bit immediate to RAX)
-                            ];
-                            // Append the absolute 64-bit address
+                            // Jump without touching a register: `jmp [rip+0]`, then the 64-bit
+                            // absolute address. A stub through RAX breaks `__chkstk`, which takes the
+                            // size of the stack frame in RAX: every patched function with a frame over
+                            // a page would overflow the stack on entry.
+                            let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
+                            // Append the 64-bit address
                             code.extend_from_slice(&abs_addr.to_le_bytes());
-                            // jmp RAX (jump to the address in RAX)
-                            code.extend_from_slice(&[0xFF, 0xE0]);
                             code
                         }
                         Architecture::X86_32(_) => {
