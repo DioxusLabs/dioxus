@@ -65,7 +65,10 @@ impl LiveViewPool {
         match self.pool.spawn_pinned(move || run(make_app(), ws)).await {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(LiveViewError::SendingFailed),
+            Err(error) => {
+                tracing::error!(?error, "LiveView renderer task failed");
+                Err(LiveViewError::SendingFailed)
+            }
         }
     }
 }
@@ -223,13 +226,13 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                         dioxus_devtools::apply_changes(&vdom, &msg);
                     }
                     dioxus_devtools::DevserverMsg::Shutdown => {
+                        tracing::info!(process_id = std::process::id(), "LiveView received development server shutdown");
                         std::process::exit(0);
                     },
-                    dioxus_devtools::DevserverMsg::FullReloadCommand
+                    message @ (dioxus_devtools::DevserverMsg::FullReloadCommand
                     | dioxus_devtools::DevserverMsg::FullReloadStart
-                    | dioxus_devtools::DevserverMsg::FullReloadFailed => {
-                        // usually only web gets this message - what are we supposed to do?
-                        // Maybe we could just binary patch ourselves in place without losing window state?
+                    | dioxus_devtools::DevserverMsg::FullReloadFailed) => {
+                        tracing::info!(?message, process_id = std::process::id(), "LiveView received development server reload event; no action taken");
                     },
                     _ => {}
                 }
