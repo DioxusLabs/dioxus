@@ -1324,7 +1324,10 @@ impl<'a> ModuleWithRelocations<'a> {
     /// when building the source module.
     fn get_symbol_dep_node(&self, index: usize) -> Result<Option<Node>> {
         let res = match self.symbols[index] {
-            SymbolInfo::Data { .. } => Some(Node::DataSymbol(index)),
+            // `data_symbols` skips symbols without bytes (zero-size or undefined).
+            SymbolInfo::Data { .. } if self.data_symbols.contains_key(&index) => {
+                Some(Node::DataSymbol(index))
+            }
             SymbolInfo::Func { name, .. } => Some(Node::Function({
                 let name = name.context(
                     "Function symbol has no name - did you forget to enable debug symbols",
@@ -1547,4 +1550,40 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
         symbols,
         data_symbols,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_size_data_symbol_is_not_graphed() {
+        let mut module = Module::default();
+        let memory = module.memories.add_local(false, false, 1, None, None);
+        let offset = ConstExpr::Value(ir::Value::I32(0));
+        module
+            .data
+            .add(DataKind::Active { memory, offset }, vec![0; 4]);
+
+        // Data symbol (kind 1, flags 0) in segment 0 at offset 0; linking v2, symbol table (8).
+        let sym = |name: &[u8], size| [&[1, 0, name.len() as u8], name, &[0, 0, size]].concat();
+        let table = [sym(b"zst", 0), sym(b"buf", 4)].concat();
+        let linking = [&[2, 8, table.len() as u8 + 1, 2], &table[..]].concat();
+        for (name, data) in [
+            ("linking", linking),
+            ("reloc.CODE", vec![0, 0]),
+            ("reloc.DATA", vec![0, 0]),
+        ] {
+            let name = name.to_string();
+            module.customs.add(walrus::RawCustomSection { name, data });
+        }
+
+        let bytes = module.emit_wasm();
+        let module = ModuleWithRelocations::new(&bytes).unwrap();
+        assert_eq!(module.get_symbol_dep_node(0).unwrap(), None);
+        assert_eq!(
+            module.get_symbol_dep_node(1).unwrap(),
+            Some(Node::DataSymbol(1))
+        );
+    }
 }
