@@ -61,6 +61,11 @@ pub(crate) type AsyncWryProtocol = (
     Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
 );
 
+/// A callback that can modify the window and virtual dom right after they are built, but before
+/// the webview is created. See [`WindowConfig::with_on_window`].
+#[allow(clippy::type_complexity)]
+pub(crate) type OnWindowCallback = Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>;
+
 /// The configuration for a single desktop window.
 ///
 /// Pass a `WindowConfig` to the [`Window`](crate::Window) component's `config` prop to customize a
@@ -76,7 +81,7 @@ pub struct WindowConfig {
     pub(crate) disable_context_menu: bool,
     pub(crate) resource_dir: Option<PathBuf>,
     pub(crate) data_dir: Option<PathBuf>,
-    pub(crate) custom_head: Option<String>,
+    pub(crate) custom_head: Vec<String>,
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
@@ -85,8 +90,7 @@ pub struct WindowConfig {
     pub(crate) additional_windows_args: Option<String>,
     pub(crate) navigation_handler: Option<NavigationHandler>,
 
-    #[allow(clippy::type_complexity)]
-    pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
+    pub(crate) on_window: Vec<OnWindowCallback>,
 }
 
 impl WindowConfig {
@@ -113,13 +117,13 @@ impl WindowConfig {
             disable_context_menu: !cfg!(debug_assertions),
             resource_dir: None,
             data_dir: None,
-            custom_head: None,
+            custom_head: Vec::new(),
             custom_index: None,
             root_name: "main".to_string(),
             background_color: None,
             window_close_behavior: WindowCloseBehaviour::WindowCloses,
             disable_file_drop_handler: false,
-            on_window: None,
+            on_window: Vec::new(),
             additional_windows_args: None,
             navigation_handler: None,
         }
@@ -241,9 +245,17 @@ impl WindowConfig {
     /// Inject additional content into the document's HEAD.
     ///
     /// This is useful for loading CSS libraries, JS libraries, etc.
+    ///
+    /// Content is appended in the order it is added, so an app and the libraries it uses can each
+    /// contribute their own head content instead of the last call winning.
     pub fn with_custom_head(mut self, head: String) -> Self {
-        self.custom_head = Some(head);
+        self.custom_head.push(head);
         self
+    }
+
+    /// The head content added with [`WindowConfig::with_custom_head`], in the order it was added.
+    pub fn custom_head(&self) -> &[String] {
+        &self.custom_head
     }
 
     /// Use a custom index.html instead of the default Dioxus one.
@@ -293,9 +305,17 @@ impl WindowConfig {
     ///
     /// This is important for z-ordering textures in child windows. Note that this callback runs on
     /// every window creation, so it's up to you to
+    ///
+    /// Callbacks are run in the order they are added, so an app and the libraries it uses can each
+    /// modify the window instead of the last call winning.
     pub fn with_on_window(mut self, f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static) -> Self {
-        self.on_window = Some(Box::new(f));
+        self.on_window.push(Box::new(f));
         self
+    }
+
+    /// The callbacks added with [`WindowConfig::with_on_window`], in the order they were added.
+    pub fn on_window(&self) -> &[OnWindowCallback] {
+        &self.on_window
     }
 
     /// Add additional windows only launch arguments for webview2
@@ -495,9 +515,17 @@ impl Config {
     /// Inject additional content into the document's HEAD.
     ///
     /// This is useful for loading CSS libraries, JS libraries, etc.
+    ///
+    /// Content is appended in the order it is added, so an app and the libraries it uses can each
+    /// contribute their own head content instead of the last call winning.
     pub fn with_custom_head(mut self, head: String) -> Self {
         self.window = self.window.with_custom_head(head);
         self
+    }
+
+    /// The head content added with [`Config::with_custom_head`], in the order it was added.
+    pub fn custom_head(&self) -> &[String] {
+        self.window.custom_head()
     }
 
     /// Use a custom index.html instead of the default Dioxus one.
@@ -526,9 +554,17 @@ impl Config {
     }
 
     /// Allows modifying the window and virtual dom right after they are built, but before the webview is created.
+    ///
+    /// Callbacks are run in the order they are added, so an app and the libraries it uses can each
+    /// modify the window instead of the last call winning.
     pub fn with_on_window(mut self, f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static) -> Self {
         self.window = self.window.with_on_window(f);
         self
+    }
+
+    /// The callbacks added with [`Config::with_on_window`], in the order they were added.
+    pub fn on_window(&self) -> &[OnWindowCallback] {
+        self.window.on_window()
     }
 
     /// Add additional windows only launch arguments for webview2
@@ -577,3 +613,51 @@ impl Default for Config {
 //     file.write_all(icon.as_bytes()).unwrap();
 //     println!("({}, {})", icon.width(), icon.height())
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn custom_head_is_empty_by_default() {
+        assert!(WindowConfig::new().custom_head().is_empty());
+    }
+
+    #[test]
+    fn with_custom_head_appends_instead_of_replacing() {
+        let config = WindowConfig::new()
+            .with_custom_head("<style>app</style>".to_string())
+            .with_custom_head("<script>library</script>".to_string());
+
+        assert_eq!(
+            config.custom_head(),
+            ["<style>app</style>", "<script>library</script>"]
+        );
+    }
+
+    #[test]
+    fn on_window_is_empty_by_default() {
+        assert!(WindowConfig::new().on_window().is_empty());
+    }
+
+    #[test]
+    fn with_on_window_appends_instead_of_replacing() {
+        let config = WindowConfig::new()
+            .with_on_window(|_, _| {})
+            .with_on_window(|_, _| {});
+
+        assert_eq!(config.on_window().len(), 2);
+    }
+
+    #[test]
+    fn config_forwards_additive_behavior_to_its_window() {
+        let config = Config::new()
+            .with_custom_head("<style>app</style>".to_string())
+            .with_custom_head("<script>library</script>".to_string())
+            .with_on_window(|_, _| {})
+            .with_on_window(|_, _| {});
+
+        assert_eq!(config.custom_head().len(), 2);
+        assert_eq!(config.on_window().len(), 2);
+    }
+}

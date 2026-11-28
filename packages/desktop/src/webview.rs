@@ -343,7 +343,9 @@ impl WebviewInstance {
 
         let window = Arc::new(window.build(&app_context.target).unwrap());
         restore_window_state(&window, explicit_window_size, explicit_window_position);
-        if let Some(on_build) = cfg.on_window.as_mut() {
+        // Run the on_window callbacks in the order they were registered so an app and the
+        // libraries it uses can each modify the window instead of the last one winning.
+        for on_build in cfg.on_window.iter_mut() {
             on_build(window.clone(), dom);
         }
 
@@ -395,7 +397,7 @@ impl WebviewInstance {
                     asset_handlers.clone(),
                     responder,
                     &edits,
-                    custom_head.clone(),
+                    &custom_head,
                     custom_index.clone(),
                     &root_name,
                     headless,
