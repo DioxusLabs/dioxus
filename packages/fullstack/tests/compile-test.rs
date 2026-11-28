@@ -242,6 +242,7 @@ mod custom_types {
 
 mod overlap {
     use super::*;
+    use dioxus_fullstack::{ClientRequest, ClientResponse, IntoRequest, RequestError};
 
     #[derive(Serialize, Deserialize)]
     struct MyCustomPayload {}
@@ -272,6 +273,33 @@ mod overlap {
     #[get("/myendpoint")]
     async fn my_custom_handler4(payload: MyCustomPayload) -> Result<MyCustomPayload> {
         Ok(payload)
+    }
+
+    /// A serde type that also implements `IntoRequest` + `FromRequest` uses those impls instead of JSON.
+    #[derive(Serialize, Deserialize)]
+    struct CustomEncodedPayload {}
+    impl<T> FromRequest<T> for CustomEncodedPayload {
+        type Rejection = ServerFnError;
+        #[allow(clippy::manual_async_fn)]
+        fn from_request(
+            _req: axum::extract::Request,
+            _state: &T,
+        ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+            async move { Ok(CustomEncodedPayload {}) }
+        }
+    }
+    impl IntoRequest for CustomEncodedPayload {
+        fn into_request(
+            self,
+            request_builder: ClientRequest,
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
+            async move { unimplemented!() }
+        }
+    }
+
+    #[post("/myendpoint")]
+    async fn my_custom_handler5(payload: CustomEncodedPayload) -> Result<()> {
+        Ok(())
     }
 }
 

@@ -6,7 +6,7 @@ use core::panic;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
 use std::collections::HashMap;
 use syn::{
     Attribute, Expr, ExprClosure, Lit, Result,
@@ -43,24 +43,20 @@ use syn::{LitBool, LitInt, Pat, PatType, spanned::Spanned};
 /// You can use any combination of the following named arguments:
 /// - `endpoint`: a prefix at which the server function handler will be mounted (defaults to `/api`).
 ///   Example: `endpoint = "/my_api/my_serverfn"`.
-/// - `input`: the encoding for the arguments, defaults to `Json<T>`
-///     - You may customize the encoding of the arguments by specifying a different type for `input`.
-///     - Any axum `IntoRequest` extractor can be used here, and dioxus provides
-///       - `Json<T>`: The default axum `Json` extractor that decodes JSON-encoded request bodies.
-///       - `Cbor<T>`: A custom axum `Cbor` extractor that decodes CBOR-encoded request bodies.
-///       - `MessagePack<T>`: A custom axum `MessagePack` extractor that decodes MessagePack-encoded request bodies.
-/// - `output`: the encoding for the response (defaults to `Json`).
-///     - The `output` argument specifies how the server should encode the response data.
-///     - Acceptable values include:
-///       - `Json`: A response encoded as JSON (default). This is ideal for most web applications.
-///       - `Cbor`: A response encoded in the CBOR format for efficient, binary-encoded data.
 /// - `client`: a custom `Client` implementation that will be used for this server function. This allows
 ///   customization of the client-side behavior if needed.
 ///
-/// ## Advanced Usage of `input` and `output` Fields
+/// ## Customizing the Encoding of Arguments and Return Values
 ///
-/// The `input` and `output` fields allow you to customize how arguments and responses are encoded and decoded.
-/// These fields impose specific trait bounds on the types you use. Here are detailed examples for different scenarios:
+/// Arguments and return values that implement `Serialize` + `DeserializeOwned` are encoded as JSON.
+/// The `input`, `output` and `encoding` arguments are no longer supported and are ignored (they
+/// emit a deprecation warning).
+///
+/// To use a different encoding, use a type that handles its own encoding:
+/// - for a single argument, implement `IntoRequest` (client) and `FromRequest` (server) on the argument type.
+/// - for the return value, implement `FromResponse` (client) and `IntoResponse` (server) on the returned type.
+///
+/// These impls take priority over the JSON encoding, even if the type also implements `Serialize` + `DeserializeOwned`.
 ///
 /// ## Adding layers to server functions
 ///
@@ -98,6 +94,16 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
         }
     };
 
+    // `input`, `output` and the legacy `encoding` are parsed for compatibility, but not used.
+    let ignored_encodings: Vec<(Span, &str)> = if args.builtin_encoding {
+        vec![(Span::call_site(), "`encoding`")]
+    } else {
+        [(&args.input, "`input`"), (&args.output, "`output`")]
+            .into_iter()
+            .filter_map(|(ty, name)| ty.as_ref().map(|ty| (ty.span(), name)))
+            .collect()
+    };
+
     let method = Method::Post(Ident::new("POST", proc_macro2::Span::call_site()));
     let prefix = args
         .prefix
@@ -129,6 +135,22 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
                         }
 
                         ()
+                    };
+                });
+            }
+
+            for (span, name) in ignored_encodings {
+                let note = format!(
+                    "The {name} argument of `#[server]` is ignored. Arguments and return values are encoded as JSON, unless their type implements `IntoRequest` + `FromRequest` (arguments) or `FromResponse` + `IntoResponse` (return values)."
+                );
+                tokens.extend(quote_spanned! {span=>
+                    #[allow(dead_code)]
+                    const _: () = {
+                        #[deprecated(note = #note)]
+                        struct IgnoredEncoding;
+                        fn ___assert_deprecated() {
+                            let _ = IgnoredEncoding;
+                        }
                     };
                 });
             }
