@@ -15,20 +15,51 @@ use crate::{
     nodes::VNode,
 };
 
-use rustc_hash::FxHashMap;
-use std::ops::Range;
+use hashbrown::HashTable;
+use rustc_hash::FxBuildHasher;
+use std::{hash::BuildHasher, ops::Range};
 
+/// Buffers for one fragment diff. A fragment holds them while its children are diffed, so
+/// nested fragments each take their own set from [`DocumentScratch`](super::scratch::DocumentScratch).
+#[derive(Default)]
+pub(crate) struct FragmentScratch {
+    plan: FragmentPlacementPlan,
+    old_is_shared: Vec<bool>,
+    new_mounts: Vec<Option<MountId>>,
+    anchorable: Vec<bool>,
+    edges: StableFragmentEdges,
+    runs: Vec<Range<usize>>,
+}
+
+/// Buffers for matching the reordered middle of a keyed list. They are only used before any
+/// child is diffed, so a single set is shared by every keyed list.
+#[derive(Default)]
+pub(crate) struct KeyedScratch {
+    /// Old indices hashed by their key, so the table borrows nothing from the old nodes.
+    old_key_to_old_index: HashTable<usize>,
+    new_index_to_old_index: Vec<Option<usize>>,
+    shared_middle_indices: Vec<usize>,
+    shared_old_indices: Vec<usize>,
+    in_lis: Vec<bool>,
+    lis_sequence: Vec<usize>,
+    lis_buffer: Vec<usize>,
+}
+
+fn reset<T: Clone>(buffer: &mut Vec<T>, len: usize, value: T) {
+    buffer.clear();
+    buffer.resize(len, value);
+}
+
+#[derive(Default)]
 struct FragmentPlacementPlan {
     new_to_old: Vec<Option<usize>>,
     stable: Vec<bool>,
 }
 
 impl FragmentPlacementPlan {
-    fn new(len: usize) -> Self {
-        Self {
-            new_to_old: vec![None; len],
-            stable: vec![false; len],
-        }
+    fn reset(&mut self, len: usize) {
+        reset(&mut self.new_to_old, len, None);
+        reset(&mut self.stable, len, false);
     }
 
     fn reuse(&mut self, new_index: usize, old_index: usize, old: &VNode, new: &VNode) {
@@ -36,8 +67,8 @@ impl FragmentPlacementPlan {
         self.stable[new_index] = old.template() == new.template();
     }
 
-    fn placement_runs(&self, live_stable: &[bool]) -> Vec<Range<usize>> {
-        let mut runs = Vec::new();
+    fn placement_runs(&self, live_stable: &[bool], runs: &mut Vec<Range<usize>>) {
+        runs.clear();
         let mut run_start = None;
         let mut run_has_placed_child = false;
 
@@ -63,27 +94,36 @@ impl FragmentPlacementPlan {
         {
             runs.push(start..self.stable.len());
         }
-
-        runs
     }
 }
 
+#[derive(Default)]
 struct StableFragmentEdges {
+    first_edges: Vec<Option<ElementId>>,
+    last_edges: Vec<Option<ElementId>>,
     live_stable: Vec<bool>,
     next_first: Vec<Option<ElementId>>,
     prev_last: Vec<Option<ElementId>>,
 }
 
 impl StableFragmentEdges {
-    fn new(
+    fn compute(
+        &mut self,
         new: &[VNode],
         new_mounts: &[Option<MountId>],
         stable: &[bool],
         dom: &VirtualDom,
-    ) -> Self {
-        let mut first_edges = vec![None; new.len()];
-        let mut last_edges = vec![None; new.len()];
-        let mut live_stable = vec![false; new.len()];
+    ) {
+        let Self {
+            first_edges,
+            last_edges,
+            live_stable,
+            next_first,
+            prev_last,
+        } = self;
+        reset(first_edges, new.len(), None);
+        reset(last_edges, new.len(), None);
+        reset(live_stable, new.len(), false);
 
         for idx in 0..new.len() {
             if !stable[idx] {
@@ -97,7 +137,7 @@ impl StableFragmentEdges {
             live_stable[idx] = first_edges[idx].is_some() || last_edges[idx].is_some();
         }
 
-        let mut next_first = vec![None; new.len() + 1];
+        reset(next_first, new.len() + 1, None);
         let mut next = None;
         for idx in (0..new.len()).rev() {
             if live_stable[idx] {
@@ -106,7 +146,7 @@ impl StableFragmentEdges {
             next_first[idx] = next;
         }
 
-        let mut prev_last = vec![None; new.len() + 1];
+        reset(prev_last, new.len() + 1, None);
         let mut prev = None;
         for idx in 0..new.len() {
             prev_last[idx] = prev;
@@ -115,12 +155,6 @@ impl StableFragmentEdges {
             }
         }
         prev_last[new.len()] = prev;
-
-        Self {
-            live_stable,
-            next_first,
-            prev_last,
-        }
     }
 
     fn next_first(&self, boundary: usize) -> Option<ElementId> {
@@ -197,10 +231,11 @@ impl DiffState<'_, '_, '_, '_> {
         dioxus_debug_assert!(!old.is_empty());
 
         let paired = old.len().min(new.len());
-        let mut plan = FragmentPlacementPlan::new(new.len());
+        let mut scratch = self.dom.scratch.take_fragment();
+        scratch.plan.reset(new.len());
 
         for idx in 0..paired {
-            plan.reuse(idx, idx, &old[idx], &new[idx]);
+            scratch.plan.reuse(idx, idx, &old[idx], &new[idx]);
         }
 
         self.execute_fragment_plan(
@@ -212,9 +247,10 @@ impl DiffState<'_, '_, '_, '_> {
                 new_children,
                 new_offset: 0,
             },
-            plan,
+            &mut scratch,
             fallback_site,
         );
+        self.dom.scratch.return_fragment(scratch);
 
         if old.len() > new.len() {
             self.dom.remove_nodes(
@@ -277,8 +313,14 @@ impl DiffState<'_, '_, '_, '_> {
         let old_suffix_start = old.len() - suffix;
         let new_suffix_start = new.len() - suffix;
 
-        let mut plan = FragmentPlacementPlan::new(new.len());
-        let mut old_is_shared = vec![false; old.len()];
+        let mut scratch = self.dom.scratch.take_fragment();
+        let FragmentScratch {
+            plan,
+            old_is_shared,
+            ..
+        } = &mut scratch;
+        plan.reset(new.len());
+        reset(old_is_shared, old.len(), false);
 
         for idx in 0..prefix {
             plan.reuse(idx, idx, &old[idx], &new[idx]);
@@ -293,47 +335,56 @@ impl DiffState<'_, '_, '_, '_> {
         }
 
         if prefix < old_suffix_start && prefix < new_suffix_start {
-            let old_key_to_old_index = old[prefix..old_suffix_start]
-                .iter()
-                .enumerate()
-                .map(|(i, o)| (o.key().unwrap(), prefix + i))
-                .collect::<FxHashMap<_, _>>();
+            let KeyedScratch {
+                old_key_to_old_index,
+                new_index_to_old_index,
+                shared_middle_indices,
+                shared_old_indices,
+                in_lis,
+                lis_sequence,
+                lis_buffer,
+            } = &mut self.dom.scratch.keyed;
+            let hash_key = |key: &str| FxBuildHasher.hash_one(key);
+            let hash_old = |&index: &usize| hash_key(old[index].key().unwrap());
 
-            let mut shared_middle_indices = Vec::new();
-            let mut shared_old_indices = Vec::new();
-            let new_index_to_old_index = new[prefix..new_suffix_start]
-                .iter()
-                .enumerate()
-                .map(|(middle_new_idx, node)| {
+            old_key_to_old_index.clear();
+            old_key_to_old_index.reserve(old_suffix_start - prefix, hash_old);
+            for (index, node) in old.iter().enumerate().take(old_suffix_start).skip(prefix) {
+                old_key_to_old_index.insert_unique(hash_key(node.key().unwrap()), index, hash_old);
+            }
+
+            shared_middle_indices.clear();
+            shared_old_indices.clear();
+            new_index_to_old_index.clear();
+            new_index_to_old_index.extend(new[prefix..new_suffix_start].iter().enumerate().map(
+                |(middle_new_idx, node)| {
                     let key = node.key().unwrap();
-                    if let Some(&index) = old_key_to_old_index.get(key) {
-                        if !old_is_shared[index] {
-                            old_is_shared[index] = true;
-                            shared_middle_indices.push(middle_new_idx);
-                            shared_old_indices.push(index);
-                        }
-                        Some(index)
-                    } else {
-                        None
+                    let &index = old_key_to_old_index
+                        .find(hash_key(key), |&index| old[index].key() == Some(key))?;
+                    if !old_is_shared[index] {
+                        old_is_shared[index] = true;
+                        shared_middle_indices.push(middle_new_idx);
+                        shared_old_indices.push(index);
                     }
-                })
-                .collect::<Box<[_]>>();
+                    Some(index)
+                },
+            ));
 
-            let mut in_lis = vec![false; new_index_to_old_index.len()];
+            reset(in_lis, new_index_to_old_index.len(), false);
             if !shared_old_indices.is_empty() {
-                let mut lis_sequence = Vec::with_capacity(shared_old_indices.len());
-                let mut allocation = vec![0; shared_old_indices.len() * 2];
-                let (predecessors, starts) = allocation.split_at_mut(shared_old_indices.len());
+                lis_sequence.clear();
+                reset(lis_buffer, shared_old_indices.len() * 2, 0);
+                let (predecessors, starts) = lis_buffer.split_at_mut(shared_old_indices.len());
 
                 longest_increasing_subsequence::lis_with(
-                    &shared_old_indices,
-                    &mut lis_sequence,
+                    shared_old_indices,
+                    lis_sequence,
                     |a, b| a < b,
                     predecessors,
                     starts,
                 );
 
-                for idx in lis_sequence {
+                for &idx in lis_sequence.iter() {
                     in_lis[shared_middle_indices[idx]] = true;
                 }
             }
@@ -355,24 +406,25 @@ impl DiffState<'_, '_, '_, '_> {
                 new_children,
                 new_offset: 0,
             },
-            plan,
+            &mut scratch,
             fallback_site,
         );
 
-        for (_, (child_to_remove, mount_to_remove)) in old
+        for (child_to_remove, mount_to_remove) in old
             .iter()
             .zip(old_mounts)
-            .enumerate()
-            .filter(|(old_index, _)| !old_is_shared[*old_index])
+            .zip(&scratch.old_is_shared)
+            .filter_map(|(child, &shared)| (!shared).then_some(child))
         {
             child_to_remove.remove_node(*mount_to_remove, self.dom, self.to.as_deref_mut());
         }
+        self.dom.scratch.return_fragment(scratch);
     }
 
     fn execute_fragment_plan(
         &mut self,
         inputs: FragmentInputs,
-        plan: FragmentPlacementPlan,
+        scratch: &mut FragmentScratch,
         fallback_site: Option<InsertionSite>,
     ) {
         let FragmentInputs {
@@ -383,8 +435,17 @@ impl DiffState<'_, '_, '_, '_> {
             new_offset,
             ..
         } = inputs;
-        let mut new_mounts = vec![None; new.len()];
-        let mut anchorable = plan.stable.clone();
+        let FragmentScratch {
+            plan,
+            new_mounts,
+            anchorable,
+            edges,
+            runs,
+            ..
+        } = scratch;
+        reset(new_mounts, new.len(), None);
+        anchorable.clear();
+        anchorable.extend_from_slice(&plan.stable);
 
         for idx in 0..new.len() {
             if !plan.stable[idx] {
@@ -405,32 +466,29 @@ impl DiffState<'_, '_, '_, '_> {
 
         // `placement_runs` only opens a run on a `!stable` child, so when every child is
         // stable there is nothing to place and the stable edges are never read. Skip the
-        // two per-child element scans `StableFragmentEdges::new` would otherwise perform.
+        // two per-child element scans `StableFragmentEdges::compute` would otherwise perform.
         if plan.stable.iter().any(|stable| !stable) {
-            let stable_edges = StableFragmentEdges::new(new, &new_mounts, &anchorable, self.dom);
-            for range in plan.placement_runs(&stable_edges.live_stable) {
+            edges.compute(new, new_mounts, anchorable, self.dom);
+            plan.placement_runs(&edges.live_stable, runs);
+            for range in runs.iter().cloned() {
                 let context = self.context();
                 let runtime = self.dom.runtime.clone();
                 let dom = &mut *self.dom;
                 let mut replaced_nodes = Vec::new();
                 if let Some(to) = self.to.as_deref_mut() {
-                    let site = stable_edges
+                    let site = edges
                         .next_first(range.end)
                         .map(InsertionSite::before)
-                        .or_else(|| {
-                            stable_edges
-                                .prev_last(range.start)
-                                .map(InsertionSite::after)
-                        })
+                        .or_else(|| edges.prev_last(range.start).map(InsertionSite::after))
                         .or(fallback_site)
                         .expect("visible fragment placement requires a fallback insertion site");
                     site.create_and_place_with_result(to, runtime, |to| {
                         let mut state = DiffState::new_with_context(dom, Some(to), context);
                         let nodes = state.create_or_diff_placed_range(
                             &inputs,
-                            &plan,
+                            plan,
                             range.clone(),
-                            &mut new_mounts,
+                            new_mounts,
                             &mut replaced_nodes,
                         );
                         (nodes, nodes)
@@ -439,9 +497,9 @@ impl DiffState<'_, '_, '_, '_> {
                     let mut state = DiffState::new_with_context(dom, None, context);
                     state.create_or_diff_placed_range(
                         &inputs,
-                        &plan,
+                        plan,
                         range.clone(),
-                        &mut new_mounts,
+                        new_mounts,
                         &mut replaced_nodes,
                     );
                 }
@@ -452,7 +510,7 @@ impl DiffState<'_, '_, '_, '_> {
             }
         }
 
-        for (idx, mount) in new_mounts.into_iter().enumerate() {
+        for (idx, mount) in new_mounts.iter().enumerate() {
             let mount = mount.expect("fragment plan must materialize every new child");
             self.dom
                 .set_mounted_fragment_child(new_children, new_offset + idx, mount);
