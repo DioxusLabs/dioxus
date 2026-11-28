@@ -39,9 +39,222 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    time::SystemTime,
 };
 use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
+
+/// Minimum iOS version of the app when `[ios] deployment_target` is unset.
+const DEFAULT_IOS_DEPLOYMENT_TARGET: &str = "15.0";
+
+/// Minimum iOS version of a widget when neither it nor `[ios]` sets one.
+const DEFAULT_IOS_WIDGET_DEPLOYMENT_TARGET: &str = "16.0";
+
+/// `DT*` and related `Info.plist` keys that Xcode adds and App Store validation requires.
+#[derive(Serialize, Default, Clone)]
+pub struct IosDtMetadata {
+    pub dt_platform_name: String,
+    pub dt_platform_version: String,
+    pub dt_platform_build: String,
+    pub dt_sdk_name: String,
+    pub dt_sdk_build: String,
+    pub dt_xcode: String,
+    pub dt_xcode_build: String,
+    pub dt_compiler: String,
+    pub build_machine_os_build: String,
+    pub minimum_os_version: String,
+    pub cf_bundle_package_type: String,
+}
+
+/// Probes the local Xcode install, leaving a field empty when its probe fails.
+fn collect_ios_dt_metadata(deployment_target: &str) -> IosDtMetadata {
+    fn run(cmd: &str, args: &[&str]) -> String {
+        std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default()
+    }
+
+    let sdk_version = run("xcrun", &["--sdk", "iphoneos", "--show-sdk-version"]);
+    let sdk_build = run("xcrun", &["--sdk", "iphoneos", "--show-sdk-build-version"]);
+    // `xcode-select -p` prints `<Xcode.app>/Contents/Developer`, the Xcode xcrun uses above.
+    // Xcode writes its `version` build into apps, `Info` holds the build that compiled Xcode.
+    let developer_dir = PathBuf::from(run("xcode-select", &["-p"]));
+    let xcode_plist = |name| {
+        developer_dir
+            .with_file_name(name)
+            .to_string_lossy()
+            .into_owned()
+    };
+    let xcode = run("defaults", &["read", &xcode_plist("Info"), "DTXcode"]);
+    let xcode_build = run(
+        "defaults",
+        &["read", &xcode_plist("version"), "ProductBuildVersion"],
+    );
+    let os_build = run("sw_vers", &["-buildVersion"]);
+
+    let dt_sdk_name = if sdk_version.is_empty() {
+        String::new()
+    } else {
+        format!("iphoneos{sdk_version}")
+    };
+
+    IosDtMetadata {
+        dt_platform_name: "iphoneos".to_string(),
+        dt_platform_version: sdk_version.clone(),
+        dt_platform_build: sdk_build.clone(),
+        dt_sdk_name,
+        dt_sdk_build: sdk_build,
+        dt_xcode: xcode,
+        dt_xcode_build: xcode_build,
+        dt_compiler: "com.apple.compilers.llvm.clang.1_0".to_string(),
+        build_machine_os_build: os_build,
+        minimum_os_version: deployment_target.to_string(),
+        cf_bundle_package_type: "APPL".to_string(),
+    }
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct ProvisioningProfile {
+    #[serde(rename = "TeamIdentifier")]
+    team_identifier: Vec<String>,
+    #[serde(rename = "Entitlements")]
+    entitlements: ProfileEntitlements,
+    #[allow(dead_code)]
+    #[serde(rename = "ApplicationIdentifierPrefix")]
+    application_identifier_prefix: Vec<String>,
+    #[serde(rename = "ProvisionedDevices", default)]
+    provisioned_devices: Vec<String>,
+    #[serde(rename = "CreationDate")]
+    creation_date: plist::Date,
+    #[serde(rename = "ExpirationDate")]
+    expiration_date: plist::Date,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct ProfileEntitlements {
+    #[serde(rename = "application-identifier")]
+    application_identifier: String,
+    #[serde(rename = "keychain-access-groups")]
+    keychain_access_groups: Vec<String>,
+}
+
+/// Check if a provisioning profile's application-identifier matches the given bundle ID.
+/// The app ID is in the format "TEAMID.com.example.app" or "TEAMID.*" for wildcard profiles.
+fn profile_matches_bundle_id(app_identifier: &str, bundle_id: &str) -> bool {
+    // Strip the team ID prefix (everything before and including the first dot)
+    let app_id_suffix = match app_identifier.split_once('.') {
+        Some((_, suffix)) => suffix,
+        None => return false,
+    };
+
+    // Wildcard profile matches everything
+    if app_id_suffix == "*" {
+        return true;
+    }
+
+    // Check exact match
+    if app_id_suffix == bundle_id {
+        return true;
+    }
+
+    // Check wildcard prefix match (e.g. "com.example.*" matches "com.example.app")
+    if let Some(prefix) = app_id_suffix.strip_suffix(".*") {
+        return bundle_id.starts_with(prefix);
+    }
+
+    false
+}
+
+/// Picks the unexpired profile for `bundle_id`: an exact app ID beats a wildcard, then more
+/// provisioned devices win, then the newer profile. With `appstore`, profiles tied to devices
+/// are skipped.
+fn pick_provisioning_profile(
+    profiles: impl IntoIterator<Item = (PathBuf, ProvisioningProfile)>,
+    bundle_id: &str,
+    appstore: bool,
+) -> Option<(PathBuf, ProvisioningProfile)> {
+    let now = SystemTime::now();
+    let mut best_match: Option<(PathBuf, ProvisioningProfile, bool, (usize, SystemTime))> = None;
+
+    for (path, profile) in profiles {
+        let app_id = &profile.entitlements.application_identifier;
+        if !profile_matches_bundle_id(app_id, bundle_id) {
+            tracing::debug!(
+                "Skipping profile {} (app ID {app_id} does not match bundle ID {bundle_id})",
+                path.display()
+            );
+            continue;
+        }
+
+        // App Store profiles carry no `ProvisionedDevices`.
+        if appstore && !profile.provisioned_devices.is_empty() {
+            tracing::debug!(
+                "Skipping profile {} ({} provisioned devices — not an App Store profile)",
+                path.display(),
+                profile.provisioned_devices.len()
+            );
+            continue;
+        }
+
+        if SystemTime::from(profile.expiration_date) <= now {
+            tracing::debug!("Skipping profile {} (expired)", path.display());
+            continue;
+        }
+
+        let is_exact = !app_id.ends_with(".*") && !app_id.ends_with("*");
+        let num_devices = profile.provisioned_devices.len();
+        let rank = (num_devices, SystemTime::from(profile.creation_date));
+
+        tracing::debug!(
+            "Found matching profile {} (app ID: {app_id}, exact: {is_exact}, devices: {num_devices})",
+            path.display()
+        );
+
+        // Prefer: exact match > more provisioned devices > newer profile
+        let dominated = match &best_match {
+            Some((_, _, prev_exact, prev_rank)) => {
+                if *prev_exact && !is_exact {
+                    true // existing exact match beats wildcard
+                } else if is_exact && !*prev_exact {
+                    false // new exact match beats existing wildcard
+                } else {
+                    // same specificity — prefer more provisioned devices, then the newer profile
+                    rank <= *prev_rank
+                }
+            }
+            None => false,
+        };
+
+        if !dominated {
+            best_match = Some((path, profile, is_exact, rank));
+        }
+    }
+
+    best_match.map(|(path, profile, _, _)| (path, profile))
+}
+
+/// A profile `pick_provisioning_profile` would take if it had not expired, so the error can say to
+/// renew it instead of to change the bundle ID.
+fn expired_provisioning_profile<'a>(
+    profiles: &'a [(PathBuf, ProvisioningProfile)],
+    bundle_id: &str,
+    appstore: bool,
+) -> Option<&'a Path> {
+    let now = SystemTime::now();
+    profiles
+        .iter()
+        .find(|(_, profile)| {
+            profile_matches_bundle_id(&profile.entitlements.application_identifier, bundle_id)
+                && (!appstore || profile.provisioned_devices.is_empty())
+                && SystemTime::from(profile.expiration_date) <= now
+        })
+        .map(|(path, _)| path.as_path())
+}
 
 impl BuildRequest {
     /// Currently does nothing, but eventually we need to check that the mobile tooling is installed.
@@ -172,6 +385,9 @@ impl BuildRequest {
             pub url_schemes: Vec<String>,
             /// iOS UIBackgroundModes
             pub background_modes: Vec<String>,
+            /// iOS-only DT metadata (xcrun / Xcode probe). Empty struct on macOS.
+            #[serde(flatten)]
+            pub ios_dt: IosDtMetadata,
         }
 
         // Attempt to use the user's manually specified
@@ -237,6 +453,7 @@ impl BuildRequest {
                             minimum_system_version,
                             url_schemes: mapper.macos_url_schemes.clone(),
                             background_modes: Vec::new(), // macOS doesn't use UIBackgroundModes
+                            ios_dt: IosDtMetadata::default(),
                         },
                     )
                     .map_err(|e| e.into())
@@ -256,6 +473,14 @@ impl BuildRequest {
                 let plist_entries = generate_plist_entries(&self.config.ios.plist);
                 let raw_plist = self.config.ios.raw.info_plist.clone().unwrap_or_default();
 
+                let ios_dt = collect_ios_dt_metadata(
+                    self.config
+                        .ios
+                        .deployment_target
+                        .as_deref()
+                        .unwrap_or(DEFAULT_IOS_DEPLOYMENT_TARGET),
+                );
+
                 handlebars::Handlebars::new()
                     .render_template(
                         include_str!("../../assets/ios/ios.plist.hbs"),
@@ -271,6 +496,7 @@ impl BuildRequest {
                             minimum_system_version: String::new(), // Not used for iOS
                             url_schemes: mapper.ios_url_schemes.clone(),
                             background_modes: mapper.ios_background_modes.clone(),
+                            ios_dt,
                         },
                     )
                     .map_err(|e| e.into())
@@ -287,18 +513,23 @@ impl BuildRequest {
 
         let mut app_dev_name = self.apple_team_id.clone();
         if app_dev_name.is_none() {
-            app_dev_name = Some(Self::auto_provision_signing_name().await.context(
-                "Failed to automatically provision signing name for Apple codesigning.",
-            )?);
+            app_dev_name = Some(
+                Self::auto_provision_signing_name(self.appstore)
+                    .await
+                    .context(
+                        "Failed to automatically provision signing name for Apple codesigning.",
+                    )?,
+            );
         }
 
         let mut entitlements_file = self.apple_entitlements.clone();
         let mut provisioning_profile_path = None;
         if entitlements_file.is_none() {
             let bundle_id = self.bundle_identifier();
-            let (entitlements_xml, profile_path) = Self::auto_provision_entitlements(&bundle_id)
-                .await
-                .context("Failed to auto-provision entitlements for Apple codesigning.")?;
+            let (entitlements_xml, profile_path) =
+                Self::auto_provision_entitlements(&bundle_id, self.appstore)
+                    .await
+                    .context("Failed to auto-provision entitlements for Apple codesigning.")?;
 
             // Enrich with entitlements from Dioxus.toml config
             let entitlements_xml = self.enrich_entitlements_from_config(entitlements_xml)?;
@@ -331,13 +562,29 @@ impl BuildRequest {
             _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
         };
 
-        // iOS devices require the provisioning profile to be embedded in the .app bundle
+        // Everything that changes the bundle has to happen before the first codesign call.
         if self.bundle == BundleFormat::Ios {
+            let ios_dt = collect_ios_dt_metadata(
+                self.config
+                    .ios
+                    .deployment_target
+                    .as_deref()
+                    .unwrap_or(DEFAULT_IOS_DEPLOYMENT_TARGET),
+            );
+            let crate_dir = self.crate_dir();
+
+            Self::copy_ios_privacy_info(&crate_dir, &target_exe)?;
+
+            Self::sync_widget_info_plists(&target_exe, &ios_dt)?;
+
             if let Some(profile_path) = &provisioning_profile_path {
                 let dest = target_exe.join("embedded.mobileprovision");
                 std::fs::copy(profile_path, &dest)
                     .context("Failed to embed provisioning profile into .app bundle")?;
             }
+
+            // Extensions are signed before the app, whose signature covers theirs.
+            Self::sign_ios_app_extensions(&target_exe, app_dev_name, self.appstore).await?;
         }
 
         // codesign the app
@@ -364,7 +611,182 @@ impl BuildRequest {
         Ok(())
     }
 
-    async fn auto_provision_signing_name() -> Result<String> {
+    /// Copies `ios/PrivacyInfo.xcprivacy` from the crate root into the app, if present.
+    fn copy_ios_privacy_info(crate_dir: &Path, app_root: &Path) -> Result<()> {
+        let src = crate_dir.join("ios").join("PrivacyInfo.xcprivacy");
+        if !src.exists() {
+            return Ok(());
+        }
+        let dest = app_root.join("PrivacyInfo.xcprivacy");
+        std::fs::copy(&src, &dest).with_context(|| {
+            format!(
+                "Failed to copy PrivacyInfo.xcprivacy from {} to {}",
+                src.display(),
+                dest.display()
+            )
+        })?;
+        Ok(())
+    }
+
+    /// Gives each `.appex` the platform, version and `DT*` keys of the main bundle.
+    fn sync_widget_info_plists(app_root: &Path, ios_dt: &IosDtMetadata) -> Result<()> {
+        let plugins_dir = app_root.join("PlugIns");
+        if !plugins_dir.exists() {
+            return Ok(());
+        }
+        let app_plist = plist::Value::from_file(app_root.join("Info.plist"))
+            .context("Failed to read the app's Info.plist")?;
+
+        for entry in std::fs::read_dir(&plugins_dir)?.flatten() {
+            let appex_path = entry.path();
+            let is_appex = appex_path
+                .extension()
+                .map(|e| e == "appex")
+                .unwrap_or(false);
+            if !is_appex {
+                continue;
+            }
+
+            let plist_path = appex_path.join("Info.plist");
+            let mut value = plist::Value::from_file(&plist_path)
+                .with_context(|| format!("Failed to read {}", plist_path.display()))?;
+
+            let dict = value
+                .as_dictionary_mut()
+                .with_context(|| format!("{} root is not a dictionary", plist_path.display()))?;
+
+            // Required device family / OS markers
+            dict.insert(
+                "LSRequiresIPhoneOS".to_string(),
+                plist::Value::Boolean(true),
+            );
+            dict.insert(
+                "CFBundleSupportedPlatforms".to_string(),
+                plist::Value::Array(vec![plist::Value::String("iPhoneOS".to_string())]),
+            );
+            dict.insert(
+                "UIRequiredDeviceCapabilities".to_string(),
+                plist::Value::Array(vec![plist::Value::String("arm64".to_string())]),
+            );
+
+            // Version parity with the app, whose `[ios.plist]` may override the crate version.
+            for key in ["CFBundleVersion", "CFBundleShortVersionString"] {
+                if let Some(version) = app_plist.as_dictionary().and_then(|app| app.get(key)) {
+                    dict.insert(key.to_string(), version.clone());
+                }
+            }
+
+            // Skip keys whose probe found nothing.
+            let dt_entries: [(&str, &str); 9] = [
+                ("DTPlatformName", &ios_dt.dt_platform_name),
+                ("DTPlatformVersion", &ios_dt.dt_platform_version),
+                ("DTPlatformBuild", &ios_dt.dt_platform_build),
+                ("DTSDKName", &ios_dt.dt_sdk_name),
+                ("DTSDKBuild", &ios_dt.dt_sdk_build),
+                ("DTXcode", &ios_dt.dt_xcode),
+                ("DTXcodeBuild", &ios_dt.dt_xcode_build),
+                ("DTCompiler", &ios_dt.dt_compiler),
+                ("BuildMachineOSBuild", &ios_dt.build_machine_os_build),
+            ];
+            for (k, v) in dt_entries {
+                if !v.is_empty() {
+                    dict.insert(k.to_string(), plist::Value::String(v.to_string()));
+                }
+            }
+
+            plist::to_file_xml(&plist_path, &value)
+                .with_context(|| format!("Failed to write patched {}", plist_path.display()))?;
+        }
+
+        Ok(())
+    }
+
+    /// Signs each `.appex` with its own provisioning profile and the app's identity.
+    async fn sign_ios_app_extensions(
+        app_root: &Path,
+        dev_name: &str,
+        appstore: bool,
+    ) -> Result<()> {
+        let plugins_dir = app_root.join("PlugIns");
+        if !plugins_dir.exists() {
+            return Ok(());
+        }
+
+        for entry in std::fs::read_dir(&plugins_dir)?.flatten() {
+            let appex_path = entry.path();
+            let is_appex = appex_path
+                .extension()
+                .map(|e| e == "appex")
+                .unwrap_or(false);
+            if !is_appex {
+                continue;
+            }
+
+            let info_plist = appex_path.join("Info.plist");
+            let appex_bundle_id = plist::Value::from_file(&info_plist)
+                .with_context(|| format!("Failed to read {}", info_plist.display()))?
+                .as_dictionary()
+                .and_then(|d| d.get("CFBundleIdentifier"))
+                .and_then(|v| v.as_string())
+                .map(|s| s.to_string())
+                .with_context(|| {
+                    format!(
+                        "Missing CFBundleIdentifier in app extension {}",
+                        info_plist.display()
+                    )
+                })?;
+
+            tracing::debug!(
+                "Signing app extension {} (bundle id: {appex_bundle_id})",
+                appex_path.display()
+            );
+
+            let (entitlements_xml, profile_path) = Self::auto_provision_entitlements(
+                &appex_bundle_id,
+                appstore,
+            )
+            .await
+            .with_context(|| {
+                format!("Failed to auto-provision entitlements for app extension {appex_bundle_id}")
+            })?;
+
+            let dest_profile = appex_path.join("embedded.mobileprovision");
+            std::fs::copy(&profile_path, &dest_profile).with_context(|| {
+                format!(
+                    "Failed to embed provisioning profile into {}",
+                    appex_path.display()
+                )
+            })?;
+
+            let entitlements_tmp = tempfile::NamedTempFile::new()?;
+            std::fs::write(entitlements_tmp.path(), entitlements_xml)?;
+
+            let output = Command::new("codesign")
+                .args([
+                    "--force",
+                    "--entitlements",
+                    entitlements_tmp.path().to_str().unwrap(),
+                    "--sign",
+                    dev_name,
+                ])
+                .arg(&appex_path)
+                .output()
+                .await
+                .context("Failed to codesign app extension - is `codesign` in your path?")?;
+
+            if !output.status.success() {
+                bail!(
+                    "Failed to codesign app extension {}: {}",
+                    appex_path.display(),
+                    String::from_utf8(output.stderr).unwrap_or_default()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn auto_provision_signing_name(appstore: bool) -> Result<String> {
         let identities = Command::new("security")
             .args(["find-identity", "-v", "-p", "codesigning"])
             .output()
@@ -375,18 +797,27 @@ impl BuildRequest {
                     .context("Failed to parse `security find-identity -v -p codesigning`")
             })??;
 
-        // Parsing this:
-        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
-        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
+        let label = if appstore {
+            "Apple Distribution"
+        } else {
+            "Apple Development"
+        };
+
+        Self::find_signing_identity(&identities, label)
+            .map(str::to_string)
+            .with_context(|| {
+                format!("Failed to find {label} in `security find-identity -v -p codesigning`")
+            })
+    }
+
+    /// SHA-1 of the first `label` identity, which codesign matches to exactly one certificate.
+    fn find_signing_identity<'a>(identities: &'a str, label: &str) -> Option<&'a str> {
+        let pattern = format!(r#"(?m)^\s*\d+\) ([0-9A-F]{{40}}) "{label}: [^"]+""#);
+        regex::Regex::new(&pattern)
             .unwrap()
-            .captures(&identities)
+            .captures(identities)
             .and_then(|caps| caps.get(1))
             .map(|m| m.as_str())
-            .context(
-                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
-            )?;
-
-        Ok(app_dev_name.to_string())
     }
 
     /// Enrich auto-provisioned entitlements XML with config from Dioxus.toml.
@@ -615,7 +1046,10 @@ impl BuildRequest {
         }
     }
 
-    async fn auto_provision_entitlements(bundle_id: &str) -> Result<(String, PathBuf)> {
+    async fn auto_provision_entitlements(
+        bundle_id: &str,
+        appstore: bool,
+    ) -> Result<(String, PathBuf)> {
         const CODESIGN_ERROR: &str = r#"This is likely because you haven't
 - Created a provisioning profile before
 - Accepted the Apple Developer Program License Agreement
@@ -650,27 +1084,6 @@ We checked the folders:
             )
         }
 
-        #[derive(serde::Deserialize, Debug)]
-        struct ProvisioningProfile {
-            #[serde(rename = "TeamIdentifier")]
-            team_identifier: Vec<String>,
-            #[serde(rename = "Entitlements")]
-            entitlements: ProfileEntitlements,
-            #[allow(dead_code)]
-            #[serde(rename = "ApplicationIdentifierPrefix")]
-            application_identifier_prefix: Vec<String>,
-            #[serde(rename = "ProvisionedDevices", default)]
-            provisioned_devices: Vec<String>,
-        }
-
-        #[derive(serde::Deserialize, Debug)]
-        struct ProfileEntitlements {
-            #[serde(rename = "application-identifier")]
-            application_identifier: String,
-            #[serde(rename = "keychain-access-groups")]
-            keychain_access_groups: Vec<String>,
-        }
-
         // The .mobileprovision file has some random binary thrown into it, but it's still basically a plist
         // Let's use the plist markers to find the start and end of the plist
         fn cut_plist(bytes: &[u8], byte_match: &[u8]) -> Option<usize> {
@@ -692,95 +1105,26 @@ We checked the folders:
             plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")
         }
 
-        /// Check if a provisioning profile's application-identifier matches the given bundle ID.
-        /// The app ID is in the format "TEAMID.com.example.app" or "TEAMID.*" for wildcard profiles.
-        fn profile_matches_bundle_id(app_identifier: &str, bundle_id: &str) -> bool {
-            // Strip the team ID prefix (everything before and including the first dot)
-            let app_id_suffix = match app_identifier.split_once('.') {
-                Some((_, suffix)) => suffix,
-                None => return false,
-            };
-
-            // Wildcard profile matches everything
-            if app_id_suffix == "*" {
-                return true;
-            }
-
-            // Check exact match
-            if app_id_suffix == bundle_id {
-                return true;
-            }
-
-            // Check wildcard prefix match (e.g. "com.example.*" matches "com.example.app")
-            if let Some(prefix) = app_id_suffix.strip_suffix(".*") {
-                return bundle_id.starts_with(prefix);
-            }
-
-            false
-        }
-
-        // Collect all provisioning profiles and find the best match for the bundle ID.
-        // Priority: exact app ID match > more provisioned devices > newer file.
-        let mut best_match: Option<(PathBuf, ProvisioningProfile, bool, usize)> = None;
-
-        for entry in profiles_folder.read_dir()?.flatten() {
-            let path = entry.path();
-            let is_mobileprovision = path
-                .extension()
-                .map(|e| e == "mobileprovision")
-                .unwrap_or(false);
-
-            if !is_mobileprovision {
-                continue;
-            }
-
-            let profile = match parse_profile(&path) {
-                Ok(p) => p,
+        let profiles = profiles_folder
+            .read_dir()?
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|e| e == "mobileprovision"))
+            .filter_map(|path| match parse_profile(&path) {
+                Ok(profile) => Some((path, profile)),
                 Err(e) => {
                     tracing::debug!("Skipping profile {}: {e}", path.display());
-                    continue;
+                    None
                 }
-            };
+            })
+            .collect::<Vec<_>>();
 
-            let app_id = &profile.entitlements.application_identifier;
-            if !profile_matches_bundle_id(app_id, bundle_id) {
-                tracing::debug!(
-                    "Skipping profile {} (app ID {app_id} does not match bundle ID {bundle_id})",
-                    path.display()
-                );
-                continue;
-            }
+        let expired =
+            expired_provisioning_profile(&profiles, bundle_id, appstore).map(Path::to_path_buf);
 
-            let is_exact = !app_id.ends_with(".*") && !app_id.ends_with("*");
-            let num_devices = profile.provisioned_devices.len();
-
-            tracing::debug!(
-                "Found matching profile {} (app ID: {app_id}, exact: {is_exact}, devices: {num_devices})",
-                path.display()
-            );
-
-            // Prefer: exact match > more provisioned devices (newer profiles have more devices)
-            let dominated = match &best_match {
-                Some((_, _, prev_exact, prev_devices)) => {
-                    if *prev_exact && !is_exact {
-                        true // existing exact match beats wildcard
-                    } else if is_exact && !*prev_exact {
-                        false // new exact match beats existing wildcard
-                    } else {
-                        // same specificity — prefer more provisioned devices
-                        num_devices <= *prev_devices
-                    }
-                }
-                None => false,
-            };
-
-            if !dominated {
-                best_match = Some((path, profile, is_exact, num_devices));
-            }
-        }
-
-        let (profile_path, mbfile) = match best_match {
-            Some((path, profile, _, _)) => {
+        let (profile_path, mbfile) = match pick_provisioning_profile(profiles, bundle_id, appstore)
+        {
+            Some((path, profile)) => {
                 tracing::info!(
                     "Using provisioning profile: {} (app ID: {})",
                     path.display(),
@@ -789,6 +1133,17 @@ We checked the folders:
                 (path, profile)
             }
             None => {
+                if let Some(path) = expired {
+                    bail!(
+                        "The provisioning profile for \"{bundle_id}\" has expired: {}\n\
+                         \n\
+                         Renew it in your Apple Developer account, or open the project in Xcode \
+                         and let it download a new one.\n\
+                         \n\
+                         {CODESIGN_ERROR}",
+                        path.display()
+                    );
+                }
                 bail!(
                     "No provisioning profile found matching bundle identifier \"{bundle_id}\".\n\
                      \n\
@@ -805,6 +1160,9 @@ We checked the folders:
             }
         };
 
+        // App Store uploads require `get-task-allow=false`, the debugger needs `true`.
+        let get_task_allow = if appstore { "false" } else { "true" };
+
         let entitlements_xml = format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -816,13 +1174,14 @@ We checked the folders:
         <string>{APP_ID_ACCESS_GROUP}.*</string>
     </array>
     <key>get-task-allow</key>
-    <true/>
+    <{GET_TASK_ALLOW}/>
     <key>com.apple.developer.team-identifier</key>
     <string>{TEAM_IDENTIFIER}</string>
 </dict></plist>
         "#,
             APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
             APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
+            GET_TASK_ALLOW = get_task_allow,
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
         );
 
@@ -980,7 +1339,7 @@ We checked the folders:
             .ios
             .deployment_target
             .as_deref()
-            .unwrap_or("16.0");
+            .unwrap_or(DEFAULT_IOS_WIDGET_DEPLOYMENT_TARGET);
 
         let plugins_dir = self.plugins_folder();
         std::fs::create_dir_all(&plugins_dir)?;
@@ -2005,5 +2364,140 @@ fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
             output
         }
         serde_json::Value::Null => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn widget_plist_takes_app_version_and_skips_empty_metadata() {
+        let app = tempfile::tempdir().unwrap();
+        let mut app_dict = plist::Dictionary::new();
+        app_dict.insert("CFBundleVersion".to_string(), "7".into());
+        app_dict.insert("CFBundleShortVersionString".to_string(), "1.2.3".into());
+        plist::to_file_xml(app.path().join("Info.plist"), &app_dict).unwrap();
+        let appex = app.path().join("PlugIns").join("widget.appex");
+        std::fs::create_dir_all(&appex).unwrap();
+        let mut dict = plist::Dictionary::new();
+        dict.insert("CFBundleVersion".to_string(), "0.0.1".into());
+        plist::to_file_xml(appex.join("Info.plist"), &dict).unwrap();
+
+        let ios_dt = IosDtMetadata {
+            dt_sdk_name: "iphoneos18.2".to_string(),
+            ..Default::default()
+        };
+        BuildRequest::sync_widget_info_plists(app.path(), &ios_dt).unwrap();
+
+        let value = plist::Value::from_file(appex.join("Info.plist")).unwrap();
+        let dict = value.as_dictionary().unwrap();
+        let get = |key| dict.get(key).and_then(plist::Value::as_string);
+        assert_eq!(get("CFBundleVersion"), Some("7"));
+        assert_eq!(get("CFBundleShortVersionString"), Some("1.2.3"));
+        assert_eq!(get("DTSDKName"), Some("iphoneos18.2"));
+        assert_eq!(get("DTXcode"), None);
+    }
+
+    fn profile(app_id: &str, devices: &[&str]) -> ProvisioningProfile {
+        ProvisioningProfile {
+            team_identifier: vec!["TEAM".to_string()],
+            entitlements: ProfileEntitlements {
+                application_identifier: app_id.to_string(),
+                keychain_access_groups: vec!["TEAM.*".to_string()],
+            },
+            application_identifier_prefix: vec!["TEAM".to_string()],
+            provisioned_devices: devices.iter().map(|d| d.to_string()).collect(),
+            creation_date: std::time::UNIX_EPOCH.into(),
+            expiration_date: (SystemTime::now() + std::time::Duration::from_secs(86_400)).into(),
+        }
+    }
+
+    #[test]
+    fn appstore_skips_profiles_tied_to_devices() {
+        let profiles = || {
+            vec![
+                ("dev".into(), profile("TEAM.com.example.app", &["device"])),
+                ("store".into(), profile("TEAM.com.example.app", &[])),
+                ("other".into(), profile("TEAM.com.other.app", &[])),
+            ]
+        };
+        let pick = |profiles, appstore| {
+            pick_provisioning_profile(profiles, "com.example.app", appstore).map(|(path, _)| path)
+        };
+
+        assert_eq!(pick(profiles(), true), Some(PathBuf::from("store")));
+        assert_eq!(pick(profiles(), false), Some(PathBuf::from("dev")));
+        let dev_only = vec![("dev".into(), profile("TEAM.com.example.app", &["device"]))];
+        assert_eq!(pick(dev_only, true), None);
+    }
+
+    #[test]
+    fn appstore_picks_the_newest_unexpired_profile() {
+        const DAY: std::time::Duration = std::time::Duration::from_secs(86_400);
+        let now = SystemTime::now();
+        let store = |created: SystemTime, expires: SystemTime| ProvisioningProfile {
+            creation_date: created.into(),
+            expiration_date: expires.into(),
+            ..profile("TEAM.com.example.app", &[])
+        };
+        let pick = |profiles: Vec<(PathBuf, ProvisioningProfile)>| {
+            pick_provisioning_profile(profiles, "com.example.app", true).map(|(path, _)| path)
+        };
+
+        let regenerated = || {
+            vec![
+                ("old".into(), store(now - 200 * DAY, now + 165 * DAY)),
+                ("new".into(), store(now - DAY, now + 364 * DAY)),
+            ]
+        };
+        assert_eq!(pick(regenerated()), Some(PathBuf::from("new")));
+        assert_eq!(
+            pick(regenerated().into_iter().rev().collect()),
+            Some(PathBuf::from("new"))
+        );
+        let expired = vec![("expired".into(), store(now - 400 * DAY, now - DAY))];
+        assert_eq!(pick(expired), None);
+    }
+
+    #[test]
+    fn an_expired_profile_is_reported_instead_of_a_missing_one() {
+        let yesterday = SystemTime::now() - std::time::Duration::from_secs(86_400);
+        let expired = |devices: &[&str]| ProvisioningProfile {
+            expiration_date: yesterday.into(),
+            ..profile("TEAM.com.example.app", devices)
+        };
+        let store = vec![("store".into(), expired(&[]))];
+        let dev = vec![("dev".into(), expired(&["device"]))];
+        let id = "com.example.app";
+
+        assert_eq!(
+            expired_provisioning_profile(&store, id, true),
+            Some(Path::new("store"))
+        );
+        assert_eq!(
+            expired_provisioning_profile(&dev, id, false),
+            Some(Path::new("dev"))
+        );
+        assert_eq!(expired_provisioning_profile(&dev, id, true), None);
+    }
+
+    #[test]
+    fn signing_identity_is_the_hash_of_the_labelled_certificate() {
+        let identities = r#"  1) 1111111111111111111111111111111111111111 "Developer ID Application: Acme (TEAM1)"
+  2) 2222222222222222222222222222222222222222 "Apple Distribution: Acme (TEAM1)"
+  3) 3333333333333333333333333333333333333333 "Apple Development: Jane Doe (TEAM2)"
+     3 valid identities found
+"#;
+        let find = |label| BuildRequest::find_signing_identity(identities, label);
+        assert_eq!(
+            find("Apple Distribution"),
+            Some("2222222222222222222222222222222222222222")
+        );
+        assert_eq!(
+            find("Apple Development"),
+            Some("3333333333333333333333333333333333333333")
+        );
+        assert_eq!(find("Mac Developer"), None);
     }
 }
